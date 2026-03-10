@@ -1,0 +1,2111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Travel Rule API v3 – ISO 20022 pacs.008.001.14</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#21262d;
+      --border:#30363d;--border-hi:#388bfd;
+      --text:#e6edf3;--muted:#7d8590;--dim:#484f58;
+      --blue:#388bfd;--blue-bg:rgba(56,139,253,.12);
+      --green:#3fb950;--green-bg:rgba(63,185,80,.1);
+      --amber:#d29922;--amber-bg:rgba(210,153,34,.1);
+      --red:#f85149;--purple:#bc8cff;--cyan:#79c0ff;--teal:#39d353;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+
+    header{background:var(--surface);border-bottom:1px solid var(--border);height:52px;
+      display:flex;align-items:center;gap:10px;padding:0 20px;position:sticky;top:0;z-index:99}
+    .logo{width:28px;height:28px;background:linear-gradient(135deg,#1b6fd9,#388bfd);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;
+      font-family:var(--mono);font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+    header h1{font-size:13px;font-weight:500;white-space:nowrap}
+    .hbadge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid;white-space:nowrap}
+    .hb-purple{color:var(--purple);background:rgba(188,140,255,.08);border-color:rgba(188,140,255,.25)}
+    .hb-cyan{color:var(--cyan);background:rgba(121,192,255,.07);border-color:rgba(121,192,255,.2)}
+    .hb-amber{color:var(--amber);background:var(--amber-bg);border-color:rgba(210,153,34,.25)}
+    .hb-green{color:var(--green);background:var(--green-bg);border-color:rgba(63,185,80,.25)}
+    .hb-ver{color:var(--muted);background:var(--surface3);border-color:var(--border)}
+    .hspace{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+    .app{display:grid;grid-template-columns:320px 1fr 1fr;height:calc(100vh - 52px);overflow:hidden}
+
+    /* SIDEBAR */
+    aside{background:var(--surface);border-right:1px solid var(--border);
+      display:flex;flex-direction:column;overflow:hidden}
+    .sb-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+    .sb-tab{flex:1;padding:9px 4px;font-family:var(--mono);font-size:10px;font-weight:700;
+      background:transparent;border:none;color:var(--dim);cursor:pointer;
+      border-bottom:2px solid transparent;transition:all .15s;text-align:center}
+    .sb-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+    .sb-pane{display:none;flex:1;overflow-y:auto;padding:14px}
+    .sb-pane.active{display:block}
+
+    .sb-title{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}
+    .mtabs{display:flex;gap:3px;margin-bottom:10px}
+    .mtab{flex:1;padding:5px;font-family:var(--mono);font-size:11px;font-weight:700;
+      border:1px solid var(--border);border-radius:4px;background:transparent;
+      color:var(--muted);cursor:pointer;text-align:center;transition:all .15s}
+    .mtab.ap{background:var(--green-bg);border-color:rgba(63,185,80,.4);color:var(--green)}
+    .mtab.ag{background:var(--blue-bg);border-color:rgba(56,139,253,.4);color:var(--blue)}
+    .mtab.aput{background:var(--amber-bg);border-color:rgba(210,153,34,.4);color:var(--amber)}
+    .mpill-put{background:rgba(210,153,34,.18);color:var(--amber)}
+    .ep{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-bottom:11px;word-break:break-all}
+    .mpill{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:4px}
+    .pp{background:rgba(63,185,80,.18);color:var(--green)}
+    .gp{background:rgba(56,139,253,.15);color:var(--blue)}
+
+    select{width:100%;background:var(--surface3);border:1px solid var(--border);
+      border-radius:5px;color:var(--text);font-family:var(--sans);font-size:12px;
+      padding:7px 9px;cursor:pointer;outline:none;appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath fill='%237d8590' d='M5 7L0 0h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 9px center}
+    select:focus{border-color:var(--border-hi)}
+    .si{margin-top:8px;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;font-size:11px;
+      color:var(--muted);line-height:1.6}
+    .si strong{color:var(--cyan)}
+
+    .fsec{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;padding:10px 0 6px;
+      border-bottom:1px solid var(--border);margin-bottom:8px;margin-top:4px}
+    .fg{margin-bottom:7px}
+    .fl{font-size:10px;font-weight:500;color:var(--muted);margin-bottom:3px;
+      display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+    .ft{font-family:var(--mono);font-size:8px;color:var(--purple);
+      background:rgba(188,140,255,.08);border:1px solid rgba(188,140,255,.2);
+      border-radius:2px;padding:0 4px}
+    .freq{font-family:var(--mono);font-size:8px;color:var(--red);
+      background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);
+      border-radius:2px;padding:0 4px}
+    input[type=text],input[type=number],textarea{width:100%;background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;color:var(--text);
+      font-family:var(--mono);font-size:11px;padding:6px 9px;outline:none;transition:border-color .15s}
+    input:focus,textarea:focus{border-color:var(--border-hi)}
+    textarea{resize:vertical;min-height:40px;line-height:1.5}
+
+    .callout{background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;
+      padding:8px 11px;font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+    .callout code{font-family:var(--mono);font-size:10px;color:var(--cyan);
+      background:rgba(121,192,255,.08);padding:1px 4px;border-radius:3px}
+    .callout-amber{border-left-color:var(--amber);background:rgba(210,153,34,.06);border-color:rgba(210,153,34,.2)}
+    .callout-amber code{color:var(--amber);background:rgba(210,153,34,.08)}
+    .leg-dli{font-family:var(--mono);font-size:9px;color:var(--purple);margin-bottom:2px}
+
+    .sbtn{width:100%;padding:9px;border:none;border-radius:6px;font-family:var(--mono);
+      font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.04em;
+      transition:all .15s;display:flex;align-items:center;justify-content:center;
+      gap:7px;margin-top:8px}
+    .sbtn.sp{background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff}
+    .sbtn.sg{background:linear-gradient(135deg,#1b6fd9,#388bfd);color:#fff}
+    .sbtn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+    .sbtn:active{transform:translateY(0);filter:brightness(.95)}
+
+    /* PANELS */
+    .panel{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+    .ph{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .pt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .pm{font-family:var(--mono);font-size:10px;color:var(--dim)}
+    .jv{flex:1;overflow-y:auto;padding:18px;font-family:var(--mono);font-size:11.5px;
+      line-height:1.7;background:var(--bg)}
+    .jv pre{white-space:pre-wrap;word-break:break-word}
+    .j-key{color:#79c0ff}.j-str{color:#a5d6ff}.j-num{color:#f2cc60}
+    .j-bool{color:#ff7b72}.j-null{color:var(--dim)}
+
+    /* RESPONSE */
+    .rp{display:flex;flex-direction:column;overflow:hidden}
+    .rh{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:44px}
+    .sbadge{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:4px}
+    .s201,.s200{background:var(--green-bg);border:1px solid rgba(63,185,80,.35);color:var(--green)}
+    .s404,.s400{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+    .rt{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
+    .rb{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+
+    /* Cards */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}
+    .ch{padding:9px 13px;background:var(--surface2);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:7px}
+    .ct{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .cb{padding:12px}
+    .dr{display:grid;grid-template-columns:160px 1fr;gap:6px;padding:4px 0;
+      border-bottom:1px solid var(--border);align-items:start}
+    .dr:last-child{border-bottom:none}
+    .dk{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .dv{font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-all}
+    .dv.hi{color:var(--cyan)}.dv.ok{color:var(--green)}.dv.wa{color:var(--amber)}.dv.er{color:var(--red)}
+    .dv.addr{color:var(--purple);font-size:9.5px}
+
+    /* Party grid */
+    .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .pbox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .prole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+    .pname{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .pdet{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:2px}
+    .paddr{font-family:var(--mono);font-size:9px;color:var(--purple);
+      background:rgba(188,140,255,.06);border-radius:3px;padding:3px 6px;margin-top:4px;word-break:break-all}
+    .wtag{display:inline-block;font-family:var(--mono);font-size:8px;font-weight:700;
+      padding:1px 6px;border-radius:10px;margin-top:4px}
+    .wt-hosted{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .wt-unhosted{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .wt-unknown{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+
+    /* Agents grid */
+    .agrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .abox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:8px 10px}
+    .arole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+    .aname{font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .alei{font-family:var(--mono);font-size:9px;color:var(--muted)}
+    .acrypto{border-color:rgba(188,140,255,.3);background:rgba(188,140,255,.04)}
+    .acrypto .arole{color:var(--purple)}
+
+    /* Legs */
+    .legs{display:flex;flex-direction:column;gap:7px}
+    .leg{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .leg-o{border-left:3px solid var(--green)}
+    .leg-b{border-left:3px solid var(--amber)}
+    .leg-d{border-left:3px solid var(--blue)}
+    .leg-type{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px}
+    .leg-type.lo{color:var(--green)}.leg-type.lb{color:var(--amber)}.leg-type.ld{color:var(--blue)}
+    .leg-chain{font-size:12px;font-weight:500;color:var(--text);margin-bottom:3px}
+    .leg-tx{font-family:var(--mono);font-size:9px;color:var(--cyan);word-break:break-all;margin-bottom:3px}
+    .leg-token{font-family:var(--mono);font-size:11px;color:var(--amber);margin-bottom:2px}
+    .leg-status{font-family:var(--mono);font-size:9px}
+    .leg-conf{font-size:9px;color:var(--dim)}
+    .bridge-tag{display:inline-block;font-family:var(--mono);font-size:8px;
+      padding:1px 6px;border-radius:3px;background:rgba(210,153,34,.12);
+      border:1px solid rgba(210,153,34,.25);color:var(--amber);margin-top:3px}
+
+    /* Asset pill */
+    .apill{display:inline-flex;align-items:center;gap:8px;background:var(--surface3);
+      border:1px solid var(--border);border-radius:16px;padding:5px 13px;
+      font-family:var(--mono);font-size:12px;margin-bottom:6px}
+    .at{color:var(--amber);font-weight:700}.af{color:var(--dim);font-size:10px}
+    .dti{color:var(--purple);font-size:9px;background:rgba(188,140,255,.07);
+      padding:1px 6px;border-radius:3px;margin-left:4px}
+
+    /* Screening */
+    .scr-clear{background:var(--green-bg);border:1px solid rgba(63,185,80,.3);
+      border-radius:5px;padding:8px 12px;display:flex;align-items:center;gap:8px}
+    .scr-icon{font-size:18px}
+    .scr-label{font-family:var(--mono);font-size:11px;color:var(--green);font-weight:700}
+    .scr-sub{font-size:10px;color:var(--muted)}
+
+    /* Status flow */
+    .sflow{display:flex;align-items:center;padding:8px 0}
+    .fstep{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:72px}
+    .fdot{width:10px;height:10px;border-radius:50%;border:2px solid var(--border);background:var(--bg)}
+    .fdot.done{background:var(--green);border-color:var(--green)}
+    .fdot.cur{background:var(--blue);border-color:var(--blue);box-shadow:0 0 8px rgba(56,139,253,.5)}
+    .fline{flex:1;height:2px;background:var(--border);min-width:14px;margin-top:-19px}
+    .fline.done{background:var(--green)}
+    .flabel{font-family:var(--mono);font-size:8px;color:var(--dim);text-align:center}
+    .flabel.done{color:var(--green)}.flabel.cur{color:var(--blue)}
+
+    /* Timing badge */
+    .timing{font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:10px;font-weight:700}
+    .timing-pre{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .timing-post{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .timing-sim{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+
+    /* Remittance */
+    .rblk{background:var(--surface3);border:1px solid var(--border);border-radius:5px;
+      padding:8px 11px;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.7}
+    .rref{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;
+      color:var(--green);background:var(--green-bg);border:1px solid rgba(63,185,80,.2);
+      border-radius:4px;padding:3px 8px;margin-top:5px}
+
+    /* Empty / loading */
+    .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:10px;color:var(--dim);padding:40px;text-align:center}
+    .ei{font-size:36px;opacity:.4}
+    .et{font-size:15px;font-style:italic;color:var(--muted)}
+    .es{font-size:11px;line-height:1.6;max-width:240px}
+    .ldots{display:flex;gap:4px;align-items:center}
+    .ldots span{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:blink 1.2s infinite}
+    .ldots span:nth-child(2){animation-delay:.2s}.ldots span:nth-child(3){animation-delay:.4s}
+    @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+    @keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .ani{animation:fi .22s ease forwards}
+
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+    /* Search result rows */
+    .sr-list{display:flex;flex-direction:column;gap:6px}
+    .sr-row{background:var(--surface3);border:1px solid var(--border);border-radius:5px;
+      padding:9px 11px;transition:border-color .15s}
+    .sr-row:hover{border-color:var(--border-hi)}
+    .sr-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px}
+    .sr-id{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .sr-parties{font-size:11px;margin-bottom:4px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .sr-party{color:var(--text);font-weight:500}
+    .sr-arrow{color:var(--dim);font-family:var(--mono)}
+    .sr-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px}
+    .sr-amt{font-family:var(--mono);font-size:12px;color:var(--amber);font-weight:600}
+    .sr-status{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:4px}
+    .sr-dir{font-family:var(--mono);font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px}
+    .sr-out{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.25)}
+    .sr-in{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.25)}
+
+    /* Stats KPIs and bars */
+    .stat-kpi{background:var(--surface3);border:1px solid var(--border);border-radius:5px;
+      padding:10px;text-align:center}
+    .stat-kpi-n{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text);line-height:1}
+    .stat-kpi-l{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:4px;
+      text-transform:uppercase;letter-spacing:.08em}
+    .stat-row{display:grid;grid-template-columns:140px 1fr 80px 70px;gap:6px;
+      align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+    .stat-row:last-child{border-bottom:none}
+    .stat-label{font-size:11px;color:var(--text);font-weight:500;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .stat-bar-wrap{padding-right:8px}
+    .stat-bar{height:6px;background:var(--blue);border-radius:3px;
+      transition:width .4s ease;min-width:2px;opacity:.7}
+    .stat-rate-bar-wrap{height:3px;background:var(--surface);border-radius:2px;margin-top:2px}
+    .stat-rate-bar{height:3px;border-radius:2px;transition:width .4s ease;min-width:1px}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">TR</div>
+  <h1>Travel Rule API v3</h1>
+  <span class="hbadge hb-ver">v3.5</span>
+  <div class="hspace">
+    <span class="hbadge hb-purple">pacs.008.001.14</span>
+    <span class="hbadge hb-cyan">FATF R.16 · EU TFR</span>
+    <span class="hbadge hb-amber">DTI · DLI · ISO 24165</span>
+    <span class="hbadge hb-green">Callback · Search · Stats</span>
+  </div>
+</header>
+
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside>
+  <div class="sb-tabs">
+    <button class="sb-tab active" onclick="switchTab('config')">⚙ Config</button>
+    <button class="sb-tab" onclick="switchTab('parties')">👤 Parties</button>
+    <button class="sb-tab" onclick="switchTab('chain')">⛓ Chain</button>
+    <button class="sb-tab" onclick="switchTab('reporting')">⚖ Reporting</button>
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div class="sb-pane active" id="tab-config">
+    <div class="callout" style="margin-bottom:12px">
+      <strong style="color:var(--cyan)">Dual purpose:</strong>
+      FATF R.16 Travel Rule compliance <em>and</em> structured remittance
+      (<code>RemittanceInformation26</code>) — zero extra mapping for banks
+      already processing pacs.008.
+    </div>
+
+    <div class="sb-title">Method &amp; Endpoint</div>
+    <div class="mtabs">
+      <button class="mtab ap" id="tab-post" onclick="setMethod('POST')">POST</button>
+      <button class="mtab" id="tab-put" onclick="setMethod('PUT')" style="font-size:10px">PUT</button>
+      <button class="mtab" id="tab-get" onclick="setMethod('GET')">GET</button>
+      <button class="mtab" id="tab-callback" onclick="setMethod('CALLBACK')" style="font-size:10px">CALLBACK</button>
+      <button class="mtab" id="tab-search" onclick="setMethod('SEARCH')" style="font-size:10px">SEARCH</button>
+      <button class="mtab" id="tab-stats" onclick="setMethod('STATS')" style="font-size:10px">STATS</button>
+    </div>
+    <div class="ep" id="ep-display">
+      <span class="mpill pp" id="mp">POST</span>/v1/travel-rule
+    </div>
+
+    <div class="sb-title" style="margin-top:4px">Load Scenario</div>
+    <select id="scen" onchange="loadScenario(this.value)">
+      <option value="">— select a scenario —</option>
+      <option value="eth">🏢 B2B ETH — Acme DE → Bravo NL (single-chain)</option>
+      <option value="btc">👤 Retail BTC — Self-custody → Kraken BE (unhosted)</option>
+      <option value="bridge">🌉 USDC Bridge — Vertex US → SingTech SG (ETH → Polygon via CCTP)</option>
+      <option value="put_correction">✏️ PUT Correction — Acme resubmits after Bitvavo rejection</option>
+      <option value="cb_accepted">✅ Callback — Bitvavo accepts data quality</option>
+      <option value="cb_rejected">❌ Callback — Bitvavo rejects (missing address)</option>
+      <option value="cb_review">🔍 Callback — Kraken UNDER_REVIEW (unhosted EDD)</option>
+      <option value="get">🔍 GET by Record ID</option>
+      <option value="search_basic">🔎 Search — March rejections, outgoing (reconciliation)</option>
+      <option value="stats_grouped">📊 Stats — Q1 by counterparty VASP with rejection rates</option>
+    </select>
+    <div class="si" id="si">Select a scenario or fill in the fields across all tabs.</div>
+
+    <div class="fsec">Submission</div>
+    <div class="fg">
+      <div class="fl">Submission Timing</div>
+      <select id="f-timing">
+        <option value="PRE_TX">PRE_TX — before broadcast</option>
+        <option value="SIMULTANEOUS">SIMULTANEOUS</option>
+        <option value="POST_TX">POST_TX — after confirmation</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">End-to-End ID <span class="ft">E2EId</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-e2e" placeholder="E2E-XXXX-001"/>
+    </div>
+    <div class="fg">
+      <div class="fl">UETR <span class="ft">UUIDv4</span></div>
+      <input type="text" id="f-uetr" placeholder="auto-generated"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Settlement Amount <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-amt" placeholder="50000.00"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Currency <span class="ft">ISO 4217 / XXX</span></div>
+      <select id="f-ccy">
+        <option>EUR</option><option>USD</option><option>GBP</option>
+        <option>CHF</option><option>SGD</option><option>XXX</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Fiat Equivalent <span class="ft">instructed_amount</span></div>
+      <input type="text" id="f-fiat" placeholder="e.g. EUR 2866.50 when CCY=XXX"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Fiat Currency</div>
+      <select id="f-fiatccy">
+        <option value="">— none —</option>
+        <option>EUR</option><option>USD</option><option>GBP</option>
+        <option>CHF</option><option>SGD</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Settlement Date</div>
+      <input type="text" id="f-date" placeholder="2025-03-15"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Token Identifier <span class="ft">local_instrument/proprietary</span></div>
+      <input type="text" id="f-dti" placeholder="DTID/X9J9XDMTD or ISIN/US9311861023"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Purpose <span class="ft">Purpose2Choice</span></div>
+      <select id="f-purp">
+        <option value="TRAD">TRAD – Trade</option>
+        <option value="SUPP">SUPP – Supplier Payment</option>
+        <option value="SALA">SALA – Salary</option>
+        <option value="INTC">INTC – Intra-Company</option>
+        <option value="INVS">INVS – Investment</option>
+        <option value="OTHR">OTHR – Other</option>
+      </select>
+    </div>
+
+    <div class="fsec">Remittance <span class="ft">RemittanceInformation26</span></div>
+    <div class="fg">
+      <div class="fl">Invoice Number <span class="ft">ReferredDocumentInformation8</span></div>
+      <input type="text" id="f-inv" placeholder="INV-2025-XXXX"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Unstructured Info <span class="ft">Max140Text</span></div>
+      <textarea id="f-ustrd" rows="2" placeholder="Free text (max 140 chars)"></textarea>
+    </div>
+
+    <!-- CALLBACK fields (hidden by default) -->
+    <div id="callback-fields" style="display:none">
+      <div class="callout callout-amber" style="margin-bottom:10px">
+        Posted by the <strong style="color:var(--amber)">receiving VASP</strong> after
+        validating data quality. <code>ACCEPTED</code> / <code>REJECTED</code> /
+        <code>UNDER_REVIEW</code> — data quality only, not a sanctions clearance.
+      </div>
+      <div class="fsec">Callback Payload</div>
+      <div class="fg"><div class="fl">Record ID (reference) <span class="freq">MANDATORY</span></div>
+        <input type="text" id="f-cb-recordid" placeholder="UUID of the original record"/></div>
+      <div class="fg"><div class="fl">Callback Status <span class="freq">MANDATORY</span></div>
+        <select id="f-cb-status" onchange="updateCallbackFields()">
+          <option value="ACCEPTED">ACCEPTED — data quality sufficient</option>
+          <option value="REJECTED">REJECTED — data quality deficiency</option>
+          <option value="UNDER_REVIEW">UNDER_REVIEW — manual review required</option>
+        </select>
+      </div>
+      <div class="fg"><div class="fl">Receiving VASP Name <span class="freq">MANDATORY</span></div>
+        <input type="text" id="f-cb-vasp" placeholder="Receiving VASP legal name"/></div>
+      <div class="fg"><div class="fl">Receiving VASP LEI</div>
+        <input type="text" id="f-cb-lei" placeholder="LEI"/></div>
+      <div class="fg"><div class="fl">Receiver Internal Ref <span class="ft">vasp_record_ref</span></div>
+        <input type="text" id="f-cb-ref" placeholder="e.g. BTV-TR-2025-00891"/></div>
+      <div id="cb-reject-fields">
+        <div class="fg"><div class="fl">Rejected Field Path <span class="ft">CallbackRejectionReason</span></div>
+          <input type="text" id="f-cb-field" placeholder="travel_rule_data.debtor.postal_address"/></div>
+        <div class="fg"><div class="fl">Rejection Code</div>
+          <select id="f-cb-code">
+            <option value="MISSING_MANDATORY_FIELD">MISSING_MANDATORY_FIELD</option>
+            <option value="MISSING_CONDITIONAL_FIELD">MISSING_CONDITIONAL_FIELD</option>
+            <option value="INVALID_FORMAT">INVALID_FORMAT</option>
+            <option value="UNRESOLVABLE_IDENTIFIER">UNRESOLVABLE_IDENTIFIER</option>
+            <option value="INCONSISTENT_DATA">INCONSISTENT_DATA</option>
+            <option value="INSUFFICIENT_IDENTIFICATION">INSUFFICIENT_IDENTIFICATION</option>
+          </select>
+        </div>
+        <div class="fg"><div class="fl">Description &amp; Remediation</div>
+          <textarea id="f-cb-desc" rows="3" placeholder="Explain the issue…"></textarea></div>
+      </div>
+      <div id="cb-review-fields" style="display:none">
+        <div class="fg"><div class="fl">Review Reason</div>
+          <textarea id="f-cb-review" rows="3" placeholder="Why manual review is required…"></textarea></div>
+      </div>
+    </div>
+
+    <!-- PUT correction fields (hidden by default) -->
+    <div id="put-fields" style="display:none">
+      <div class="callout callout-amber" style="margin-bottom:10px">
+        Correcting record <strong style="color:var(--amber)">550e8400-e29b-41d4-a716-446655440042</strong>
+        in response to Bitvavo's REJECTED callback.<br/>
+        The full Travel Rule data (Parties / Chain / Reporting tabs) is resubmitted
+        with the correction. <code>correction_of_callback_ref</code> links this PUT
+        to the specific rejection for audit and targeted re-validation.
+      </div>
+      <div class="fsec">correction_of_callback_ref <span class="ft">optional — links to rejection</span></div>
+      <div class="fg"><div class="fl">Rejected Callback Timestamp <span class="freq">MANDATORY if correcting</span></div>
+        <input type="text" id="f-put-ts" placeholder="2025-03-15T14:35:22Z"/></div>
+      <div class="fg"><div class="fl">Receiver Internal Ref <span class="ft">receiving_vasp_record_ref</span></div>
+        <input type="text" id="f-put-ref" placeholder="e.g. BTV-TR-2025-00892"/></div>
+      <div class="fg"><div class="fl">Correction Notes <span class="ft">audit trail</span></div>
+        <textarea id="f-put-notes" rows="3" placeholder="What was corrected and why…"></textarea></div>
+    </div>
+
+    <!-- SEARCH fields (hidden by default) -->
+    <div id="search-fields" style="display:none">
+      <div class="callout" style="margin-bottom:10px">
+        Queries <strong style="color:var(--cyan)">this VASP's own records</strong>.
+        For cross-VASP reconciliation, fan out to each counterparty and aggregate.
+        Equivalent to ISO 20022 <code>camt.052/camt.053</code>.
+      </div>
+      <div class="fsec">Time Range <span class="freq">MANDATORY</span></div>
+      <div class="fg"><div class="fl">From <span class="ft">ISO 8601 UTC</span></div>
+        <input type="text" id="f-sr-from" placeholder="2025-03-01T00:00:00Z"/></div>
+      <div class="fg"><div class="fl">To</div>
+        <input type="text" id="f-sr-to" placeholder="2025-03-31T23:59:59Z"/></div>
+      <div class="fsec">Filters</div>
+      <div class="fg"><div class="fl">Direction</div>
+        <select id="f-sr-dir">
+          <option value="BOTH">BOTH</option>
+          <option value="OUTGOING">OUTGOING</option>
+          <option value="INCOMING">INCOMING</option>
+        </select></div>
+      <div class="fg"><div class="fl">Status <span class="ft">comma-separated</span></div>
+        <select id="f-sr-status">
+          <option value="">— all statuses —</option>
+          <option value="SUBMITTED">SUBMITTED</option>
+          <option value="ACCEPTED">ACCEPTED</option>
+          <option value="REJECTED">REJECTED</option>
+          <option value="SUBMITTED,UNDER_REVIEW">SUBMITTED,UNDER_REVIEW (pending)</option>
+        </select></div>
+      <div class="fg"><div class="fl">Callback Status</div>
+        <select id="f-sr-cbstatus">
+          <option value="">— any —</option>
+          <option value="PENDING">PENDING (no callback yet)</option>
+          <option value="ACCEPTED">ACCEPTED</option>
+          <option value="REJECTED">REJECTED (data quality issues)</option>
+          <option value="UNDER_REVIEW">UNDER_REVIEW</option>
+        </select></div>
+      <div class="fg"><div class="fl">Chain ID <span class="ft">DLI or CHAINID</span></div>
+        <input type="text" id="f-sr-chain" placeholder="DLID/X9J9XDMTD"/></div>
+      <div class="fg"><div class="fl">Token Identifier <span class="ft">DTI/ISIN/contract/ticker</span></div>
+        <input type="text" id="f-sr-token" placeholder="DTID/T9B3X8H2K or USDC:eip155:1"/></div>
+      <div class="fg"><div class="fl">Counterparty VASP LEI</div>
+        <input type="text" id="f-sr-lei" placeholder="20-char LEI"/></div>
+      <div class="fg"><div class="fl">Wallet Type</div>
+        <select id="f-sr-wtype">
+          <option value="">— any —</option>
+          <option value="HOSTED">HOSTED</option>
+          <option value="UNHOSTED">UNHOSTED (EU TFR Art.17 scope)</option>
+          <option value="UNKNOWN">UNKNOWN</option>
+        </select></div>
+      <div class="fg"><div class="fl">Amount Min / Max</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <input type="text" id="f-sr-amtmin" placeholder="min"/>
+          <input type="text" id="f-sr-amtmax" placeholder="max"/>
+        </div></div>
+      <div class="fsec">Pagination</div>
+      <div class="fg"><div class="fl">Page Size <span class="ft">max 200</span></div>
+        <input type="text" id="f-sr-pagesize" placeholder="50"/></div>
+      <div class="fg"><div class="fl">Sort</div>
+        <select id="f-sr-sort">
+          <option value="submitted_at_desc">Newest first</option>
+          <option value="submitted_at_asc">Oldest first</option>
+          <option value="amount_desc">Largest amount first</option>
+          <option value="amount_asc">Smallest amount first</option>
+        </select></div>
+    </div>
+
+    <!-- STATS fields (hidden by default) -->
+    <div id="stats-fields" style="display:none">
+      <div class="callout" style="margin-bottom:10px">
+        Aggregate counts &amp; volumes over <strong style="color:var(--cyan)">this VASP's own records</strong>.
+        Fan out to counterparties and sum totals for network-wide view.
+        Equivalent to ISO 20022 <code>camt.060</code>.
+      </div>
+      <div class="fsec">Time Range <span class="freq">MANDATORY</span></div>
+      <div class="fg"><div class="fl">From <span class="ft">ISO 8601 UTC</span></div>
+        <input type="text" id="f-st-from" placeholder="2025-01-01T00:00:00Z"/></div>
+      <div class="fg"><div class="fl">To</div>
+        <input type="text" id="f-st-to" placeholder="2025-03-31T23:59:59Z"/></div>
+      <div class="fsec">Grouping &amp; Filters</div>
+      <div class="fg"><div class="fl">Direction</div>
+        <select id="f-st-dir">
+          <option value="BOTH">BOTH</option>
+          <option value="OUTGOING">OUTGOING</option>
+          <option value="INCOMING">INCOMING</option>
+        </select></div>
+      <div class="fg"><div class="fl">Group By <span class="ft">breakdown dimension</span></div>
+        <select id="f-st-groupby">
+          <option value="">— totals only —</option>
+          <option value="counterparty_vasp">Counterparty VASP (rejection rates per partner)</option>
+          <option value="status">Record Status</option>
+          <option value="callback_status">Callback Status</option>
+          <option value="chain">Blockchain Network</option>
+          <option value="token">Token / Asset</option>
+          <option value="submission_timing">Submission Timing (PRE/POST)</option>
+          <option value="wallet_type">Wallet Type (hosted vs unhosted)</option>
+          <option value="rejection_reason_code">Rejection Reason Code</option>
+        </select></div>
+      <div class="fg"><div class="fl">Pre-filter: Chain ID</div>
+        <input type="text" id="f-st-chain" placeholder="DLID/X9J9XDMTD"/></div>
+      <div class="fg"><div class="fl">Pre-filter: Token Identifier</div>
+        <input type="text" id="f-st-token" placeholder="DTID/T9B3X8H2K or USDC:eip155:1"/></div>
+      <div class="fg"><div class="fl">Pre-filter: Counterparty VASP LEI</div>
+        <input type="text" id="f-st-lei" placeholder="20-char LEI"/></div>
+    </div>
+
+    <button class="sbtn sp" id="sbtn" onclick="sendRequest()">
+      <span id="slbl">▶ Submit Record</span>
+    </button>
+  </div>
+
+  <!-- PARTIES TAB -->
+  <div class="sb-pane" id="tab-parties">
+    <div class="callout">
+      <strong style="color:var(--cyan)">FATF R.16 / EU TFR mandatory:</strong><br/>
+      Originator: name + wallet address + one of: address, national ID, DOB+POB.<br/>
+      Beneficiary: name + wallet address.
+    </div>
+
+    <div class="fsec">Debtor (Originator) <span class="freq">MANDATORY</span></div>
+    <div class="fg"><div class="fl">Full Legal Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-dname" placeholder="Full legal name"/></div>
+    <div class="fg"><div class="fl">Country of Residence</div>
+      <input type="text" id="f-dctry" placeholder="DE" maxlength="2" style="text-transform:uppercase"/></div>
+    <div class="fg"><div class="fl">LEI <span class="ft">OrganisationIdentification39</span></div>
+      <input type="text" id="f-dlei" placeholder="20-char LEI"/></div>
+    <div class="fg"><div class="fl">National ID / Passport <span class="ft">NIDN/CCPT</span></div>
+      <input type="text" id="f-dnid" placeholder="ID number (EU TFR Art. 4(1)(b))"/></div>
+    <div class="fg"><div class="fl">Date of Birth <span class="ft">DateAndPlaceOfBirth1</span></div>
+      <input type="text" id="f-ddob" placeholder="1985-07-23 (EU TFR Art. 4(1)(c))"/></div>
+    <div class="fg"><div class="fl">Wallet Address <span class="ft">proxy/EWAL</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-dwallet" placeholder="0x… or bc1… or base58…"/></div>
+    <div class="fg"><div class="fl">Wallet Type <span class="ft">EU TFR Art.17</span></div>
+      <select id="f-dwtype">
+        <option value="HOSTED">HOSTED</option>
+        <option value="UNHOSTED">UNHOSTED — enhanced due diligence</option>
+        <option value="UNKNOWN">UNKNOWN</option>
+      </select>
+    </div>
+
+    <div class="fsec">Creditor (Beneficiary) <span class="freq">MANDATORY</span></div>
+    <div class="fg"><div class="fl">Full Legal Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-cname" placeholder="Full legal name"/></div>
+    <div class="fg"><div class="fl">Country of Residence</div>
+      <input type="text" id="f-cctry" placeholder="NL" maxlength="2" style="text-transform:uppercase"/></div>
+    <div class="fg"><div class="fl">LEI</div>
+      <input type="text" id="f-clei" placeholder="20-char LEI"/></div>
+    <div class="fg"><div class="fl">Wallet Address <span class="ft">proxy/EWAL</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-cwallet" placeholder="0x… or bc1… or base58…"/></div>
+    <div class="fg"><div class="fl">Wallet Type</div>
+      <select id="f-cwtype">
+        <option value="HOSTED">HOSTED</option>
+        <option value="UNHOSTED">UNHOSTED</option>
+        <option value="UNKNOWN">UNKNOWN</option>
+      </select>
+    </div>
+
+    <div class="fsec">Agents <span class="ft">BranchAndFinancialInstitutionIdentification8</span></div>
+    <div class="callout callout-amber">
+      <code>debtor_agent</code> = bank/VASP with KYC obligation<br/>
+      <code>debtor_crypto_agent</code> = crypto custodian executing on-chain<br/>
+      Leave crypto agent blank if same entity handles both roles.
+    </div>
+    <div class="fg"><div class="fl">Debtor Agent (Originating VASP / Bank)</div>
+      <input type="text" id="f-ovasp" placeholder="Institution name"/></div>
+    <div class="fg"><div class="fl">Debtor Agent LEI</div>
+      <input type="text" id="f-ovasp-lei" placeholder="LEI"/></div>
+    <div class="fg"><div class="fl">Debtor Crypto Agent <span class="ft">optional</span></div>
+      <input type="text" id="f-ocrypto" placeholder="Crypto custodian name (if different)"/></div>
+    <div class="fg"><div class="fl">Debtor Crypto Agent LEI</div>
+      <input type="text" id="f-ocrypto-lei" placeholder="LEI"/></div>
+    <div class="fg"><div class="fl">Creditor Agent (Beneficiary VASP / Bank)</div>
+      <input type="text" id="f-bvasp" placeholder="Institution name"/></div>
+    <div class="fg"><div class="fl">Creditor Agent LEI</div>
+      <input type="text" id="f-bvasp-lei" placeholder="LEI"/></div>
+    <div class="fg"><div class="fl">Creditor Crypto Agent <span class="ft">optional</span></div>
+      <input type="text" id="f-bcrypto" placeholder="Crypto custodian name (if different)"/></div>
+    <div class="fg"><div class="fl">Creditor Crypto Agent LEI</div>
+      <input type="text" id="f-bcrypto-lei" placeholder="LEI"/></div>
+  </div>
+
+  <!-- CHAIN TAB -->
+  <div class="sb-pane" id="tab-chain">
+    <div class="callout">
+      <strong style="color:var(--cyan)">Chain identification priority:</strong><br/>
+      1. <code>DLID/&lt;dli&gt;</code> — ISO 24165-2 DLI (preferred)<br/>
+      2. <code>CHAINID:&lt;code&gt;</code> — compact fallback<br/>
+      Maps to <code>ClearingSystem/Proprietary</code> Max35Text ✓
+    </div>
+
+    <div class="fsec">Primary Chain (Origination)</div>
+    <div class="fg"><div class="fl">Primary Chain <span class="freq">MANDATORY</span></div>
+      <select id="f-chain">
+        <option value="DLID/X9J9XDMTD">DLID/X9J9XDMTD — Ethereum Mainnet</option>
+        <option value="DLID/4H95J0R2X">DLID/4H95J0R2X — Bitcoin Mainnet</option>
+        <option value="DLID/ZXTQFTM5G">DLID/ZXTQFTM5G — Solana Mainnet</option>
+        <option value="DLID/N3P9VQ6R1">DLID/N3P9VQ6R1 — XRPL Mainnet</option>
+        <option value="CHAINID:ETH-137">CHAINID:ETH-137 — Polygon (DLI pending)</option>
+        <option value="CHAINID:ETH-56">CHAINID:ETH-56 — BNB Smart Chain (DLI pending)</option>
+        <option value="CHAINID:ETH-43114">CHAINID:ETH-43114 — Avalanche (DLI pending)</option>
+        <option value="CHAINID:ETH-42161">CHAINID:ETH-42161 — Arbitrum One (DLI pending)</option>
+        <option value="CHAINID:ETH-8453">CHAINID:ETH-8453 — Base (DLI pending)</option>
+        <option value="CHAINID:TRX">CHAINID:TRX — Tron (DLI pending)</option>
+        <option value="CHAINID:XLM">CHAINID:XLM — Stellar Pubnet (DLI pending)</option>
+      </select>
+    </div>
+    <div class="fg"><div class="fl">Origination Tx ID</div>
+      <input type="text" id="f-txid" placeholder="0x… or txhash…"/></div>
+    <div class="fg"><div class="fl">Block Height</div>
+      <input type="text" id="f-block" placeholder="21847392"/></div>
+    <div class="fg"><div class="fl">Confirmations</div>
+      <input type="text" id="f-conf" placeholder="24"/></div>
+    <div class="fg"><div class="fl">Tx Status</div>
+      <select id="f-txstatus">
+        <option value="CONFIRMED">CONFIRMED</option>
+        <option value="PENDING">PENDING</option>
+        <option value="FAILED">FAILED</option>
+      </select>
+    </div>
+
+    <div class="fsec">Bridge / Destination Leg <span class="ft">optional</span></div>
+    <div class="callout">
+      Fill these fields for cross-chain bridge transfers.<br/>
+      Leave blank for single-chain transfers.
+    </div>
+    <div class="fg"><div class="fl">Destination Chain</div>
+      <select id="f-dstchain">
+        <option value="">— none (single-chain) —</option>
+        <option value="CHAINID:ETH-1">CHAINID:ETH-1 — Ethereum Mainnet</option>
+        <option value="CHAINID:ETH-137">CHAINID:ETH-137 — Polygon Mainnet</option>
+        <option value="CHAINID:ETH-56">CHAINID:ETH-56 — BNB Smart Chain</option>
+        <option value="CHAINID:ETH-43114">CHAINID:ETH-43114 — Avalanche C-Chain</option>
+        <option value="CHAINID:ETH-42161">CHAINID:ETH-42161 — Arbitrum One</option>
+        <option value="CHAINID:BTC">CHAINID:BTC — Bitcoin Mainnet</option>
+        <option value="CHAINID:SOL">CHAINID:SOL — Solana Mainnet</option>
+      </select>
+    </div>
+    <div class="fg"><div class="fl">Destination Tx ID</div>
+      <input type="text" id="f-dsttxid" placeholder="Destination chain tx hash"/></div>
+    <div class="fg"><div class="fl">Bridge Protocol</div>
+      <input type="text" id="f-bridge" placeholder="e.g. Circle CCTP, Stargate, Wormhole"/></div>
+    <div class="fg"><div class="fl">Bridge Contract Address</div>
+      <input type="text" id="f-bridgecontract" placeholder="0x…"/></div>
+    <div class="fg"><div class="fl">Destination Token DTI</div>
+      <input type="text" id="f-dstdti" placeholder="DTID/… (if different from source)"/></div>
+    <div class="fg"><div class="fl">Destination Amount</div>
+      <input type="text" id="f-dstamt" placeholder="Amount after bridge fees"/></div>
+  </div>
+
+  <!-- REPORTING TAB -->
+  <div class="sb-pane" id="tab-reporting">
+    <div class="callout">
+      <strong style="color:var(--cyan)">RegulatoryReporting10</strong><br/>
+      Up to 10 instances per transaction. Add one per jurisdiction.
+    </div>
+
+    <div class="fsec">Authority 1</div>
+    <div class="fg"><div class="fl">Authority Name</div>
+      <input type="text" id="f-auth1" placeholder="e.g. FSMA, FinCEN, MAS"/></div>
+    <div class="fg"><div class="fl">Authority Country</div>
+      <input type="text" id="f-authctry1" placeholder="BE" maxlength="2" style="text-transform:uppercase"/></div>
+    <div class="fg"><div class="fl">Reporting Code <span class="ft">Max10Text</span></div>
+      <select id="f-rcode1">
+        <option value="EU-TFR">EU-TFR — EU Transfer of Funds Regulation</option>
+        <option value="FATF-R16">FATF-R16 — FATF Recommendation 16</option>
+        <option value="FINCEN-TR">FINCEN-TR — FinCEN 31 CFR 103.33</option>
+        <option value="MAS-PSA">MAS-PSA — Singapore Payment Services Act</option>
+        <option value="FINTRAC">FINTRAC — Canada PCMLTFA</option>
+        <option value="FINMA-CR">FINMA-CR — Swiss FINMA</option>
+      </select>
+    </div>
+    <div class="fg"><div class="fl">Side</div>
+      <select id="f-rside1">
+        <option value="BOTH">BOTH</option>
+        <option value="DEBT">DEBT — originator side</option>
+        <option value="CRED">CRED — beneficiary side</option>
+      </select>
+    </div>
+
+    <div class="fsec">Authority 2 <span class="ft">optional</span></div>
+    <div class="fg"><div class="fl">Authority Name</div>
+      <input type="text" id="f-auth2" placeholder="Second authority (e.g. for cross-border)"/></div>
+    <div class="fg"><div class="fl">Authority Country</div>
+      <input type="text" id="f-authctry2" placeholder="US" maxlength="2" style="text-transform:uppercase"/></div>
+    <div class="fg"><div class="fl">Reporting Code</div>
+      <select id="f-rcode2">
+        <option value="EU-TFR">EU-TFR</option>
+        <option value="FATF-R16">FATF-R16</option>
+        <option value="FINCEN-TR">FINCEN-TR</option>
+        <option value="MAS-PSA">MAS-PSA</option>
+        <option value="FINTRAC">FINTRAC</option>
+        <option value="FINMA-CR">FINMA-CR</option>
+      </select>
+    </div>
+    <div class="fg"><div class="fl">Side</div>
+      <select id="f-rside2">
+        <option value="DEBT">DEBT — originator side</option>
+        <option value="CRED">CRED — beneficiary side</option>
+        <option value="BOTH">BOTH</option>
+      </select>
+    </div>
+
+    <div class="fsec">Sanctions Screening <span class="ft">sending VASP outgoing only</span></div>
+    <div class="callout callout-amber">
+      Documents the <strong style="color:var(--amber)">sending VASP's outgoing</strong>
+      screening only — not a pre-clearance for the receiver.
+      Receiving VASP screens independently on arrival; any hit = freeze + report.
+    </div>
+    <div class="fg"><div class="fl">Screening Provider</div>
+      <input type="text" id="f-screener" placeholder="e.g. Chainalysis KYT, Elliptic"/></div>
+    <div class="fg"><div class="fl">Screening Result</div>
+      <select id="f-scrresult">
+        <option value="CLEAR">CLEAR</option>
+        <option value="POTENTIAL_MATCH">POTENTIAL_MATCH — review before sending</option>
+        <option value="REVIEW_REQUIRED">REVIEW_REQUIRED</option>
+      </select>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══ REQUEST JSON ═══ -->
+<div class="panel">
+  <div class="ph">
+    <span class="pt">Request Body</span>
+    <span class="pm" id="req-meta">–</span>
+  </div>
+  <div class="jv" id="req-json">
+    <div class="empty"><div class="ei">📄</div>
+      <div class="et">No request yet</div>
+      <div class="es">Select a scenario or fill the fields across the tabs</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESPONSE ═══ -->
+<div class="rp">
+  <div class="rh" id="rh">
+    <span style="font-family:var(--mono);font-size:11px;color:var(--dim)">Response</span>
+    <span class="rt" id="rtime"></span>
+  </div>
+  <div id="rbody" style="flex:1;overflow-y:auto;display:flex;flex-direction:column">
+    <div class="empty"><div class="ei">🔒</div>
+      <div class="et">Awaiting response</div>
+      <div class="es">pacs.008.001.14 · FATF R.16 · EU TFR 2023/1113<br/>ISO 24165 DTI · Multi-Chain Bridge · CHAINID registry</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- .app -->
+
+<script>
+const CHAIN_META = {
+  'DLID/X9J9XDMTD': { name:'Ethereum Mainnet', dli:'X9J9XDMTD', caip2:'eip155:1', explorer:'https://etherscan.io/tx/' },
+  'DLID/4H95J0R2X': { name:'Bitcoin Mainnet', dli:'4H95J0R2X', caip2:'bip122:000000000019d6689c085ae165831e93', explorer:'https://blockstream.info/tx/' },
+  'DLID/ZXTQFTM5G': { name:'Solana Mainnet', dli:'ZXTQFTM5G', caip2:'solana:4sgjmw1sunhzsxgspuhpqlatymkig3i', explorer:'https://explorer.solana.com/tx/' },
+  'DLID/N3P9VQ6R1': { name:'XRPL Mainnet', dli:'N3P9VQ6R1', caip2:'xrpl:1', explorer:'https://xrpscan.com/tx/' },
+  'CHAINID:ETH-1':   { name:'Ethereum Mainnet', dli:'X9J9XDMTD', caip2:'eip155:1', explorer:'https://etherscan.io/tx/' },
+  'CHAINID:ETH-137': { name:'Polygon Mainnet', dli:null, caip2:'eip155:137', explorer:'https://polygonscan.com/tx/' },
+  'CHAINID:ETH-56':  { name:'BNB Smart Chain', dli:null, caip2:'eip155:56', explorer:'https://bscscan.com/tx/' },
+  'CHAINID:ETH-43114':{ name:'Avalanche C-Chain', dli:null, caip2:'eip155:43114', explorer:'https://snowtrace.io/tx/' },
+  'CHAINID:ETH-42161':{ name:'Arbitrum One', dli:null, caip2:'eip155:42161', explorer:'https://arbiscan.io/tx/' },
+  'CHAINID:ETH-8453': { name:'Base Mainnet', dli:null, caip2:'eip155:8453', explorer:'https://basescan.org/tx/' },
+  'CHAINID:TRX': { name:'Tron Mainnet', dli:null, caip2:'tron:1', explorer:null },
+  'CHAINID:XLM': { name:'Stellar Pubnet', dli:null, caip2:'stellar:pubnet', explorer:null },
+};
+
+const TOKEN_META = {
+  'DTID/X9J9XDMTD': { ticker:'ETH', name:'Ether' },
+  'DTID/4H95J0R2X': { ticker:'BTC', name:'Bitcoin' },
+  'DTID/T9B3X8H2K': { ticker:'USDC', name:'USD Coin' },
+  'DTID/ZXTQFTM5G': { ticker:'SOL', name:'Solana' },
+  'DTID/N3P9VQ6R1': { ticker:'XRP', name:'XRP' },
+  'DTID/2Y6BXHD9K': { ticker:'USDT', name:'Tether USD' },
+  'DTID/P7RQMX4KJ': { ticker:'BNB', name:'BNB' },
+};
+
+const SCENARIOS = {
+  eth:{
+    method:'POST',
+    info:'<strong>B2B Ethereum Transfer</strong><br/>Acme Trading GmbH (DE) → Bravo Supplies B.V. (NL)<br/>EUR 50,000 · ETH (DTID/X9J9XDMTD) · DLID/X9J9XDMTD · Single chain<br/>Coinbase Europe → Bitvavo · EU TFR · PRE_TX',
+    f:{timing:'PRE_TX',e2e:'E2E-ACME-BRV-20250315-001',uetr:'550e8400-e29b-41d4-a716-446655440042',
+       amt:'50000.00',ccy:'EUR',fiat:'',fiatccy:'',date:'2025-03-15',dti:'DTID/X9J9XDMTD',
+       purp:'TRAD',inv:'INV-2025-00342',ustrd:'INV-2025-00342 / Trade payment per contract DE-2025-007',
+       dname:'Acme Trading GmbH',dctry:'DE',dlei:'529900T8BM49AURSDO55',dnid:'',ddob:'',
+       dwallet:'0x742d35Cc6634C0532925a3b8D4C9b8A1e3f6B7c9',dwtype:'HOSTED',
+       cname:'Bravo Supplies B.V.',cctry:'NL',clei:'724500QHKL6MVSQQ1Z17',
+       cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',cwtype:'HOSTED',
+       ovasp:'Coinbase Europe Ltd','ovasp-lei':'635400DUFB71VFOHVB49',ocrypto:'','ocrypto-lei':'',
+       bvasp:'Bitvavo B.V.','bvasp-lei':'7245007VX57GR4IUVZ79',bcrypto:'','bcrypto-lei':'',
+       chain:'DLID/X9J9XDMTD',txid:'0xa3f8d2c1b4e7f6a9d0c3b2e1f4a7d8c9b0e3f2a1d4c7b8e9f0a3d6c9b2e5f8',
+       block:'21847392',conf:'24',txstatus:'CONFIRMED',
+       dstchain:'',dsttxid:'',bridge:'',bridgecontract:'',dstdti:'',dstamt:'',
+       auth1:'De Nederlandsche Bank',authctry1:'NL',rcode1:'EU-TFR',rside1:'BOTH',
+       auth2:'',authctry2:'',rcode2:'EU-TFR',rside2:'CRED',
+       screener:'Chainalysis KYT',scrresult:'CLEAR'}
+  },
+  btc:{
+    method:'POST',
+    info:'<strong>Retail BTC — Unhosted Wallet</strong><br/>Marie Dupont self-custody (BE) → Kraken Belgium<br/>BTC 0.0315 (XXX) · EUR equiv 2866.50 · DLID/4H95J0R2X<br/>EU TFR Art.17 UNHOSTED · POST_TX',
+    f:{timing:'POST_TX',e2e:'E2E-KRK-BE-20250316-4421',uetr:'7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c',
+       amt:'0.03150000',ccy:'XXX',fiat:'2866.50',fiatccy:'EUR',date:'2025-03-16',
+       dti:'DTID/4H95J0R2X',purp:'OTHR',inv:'',
+       ustrd:'Self-transfer to personal Kraken account for investment purposes',
+       dname:'Marie Dupont',dctry:'BE',dlei:'',dnid:'BE1234567890',ddob:'1990-04-12',
+       dwallet:'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',dwtype:'UNHOSTED',
+       cname:'Marie Dupont',cctry:'BE',clei:'',
+       cwallet:'3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5',cwtype:'HOSTED',
+       ovasp:'Unhosted Wallet (Self-Custody)','ovasp-lei':'',ocrypto:'','ocrypto-lei':'',
+       bvasp:'Kraken Belgium BVBA','bvasp-lei':'5299000DUFB71VFOHVB49',bcrypto:'','bcrypto-lei':'',
+       chain:'DLID/4H95J0R2X',txid:'b7e1f4a3d8c2b9f0e5a4c7d3b8f1e6a9c2d5b8e1f4a7c0d3b6f9e2a5c8d1b4',
+       block:'887241',conf:'6',txstatus:'CONFIRMED',
+       dstchain:'',dsttxid:'',bridge:'',bridgecontract:'',dstdti:'',dstamt:'',
+       auth1:'Financial Services and Markets Authority',authctry1:'BE',rcode1:'EU-TFR',rside1:'BOTH',
+       auth2:'',authctry2:'',rcode2:'EU-TFR',rside2:'CRED',
+       screener:'Elliptic',scrresult:'CLEAR'}
+  },
+  bridge:{
+    method:'POST',
+    info:'<strong>USDC Cross-Chain Bridge</strong><br/>Vertex Technologies (US/Ethereum) → SingTech (SG/Polygon)<br/>USD 125,000 USDC · DTID/T9B3X8H2K · CCTP · DLID/X9J9XDMTD → CHAINID:ETH-137<br/>Anchorage + Fireblocks · FinCEN + MAS',
+    f:{timing:'PRE_TX',e2e:'E2E-VTX-STK-20250301-Q1',uetr:'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+       amt:'125000.00',ccy:'USD',fiat:'',fiatccy:'',date:'2025-03-01',dti:'DTID/T9B3X8H2K',
+       purp:'SUPP',inv:'STK-INV-2025-Q1-001',ustrd:'Q1 2025 Software development services per MSA-2024-VTX-STK',
+       dname:'Vertex Technologies Inc.',dctry:'US',dlei:'XKZZ2JZF41MRHTR1V493',dnid:'',ddob:'',
+       dwallet:'0x1234567890abcdef1234567890abcdef12345678',dwtype:'HOSTED',
+       cname:'SingTech Pte. Ltd.',cctry:'SG',clei:'HWUPKR0MPOU8FGXBT394',
+       cwallet:'0xabcdef1234567890abcdef1234567890abcdef12',cwtype:'HOSTED',
+       ovasp:'Anchorage Digital Bank NA','ovasp-lei':'5493000IBP32UQZ0KL24',
+       ocrypto:'Fireblocks Ltd','ocrypto-lei':'5299001FIREBLOCKS0042',
+       bvasp:'Triple-A Pte. Ltd.','bvasp-lei':'5299009ACRFED31UQ693',bcrypto:'','bcrypto-lei':'',
+       chain:'DLID/X9J9XDMTD',txid:'0x5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4',
+       block:'21849017',conf:'12',txstatus:'CONFIRMED',
+       dstchain:'CHAINID:ETH-137',
+       dsttxid:'0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8',
+       bridge:'Circle CCTP (Cross-Chain Transfer Protocol)',
+       bridgecontract:'0xBd3fa81B58Ba92a82136038B25aDec7066af3155',
+       dstdti:'DTID/T9B3X8H2K',dstamt:'124975.00',
+       auth1:'Financial Crimes Enforcement Network',authctry1:'US',rcode1:'FINCEN-TR',rside1:'DEBT',
+       auth2:'Monetary Authority of Singapore',authctry2:'SG',rcode2:'MAS-PSA',rside2:'CRED',
+       screener:'Chainalysis KYT',scrresult:'CLEAR'}
+  },
+  put_correction:{
+    method:'PUT',
+    info:'<strong>PUT Correction — Acme resubmits after rejection</strong><br/>Bitvavo rejected the ETH record: originator address missing (EU TFR Art.4(1)(b)).<br/>Acme adds postal address and resubmits with <code>correction_of_callback_ref</code>.<br/>Status: REJECTED → SUBMITTED (awaiting new callback).',
+    f:{timing:'PRE_TX',e2e:'E2E-ACME-BRV-20250315-001',uetr:'550e8400-e29b-41d4-a716-446655440042',
+       amt:'50000.00',ccy:'EUR',fiat:'',fiatccy:'',date:'2025-03-15',dti:'DTID/X9J9XDMTD',
+       purp:'TRAD',inv:'INV-2025-00342',ustrd:'INV-2025-00342 / Trade payment per contract DE-2025-007',
+       dname:'Acme Trading GmbH',dctry:'DE',dlei:'529900T8BM49AURSDO55',dnid:'',ddob:'',
+       dwallet:'0x742d35Cc6634C0532925a3b8D4C9b8A1e3f6B7c9',dwtype:'HOSTED',
+       cname:'Bravo Supplies B.V.',cctry:'NL',clei:'724500QHKL6MVSQQ1Z17',
+       cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',cwtype:'HOSTED',
+       ovasp:'Coinbase Europe Ltd','ovasp-lei':'635400DUFB71VFOHVB49',ocrypto:'','ocrypto-lei':'',
+       bvasp:'Bitvavo B.V.','bvasp-lei':'7245007VX57GR4IUVZ79',bcrypto:'','bcrypto-lei':'',
+       chain:'DLID/X9J9XDMTD',txid:'0xa3f8d2c1b4e7f6a9d0c3b2e1f4a7d8c9b0e3f2a1d4c7b8e9f0a3d6c9b2e5f8',
+       block:'21847392',conf:'24',txstatus:'CONFIRMED',
+       dstchain:'',dsttxid:'',bridge:'',bridgecontract:'',dstdti:'',dstamt:'',
+       auth1:'De Nederlandsche Bank',authctry1:'NL',rcode1:'EU-TFR',rside1:'BOTH',
+       auth2:'',authctry2:'',rcode2:'EU-TFR',rside2:'CRED',
+       screener:'Chainalysis KYT',scrresult:'CLEAR'},
+    put:{'put-ts':'2025-03-15T14:35:22Z','put-ref':'BTV-TR-2025-00892',
+         'put-notes':'Added originator postal address (Hauptstrasse 42, 10115 Berlin, DE) per EU TFR Art.4(1)(b) as requested in rejection reason.'}
+  },
+  cb_accepted:{
+    method:'CALLBACK',
+    info:'<strong>Callback — ACCEPTED</strong><br/>Bitvavo B.V. (NL) acknowledges Acme→Bravo ETH transfer.<br/>Data quality: sufficient. Record status → ACCEPTED.<br/>Not a sanctions clearance — receiving VASP screens on fund arrival independently.',
+    cb:{recordid:'550e8400-e29b-41d4-a716-446655440042',status:'ACCEPTED',
+        vasp:'Bitvavo B.V.',lei:'7245007VX57GR4IUVZ79',ref:'BTV-TR-2025-00891',
+        field:'',code:'MISSING_MANDATORY_FIELD',desc:'',review:''}
+  },
+  cb_rejected:{
+    method:'CALLBACK',
+    info:'<strong>Callback — REJECTED</strong><br/>Bitvavo B.V.: originator address missing (EU TFR Art.4(1)(b)).<br/>Data quality deficiency only — no bearing on the on-chain transfer.<br/>Sending VASP must correct and resubmit.',
+    cb:{recordid:'550e8400-e29b-41d4-a716-446655440042',status:'REJECTED',
+        vasp:'Bitvavo B.V.',lei:'7245007VX57GR4IUVZ79',ref:'BTV-TR-2025-00892',
+        field:'travel_rule_data.debtor.postal_address',
+        code:'MISSING_MANDATORY_FIELD',
+        desc:'Originator physical address is required under EU TFR Art.4(1)(b). No alternative identifier was provided. Please resubmit with: postal_address, date_and_place_of_birth, or national ID (NIDN/CCPT).',
+        review:''}
+  },
+  cb_review:{
+    method:'CALLBACK',
+    info:'<strong>Callback — UNDER_REVIEW</strong><br/>Kraken Belgium: unhosted wallet triggers EU TFR Art.17 enhanced due diligence.<br/>Follow-up callback within 1 business day.',
+    cb:{recordid:'7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c',status:'UNDER_REVIEW',
+        vasp:'Kraken Belgium BVBA',lei:'5299000DUFB71VFOHVB49',ref:'KRK-BE-2025-11204',
+        field:'',code:'MISSING_MANDATORY_FIELD',desc:'',
+        review:'Transfer involves an unhosted wallet (EU TFR Art.17). Enhanced due diligence review is in progress to verify ownership. Follow-up callback within 1 business day.'}
+  },
+  get:{
+    method:'GET',
+    info:'<strong>GET by Record ID</strong><br/>Retrieve an existing record by the server-assigned UUID primary key.',
+    f:{timing:'PRE_TX',e2e:'',uetr:'550e8400-e29b-41d4-a716-446655440000',
+       amt:'',ccy:'EUR',fiat:'',fiatccy:'',date:'',dti:'',purp:'TRAD',inv:'',ustrd:'',
+       dname:'',dctry:'',dlei:'',dnid:'',ddob:'',dwallet:'',dwtype:'HOSTED',
+       cname:'',cctry:'',clei:'',cwallet:'',cwtype:'HOSTED',
+       ovasp:'','ovasp-lei':'',ocrypto:'','ocrypto-lei':'',
+       bvasp:'','bvasp-lei':'',bcrypto:'','bcrypto-lei':'',
+       chain:'DLID/X9J9XDMTD',txid:'',block:'',conf:'',txstatus:'CONFIRMED',
+       dstchain:'',dsttxid:'',bridge:'',bridgecontract:'',dstdti:'',dstamt:'',
+       auth1:'',authctry1:'',rcode1:'EU-TFR',rside1:'BOTH',
+       auth2:'',authctry2:'',rcode2:'EU-TFR',rside2:'CRED',
+       screener:'',scrresult:'CLEAR'}
+  },
+  search_basic:{
+    method:'SEARCH',
+    info:'<strong>Search — March REJECTED outgoing</strong><br/>Reconciliation query: all outgoing records with REJECTED callback in March 2025.<br/>Identifies data quality issues to correct and resubmit. camt.052 analogy.',
+    sr:{'sr-from':'2025-03-01T00:00:00Z','sr-to':'2025-03-31T23:59:59Z',
+        'sr-dir':'OUTGOING','sr-status':'REJECTED','sr-cbstatus':'REJECTED',
+        'sr-chain':'','sr-token':'','sr-lei':'','sr-wtype':'',
+        'sr-amtmin':'','sr-amtmax':'','sr-pagesize':'50','sr-sort':'submitted_at_desc'}
+  },
+  stats_grouped:{
+    method:'STATS',
+    info:'<strong>Stats — Q1 by Counterparty VASP</strong><br/>Aggregate volumes and rejection rates per counterparty VASP, Q1 2025.<br/>Identifies which partners have the most data quality issues. camt.060 analogy.',
+    st:{'st-from':'2025-01-01T00:00:00Z','st-to':'2025-03-31T23:59:59Z',
+        'st-dir':'BOTH','st-groupby':'counterparty_vasp',
+        'st-chain':'','st-token':'','st-lei':''}
+  }
+};
+
+let method = 'POST';
+const g = id => { const el=document.getElementById(id); return el?el.value.trim():''; };
+const s = (id,v) => { const el=document.getElementById(id); if(el) el.value=v??''; };
+
+function switchTab(name) {
+  document.querySelectorAll('.sb-tab').forEach((t,i)=>{
+    const names=['config','parties','chain','reporting'];
+    t.classList.toggle('active', names[i]===name);
+  });
+  document.querySelectorAll('.sb-pane').forEach(p=>{
+    p.classList.toggle('active', p.id==='tab-'+name);
+  });
+}
+
+function setMethod(m) {
+  method = m;
+  const isCallback = m === 'CALLBACK';
+  const isGet = m === 'GET';
+  const isSearch = m === 'SEARCH';
+  const isStats = m === 'STATS';
+  const isPut = m === 'PUT';
+  ['post','put','get','callback','search','stats'].forEach(x=>{
+    const btn = document.getElementById('tab-'+x);
+    if (!btn) return;
+    const active = m === x.toUpperCase();
+    btn.className = 'mtab' + (active ? (x==='get'||x==='search'||x==='stats' ? ' ag' : ' ap') : '');
+  });
+  const isReadLike = isGet || isSearch || isStats;
+  const httpVerb = isGet||isSearch||isStats ? 'GET' : isPut ? 'PUT' : 'POST';
+  const mp = document.getElementById('mp');
+  mp.textContent = httpVerb;
+  mp.className = 'mpill ' + (isReadLike ? 'gp' : 'pp');
+  const endpoint = isCallback ? '/v1/travel-rule/{recordId}/callback'
+    : isGet    ? '/v1/travel-rule/{recordId}'
+    : isPut    ? '/v1/travel-rule/{recordId}'
+    : isSearch ? '/v1/travel-rule/search'
+    : isStats  ? '/v1/travel-rule/stats'
+    : '/v1/travel-rule';
+  document.getElementById('ep-display').innerHTML =
+    `<span class="mpill ${isReadLike?'gp':'pp'}" id="mp">${httpVerb}</span>${endpoint}`;
+  const btn = document.getElementById('sbtn');
+  btn.className = 'sbtn ' + (isReadLike ? 'sg' : 'sp');
+  document.getElementById('slbl').textContent =
+    isCallback ? '▶ Send Callback'
+    : isGet    ? '▶ Retrieve Record'
+    : isPut    ? '▶ Submit Correction'
+    : isSearch ? '▶ Run Search'
+    : isStats  ? '▶ Get Stats'
+    : '▶ Submit Record';
+  // Show/hide field sections
+  document.getElementById('callback-fields').style.display = isCallback ? '' : 'none';
+  document.getElementById('put-fields').style.display      = isPut      ? '' : 'none';
+  document.getElementById('search-fields').style.display   = isSearch   ? '' : 'none';
+  document.getElementById('stats-fields').style.display    = isStats    ? '' : 'none';
+}
+
+function updateCallbackFields() {
+  const st = g('f-cb-status');
+  const rf = document.getElementById('cb-reject-fields');
+  const rv = document.getElementById('cb-review-fields');
+  if (rf) rf.style.display = st === 'REJECTED' ? '' : 'none';
+  if (rv) rv.style.display = st === 'UNDER_REVIEW' ? '' : 'none';
+  updatePreview();
+}
+
+function loadScenario(key) {
+  if (!key) return;
+  const sc = SCENARIOS[key];
+  setMethod(sc.method);
+  document.getElementById('si').innerHTML = sc.info;
+  if (sc.cb) {
+    s('f-cb-recordid', sc.cb.recordid);
+    s('f-cb-status', sc.cb.status);
+    s('f-cb-vasp', sc.cb.vasp);
+    s('f-cb-lei', sc.cb.lei);
+    s('f-cb-ref', sc.cb.ref);
+    s('f-cb-field', sc.cb.field||'');
+    s('f-cb-code', sc.cb.code||'MISSING_MANDATORY_FIELD');
+    s('f-cb-desc', sc.cb.desc||'');
+    s('f-cb-review', sc.cb.review||'');
+    updateCallbackFields();
+  }
+  if (sc.sr) Object.entries(sc.sr).forEach(([k,v]) => s('f-'+k, v));
+  if (sc.st) Object.entries(sc.st).forEach(([k,v]) => s('f-'+k, v));
+  if (sc.put) Object.entries(sc.put).forEach(([k,v]) => s('f-'+k, v));
+  if (sc.f) Object.entries(sc.f).forEach(([k,v]) => s('f-'+k, v));
+  updatePreview();
+}
+
+function buildReq() {
+  const chain = g('f-chain');
+  const dstchain = g('f-dstchain');
+  const isBridge = !!dstchain;
+
+  if (method === 'GET') {
+    return { _type:'GET', record_id: g('f-uetr') || '550e8400-e29b-41d4-a716-446655440000' };
+  }
+
+  if (method === 'SEARCH') {
+    const params = { _type:'SEARCH' };
+    if (g('f-sr-from'))     params.submitted_from    = g('f-sr-from');
+    if (g('f-sr-to'))       params.submitted_to      = g('f-sr-to');
+    if (g('f-sr-dir') && g('f-sr-dir') !== 'BOTH') params.direction = g('f-sr-dir');
+    if (g('f-sr-status'))   params.status            = g('f-sr-status');
+    if (g('f-sr-cbstatus')) params.callback_status   = g('f-sr-cbstatus');
+    if (g('f-sr-chain'))    params.chain_id          = g('f-sr-chain');
+    if (g('f-sr-token'))    params.token_identifier  = g('f-sr-token');
+    if (g('f-sr-lei'))      params.counterparty_vasp_lei = g('f-sr-lei');
+    if (g('f-sr-wtype'))    params.wallet_type       = g('f-sr-wtype');
+    if (g('f-sr-amtmin'))   params.amount_min        = parseFloat(g('f-sr-amtmin'));
+    if (g('f-sr-amtmax'))   params.amount_max        = parseFloat(g('f-sr-amtmax'));
+    if (g('f-sr-pagesize')) params.page_size         = parseInt(g('f-sr-pagesize'))||50;
+    if (g('f-sr-sort'))     params.sort              = g('f-sr-sort');
+    return params;
+  }
+
+  if (method === 'STATS') {
+    const params = { _type:'STATS' };
+    if (g('f-st-from'))    params.submitted_from        = g('f-st-from');
+    if (g('f-st-to'))      params.submitted_to          = g('f-st-to');
+    if (g('f-st-dir') && g('f-st-dir') !== 'BOTH') params.direction = g('f-st-dir');
+    if (g('f-st-groupby')) params.group_by              = g('f-st-groupby');
+    if (g('f-st-chain'))   params.chain_id              = g('f-st-chain');
+    if (g('f-st-token'))   params.token_identifier      = g('f-st-token');
+    if (g('f-st-lei'))     params.counterparty_vasp_lei = g('f-st-lei');
+    return params;
+  }
+
+  if (method === 'CALLBACK') {
+    const st = g('f-cb-status');
+    const body = {
+      _type:'CALLBACK',
+      _recordId: g('f-cb-recordid'),
+      callback_status: st,
+      receiving_vasp: { name: g('f-cb-vasp')||undefined, lei: g('f-cb-lei')||undefined },
+      callback_timestamp: new Date().toISOString(),
+      receiving_vasp_record_ref: g('f-cb-ref')||undefined,
+    };
+    if (st === 'REJECTED') {
+      body.rejection_reasons = [{
+        field: g('f-cb-field')||undefined, code: g('f-cb-code'),
+        description: g('f-cb-desc')||undefined
+      }];
+    }
+    if (st === 'UNDER_REVIEW') {
+      body.review_reason = g('f-cb-review')||undefined;
+    }
+    return JSON.parse(JSON.stringify(body));
+  }
+
+  const chainMeta = CHAIN_META[chain] || {};
+  const dstChainMeta = CHAIN_META[dstchain] || {};
+
+  const legs = [{
+    leg_type: 'ORIGINATION',
+    chain_id: chain,
+    chain_dli: chainMeta.dli || undefined,
+    caip2_chain_id: chainMeta.caip2 || chain,
+    chain_common_name: chainMeta.name || chain,
+    tx_id: g('f-txid') || undefined,
+    block_height: g('f-block') ? parseInt(g('f-block')) : undefined,
+    tx_status: g('f-txstatus'),
+    confirmations: g('f-conf') ? parseInt(g('f-conf')) : undefined,
+    block_explorer_url: (chainMeta.explorer && g('f-txid')) ? chainMeta.explorer+g('f-txid') : undefined,
+    token_dti: g('f-dti') || undefined,
+    token_amount: g('f-amt') || undefined,
+    token_currency: g('f-ccy') || undefined
+  }];
+
+  if (isBridge) {
+    legs.push({
+      leg_type: 'BRIDGE',
+      chain_id: chain,
+      chain_dli: chainMeta.dli || undefined,
+      chain_common_name: (chainMeta.name||chain) + ' → ' + (dstChainMeta.name||dstchain),
+      tx_status: 'CONFIRMED',
+      bridge_protocol: g('f-bridge') || undefined,
+      bridge_contract_address: g('f-bridgecontract') || undefined
+    });
+    legs.push({
+      leg_type: 'DESTINATION',
+      chain_id: dstchain,
+      chain_dli: dstChainMeta.dli || undefined,
+      caip2_chain_id: dstChainMeta.caip2 || dstchain,
+      chain_common_name: dstChainMeta.name || dstchain,
+      tx_id: g('f-dsttxid') || undefined,
+      tx_status: 'CONFIRMED',
+      block_explorer_url: (dstChainMeta.explorer && g('f-dsttxid')) ? dstChainMeta.explorer+g('f-dsttxid') : undefined,
+      token_dti: g('f-dstdti') || g('f-dti') || undefined,
+      token_amount: g('f-dstamt') || undefined,
+      token_currency: g('f-ccy') || undefined
+    });
+  }
+
+  // Regulatory reporting
+  const rr = [];
+  if (g('f-auth1')) rr.push({
+    debit_credit_reporting_indicator: g('f-rside1'),
+    authority: { name: g('f-auth1'), country: g('f-authctry1').toUpperCase() || undefined },
+    details: [{ type: { proprietary: 'TRAVEL-RULE' }, country: g('f-authctry1').toUpperCase()||undefined,
+      reporting_code: g('f-rcode1'), amount: { currency: g('f-ccy'), amount: g('f-amt')||'0.00' } }]
+  });
+  if (g('f-auth2')) rr.push({
+    debit_credit_reporting_indicator: g('f-rside2'),
+    authority: { name: g('f-auth2'), country: g('f-authctry2').toUpperCase() || undefined },
+    details: [{ type: { proprietary: 'TRAVEL-RULE' }, country: g('f-authctry2').toUpperCase()||undefined,
+      reporting_code: g('f-rcode2'), amount: { currency: g('f-ccy'), amount: g('f-amt')||'0.00' } }]
+  });
+
+  const debtorAgent = { financial_institution_identification: {
+    lei: g('f-ovasp-lei')||undefined, name: g('f-ovasp')||undefined
+  }};
+  const creditorAgent = { financial_institution_identification: {
+    lei: g('f-bvasp-lei')||undefined, name: g('f-bvasp')||undefined
+  }};
+  const debtorCryptoAgent = g('f-ocrypto') ? { financial_institution_identification: {
+    lei: g('f-ocrypto-lei')||undefined, name: g('f-ocrypto')
+  }} : undefined;
+  const creditorCryptoAgent = g('f-bcrypto') ? { financial_institution_identification: {
+    lei: g('f-bcrypto-lei')||undefined, name: g('f-bcrypto')
+  }} : undefined;
+
+  const body = {
+    submission_timing: g('f-timing'),
+    blockchain_settlement: { primary_chain_id: chain, legs },
+    travel_rule_data: {
+      payment_identification: {
+        end_to_end_identification: g('f-e2e') || 'NOREF',
+        uetr: g('f-uetr') || undefined
+      },
+      payment_type_information: {
+        local_instrument: g('f-dti') ? { proprietary: g('f-dti') } : undefined,
+        category_purpose: { code: g('f-purp') }
+      },
+      interbank_settlement_amount: { currency: g('f-ccy'), amount: g('f-amt')||'0.00' },
+      interbank_settlement_date: g('f-date') || new Date().toISOString().slice(0,10),
+      instructed_amount: (g('f-fiat') && g('f-fiatccy')) ?
+        { currency: g('f-fiatccy'), amount: g('f-fiat') } : undefined,
+      charge_bearer: 'SHAR',
+      debtor: {
+        name: g('f-dname'), country_of_residence: g('f-dctry').toUpperCase()||undefined,
+        identification: g('f-dlei') ? { organisation_identification: { lei: g('f-dlei') } }
+          : g('f-dnid') ? { private_identification: { other: [{ identification: g('f-dnid'),
+              scheme_name: { code: 'NIDN' } }],
+              date_and_place_of_birth: g('f-ddob') ? { birth_date: g('f-ddob'),
+                city_of_birth: 'Unknown', country_of_birth: g('f-dctry').toUpperCase()||'XX' } : undefined
+            }} : undefined
+      },
+      debtor_account: {
+        type: { proprietary: 'DIGT' },
+        proxy: g('f-dwallet') ? { type: { code: 'EWAL' }, identification: g('f-dwallet') } : undefined
+      },
+      debtor_wallet_type: g('f-dwtype'),
+      debtor_agent: debtorAgent,
+      debtor_crypto_agent: debtorCryptoAgent,
+      creditor_agent: creditorAgent,
+      creditor_crypto_agent: creditorCryptoAgent,
+      creditor: {
+        name: g('f-cname'), country_of_residence: g('f-cctry').toUpperCase()||undefined,
+        identification: g('f-clei') ? { organisation_identification: { lei: g('f-clei') } } : undefined
+      },
+      creditor_account: {
+        type: { proprietary: 'DIGT' },
+        proxy: g('f-cwallet') ? { type: { code: 'EWAL' }, identification: g('f-cwallet') } : undefined
+      },
+      creditor_wallet_type: g('f-cwtype'),
+      purpose: g('f-purp') ? { code: g('f-purp') } : undefined,
+      regulatory_reporting: rr.length ? rr : undefined,
+      remittance_information: {
+        unstructured: g('f-ustrd') ? [g('f-ustrd').slice(0,140)] : undefined,
+        structured: g('f-inv') ? [{ referred_document_information: [{
+          type: { code_or_proprietary: { code: 'CINV' } }, number: g('f-inv'),
+          related_date: { type: { code: 'VALI' }, date: g('f-date')||new Date().toISOString().slice(0,10) }
+        }], creditor_reference_information: { type: { code_or_proprietary: { code: 'SCOR' } },
+          reference: g('f-inv').replace(/[^A-Z0-9]/gi,'').slice(0,35) }
+        }] : undefined
+      }
+    }
+  };
+
+  // Tag with method; add correction_of_callback_ref for PUT
+  body._type = method;
+  if (method === 'PUT') {
+    const ts    = g('f-put-ts');
+    const ref   = g('f-put-ref');
+    const notes = g('f-put-notes');
+    if (ts || ref || notes) {
+      body.correction_of_callback_ref = {};
+      if (ts)    body.correction_of_callback_ref.callback_timestamp        = ts;
+      if (ref)   body.correction_of_callback_ref.receiving_vasp_record_ref = ref;
+      if (notes) body.correction_of_callback_ref.correction_notes          = notes;
+    }
+  }
+
+  return JSON.parse(JSON.stringify(body));
+}
+
+function updatePreview() {
+  const req = buildReq();
+  if (req._type === 'GET') {
+    const d = { _note:'GET — record_id in URL path', record_id: req.record_id };
+    document.getElementById('req-json').innerHTML = `<pre>${highlight(JSON.stringify(d,null,2))}</pre>`;
+    document.getElementById('req-meta').textContent = 'GET – no body';
+  } else if (req._type === 'CALLBACK') {
+    const { _type, _recordId, ...body } = req;
+    const j = JSON.stringify(body, null, 2);
+    document.getElementById('req-json').innerHTML = `<pre>${highlight(j)}</pre>`;
+    document.getElementById('req-meta').textContent =
+      `POST /callback · ${new TextEncoder().encode(j).length} bytes`;
+  } else if (req._type === 'SEARCH' || req._type === 'STATS') {
+    const { _type, ...params } = req;
+    // Display as query string notation
+    const qs = Object.entries(params).map(([k,v])=>`  ${k} = ${v}`).join('\n');
+    const label = _type === 'SEARCH' ? '/v1/travel-rule/search' : '/v1/travel-rule/stats';
+    document.getElementById('req-json').innerHTML =
+      `<pre style="color:var(--muted)"><span style="color:var(--blue)">GET ${label}</span>\n\n<span style="color:var(--dim)">Query Parameters:</span>\n${qs.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</pre>`;
+    document.getElementById('req-meta').textContent = `GET · ${Object.keys(params).length} params`;
+  } else if (req._type === 'POST' || req._type === 'PUT') {
+    const { _type, ...body } = req;
+    const j = JSON.stringify(body, null, 2);
+    document.getElementById('req-json').innerHTML = `<pre>${highlight(j)}</pre>`;
+    document.getElementById('req-meta').textContent =
+      `${_type} · ${new TextEncoder().encode(j).length} bytes · application/json`;
+  }
+}
+
+function highlight(j) {
+  return j.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      let c = 'j-num';
+      if (/^"/.test(m)) c = /:$/.test(m) ? 'j-key' : 'j-str';
+      else if (/true|false/.test(m)) c = 'j-bool';
+      else if (/null/.test(m)) c = 'j-null';
+      return `<span class="${c}">${m}</span>`;
+    });
+}
+
+function sendRequest() {
+  updatePreview();
+  const req = buildReq();
+  document.getElementById('rh').innerHTML =
+    `<div class="ldots"><span></span><span></span><span></span></div>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:8px">Connecting…</span>`;
+  document.getElementById('rbody').innerHTML = '';
+  setTimeout(() => renderResponse(req), 600 + Math.random()*300);
+}
+
+function wTypeClass(wt) {
+  if (wt==='HOSTED') return 'wt-hosted';
+  if (wt==='UNHOSTED') return 'wt-amber wt-unhosted';
+  return 'wt-unknown';
+}
+
+function renderResponse(req) {
+  const isGet = req._type === 'GET';
+  const isCallback = req._type === 'CALLBACK';
+  const elapsed = Math.floor(Math.random()*90)+110;
+  const now = new Date().toISOString();
+
+  // ── CALLBACK ──────────────────────────────────────────────────────────────
+  if (isCallback) {
+    const { _type, _recordId, ...cbBody } = req;
+    const st = cbBody.callback_status;
+    const stColor = st==='ACCEPTED'?'var(--green)':st==='REJECTED'?'var(--red)':'var(--amber)';
+    const stIcon = st==='ACCEPTED'?'✅':st==='REJECTED'?'❌':'🔍';
+    const curStatus = st==='ACCEPTED'?'ACCEPTED':st==='REJECTED'?'REJECTED':'UNDER_REVIEW';
+
+    const rejHtml = (st==='REJECTED' && cbBody.rejection_reasons?.length) ? `
+      <div style="margin-top:8px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">Rejection Detail</div>
+        ${cbBody.rejection_reasons.map(r=>`
+        <div style="background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.2);border-radius:5px;padding:9px 11px;margin-bottom:5px">
+          <div class="dr"><div class="dk">field</div><div class="dv er">${r.field||'—'}</div></div>
+          <div class="dr"><div class="dk">code</div><div class="dv er">${r.code||'—'}</div></div>
+          ${r.description?`<div style="margin-top:6px;font-size:10px;color:var(--muted);line-height:1.5">${r.description}</div>`:''}
+        </div>`).join('')}
+      </div>` : '';
+
+    const reviewHtml = (st==='UNDER_REVIEW' && cbBody.review_reason) ? `
+      <div style="margin-top:8px;background:var(--amber-bg);border:1px solid rgba(210,153,34,.25);
+        border-radius:5px;padding:9px 11px;font-size:10px;color:var(--muted);line-height:1.5">
+        ${cbBody.review_reason}
+      </div>` : '';
+
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/travel-rule/{id}/callback</span>
+       <span class="rt">${elapsed}ms</span>`;
+
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+
+    <div class="card" style="border-color:rgba(56,139,253,.3)">
+      <div class="ch" style="background:rgba(56,139,253,.05)">
+        <span>${stIcon}</span><span class="ct">Callback Received — Data Quality Only</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">record_id (ref)</div><div class="dv hi">${_recordId||'—'}</div></div>
+        <div class="dr"><div class="dk">callback_status</div>
+          <div class="dv" style="color:${stColor};font-weight:700">${st}</div></div>
+        <div class="dr"><div class="dk">receiving_vasp</div><div class="dv">${cbBody.receiving_vasp?.name||'—'}</div></div>
+        ${cbBody.receiving_vasp?.lei?`<div class="dr"><div class="dk">lei</div><div class="dv">${cbBody.receiving_vasp.lei}</div></div>`:''}
+        ${cbBody.receiving_vasp_record_ref?`<div class="dr"><div class="dk">vasp_record_ref</div><div class="dv ok">${cbBody.receiving_vasp_record_ref}</div></div>`:''}
+        <div class="dr"><div class="dk">callback_timestamp</div><div class="dv">${now}</div></div>
+        ${rejHtml}${reviewHtml}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>🔄</span><span class="ct">Record Status Transition (Sending VASP Side)</span></div>
+      <div class="cb">
+        <div class="sflow">
+          <div class="fstep"><div class="fdot done"></div><div class="flabel done">SUBMITTED</div></div>
+          <div class="fline done"></div>
+          <div class="fstep">
+            <div class="fdot ${st==='ACCEPTED'?'done':st==='REJECTED'?'er':'wa'}" style="${st==='REJECTED'?'background:var(--red);border-color:var(--red)':st==='UNDER_REVIEW'?'background:var(--amber);border-color:var(--amber)':''}"></div>
+            <div class="flabel" style="color:${stColor}">${curStatus}</div>
+          </div>
+          ${st==='ACCEPTED'?`<div class="fline done"></div>
+          <div class="fstep"><div class="fdot" style="border-color:var(--dim)"></div><div class="flabel">ARCHIVED</div></div>`:''}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+          <strong style="color:var(--text)">SUBMITTED</strong> →
+          <strong style="color:${stColor}">${curStatus}</strong><br/>
+          ${st==='ACCEPTED'
+            ? '<span style="color:var(--green)">Data quality confirmed.</span> Record retained. Receiving VASP sanctions screening of funds is separate and has not been communicated here.'
+            : st==='REJECTED'
+            ? '<span style="color:var(--red)">Data quality deficiency.</span> Sending VASP corrects and resubmits. The on-chain transfer is unaffected by this status.'
+            : '<span style="color:var(--amber)">Manual review in progress.</span> Follow-up callback expected.'}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(248,81,73,.2)">
+      <div class="ch" style="background:rgba(248,81,73,.04)"><span>⚠️</span>
+        <span class="ct" style="color:var(--red)">Sanctions — Separate Process, Not This API</span>
+      </div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.7">
+        <div style="margin-bottom:6px">⛓ <strong style="color:var(--text)">On-chain transfer executes independently.</strong>
+          The blockchain does not consult this API.</div>
+        <div style="margin-bottom:6px">🏦 <strong style="color:var(--text)">Receiving VASP screens upon receipt of funds,</strong>
+          not upon receipt of this callback.</div>
+        <div>🧊 <strong style="color:var(--text)">If sanctions hit: freeze + report</strong>
+          to competent authority (OFAC / FSMA / FinCEN…). No callback is issued.
+          Returning funds would itself be a sanctions violation in most jurisdictions.</div>
+      </div>
+    </div>
+
+    </div>`;
+    return;
+  }
+
+  // ── SEARCH ─────────────────────────────────────────────────────────────────
+  if (req._type === 'SEARCH') {
+    const { _type, ...params } = req;
+    const dir = params.direction || 'BOTH';
+    const cbStatus = params.callback_status;
+    const isRejectionQuery = cbStatus === 'REJECTED' || params.status === 'REJECTED';
+
+    // Simulated results matching the search scenario
+    const mockRecords = [
+      { record_id:'550e8400-e29b-41d4-a716-446655440042', direction:'OUTGOING',
+        submitted_at:'2025-03-15T10:22:00Z', last_updated_at:'2025-03-15T14:35:22Z',
+        status:'REJECTED', submission_timing:'PRE_TX', primary_chain_id:'DLID/X9J9XDMTD',
+        is_bridge:false,
+        debtor_name:'Acme Trading GmbH', debtor_vasp_lei:'635400DUFB71VFOHVB49',
+        creditor_name:'Bravo Supplies B.V.', creditor_vasp_lei:'7245007VX57GR4IUVZ79',
+        settlement_amount:'50000.00', settlement_currency:'EUR',
+        token_identification:{ dti:'DTID/X9J9XDMTD', ticker:'ETH' },
+        debtor_wallet_type:'HOSTED', creditor_wallet_type:'HOSTED',
+        latest_callback_status:'REJECTED' },
+      { record_id:'7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c', direction:'OUTGOING',
+        submitted_at:'2025-03-16T08:11:00Z', last_updated_at:'2025-03-16T09:12:00Z',
+        status:'UNDER_REVIEW', submission_timing:'POST_TX', primary_chain_id:'DLID/4H95J0R2X',
+        is_bridge:false,
+        debtor_name:'Marie Dupont', debtor_vasp_lei:'',
+        creditor_name:'Marie Dupont', creditor_vasp_lei:'5299000DUFB71VFOHVB49',
+        settlement_amount:'0.03150000', settlement_currency:'XXX',
+        token_identification:{ dti:'DTID/4H95J0R2X', ticker:'BTC' },
+        debtor_wallet_type:'UNHOSTED', creditor_wallet_type:'HOSTED',
+        latest_callback_status:'UNDER_REVIEW' },
+      { record_id:'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d', direction:'OUTGOING',
+        submitted_at:'2025-03-01T14:05:00Z', last_updated_at:'2025-03-01T14:06:12Z',
+        status:'ACCEPTED', submission_timing:'PRE_TX', primary_chain_id:'DLID/X9J9XDMTD',
+        is_bridge:true,
+        debtor_name:'Vertex Technologies Inc.', debtor_vasp_lei:'XKZZ2JZF41MRHTR1V493',
+        creditor_name:'SingTech Pte. Ltd.', creditor_vasp_lei:'HWUPKR0MPOU8FGXBT394',
+        settlement_amount:'125000.00', settlement_currency:'USD',
+        token_identification:{ dti:'DTID/T9B3X8H2K', ticker:'USDC' },
+        debtor_wallet_type:'HOSTED', creditor_wallet_type:'HOSTED',
+        latest_callback_status:'ACCEPTED' },
+    ].filter(r => !cbStatus || r.latest_callback_status === cbStatus)
+     .filter(r => dir === 'BOTH' || r.direction === dir);
+
+    const statusColor = s => s==='ACCEPTED'?'var(--green)':s==='REJECTED'?'var(--red)':s==='UNDER_REVIEW'?'var(--amber)':'var(--muted)';
+    const chainName = id => (CHAIN_META[id]||{}).name || id;
+    const timingBadge = t => `<span class="timing timing-${t==='PRE_TX'?'pre':t==='POST_TX'?'post':'sim'}">${t}</span>`;
+
+    const rowsHtml = mockRecords.map(r => `
+      <div class="sr-row">
+        <div class="sr-top">
+          <div class="sr-id">${r.record_id.slice(0,18)}…</div>
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+            ${timingBadge(r.submission_timing)}
+            <span class="sr-dir ${r.direction==='OUTGOING'?'sr-out':'sr-in'}">${r.direction}</span>
+            ${r.is_bridge?'<span class="bridge-tag">BRIDGE</span>':''}
+          </div>
+        </div>
+        <div class="sr-parties">
+          <span class="sr-party">${r.debtor_name}</span>
+          <span class="sr-arrow">→</span>
+          <span class="sr-party">${r.creditor_name}</span>
+        </div>
+        <div class="sr-meta">
+          <span class="sr-amt">${r.settlement_amount} <span style="color:var(--dim)">${r.settlement_currency}</span></span>
+          ${r.token_identification?.ticker ? `<span class="dti">${r.token_identification.dti||r.token_identification.ticker}</span>` : ''}
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${chainName(r.primary_chain_id)}</span>
+        </div>
+        <div class="sr-status">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">record:</span>
+            <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:${statusColor(r.status)}">${r.status}</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">callback:</span>
+            <span style="font-family:var(--mono);font-size:10px;font-weight:700;color:${statusColor(r.latest_callback_status)}">${r.latest_callback_status}</span>
+            ${r.debtor_wallet_type==='UNHOSTED'||r.creditor_wallet_type==='UNHOSTED' ? '<span class="wtag wt-unhosted">UNHOSTED</span>' : ''}
+          </div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:2px">${r.submitted_at.slice(0,16).replace('T',' ')}</div>
+        </div>
+      </div>`).join('');
+
+    const activeFilters = Object.entries(params)
+      .filter(([k]) => !['page_size','sort'].includes(k))
+      .map(([k,v]) => `<span style="font-family:var(--mono);font-size:9px;background:var(--surface3);border:1px solid var(--border);border-radius:3px;padding:1px 6px;color:var(--cyan)">${k}=${v}</span>`).join(' ');
+
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/travel-rule/search</span>
+       <span class="rt">${elapsed}ms</span>`;
+
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.05)">
+        <span>🔎</span><span class="ct">Search Results — Local Records</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--green)">${mockRecords.length} matched</span>
+      </div>
+      <div class="cb" style="padding:8px 12px">
+        <div style="margin-bottom:8px;display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+          <span style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-right:2px">filters:</span>
+          ${activeFilters || '<span style="font-family:var(--mono);font-size:9px;color:var(--dim)">none</span>'}
+        </div>
+        <div class="sr-list">${rowsHtml}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📄</span><span class="ct">Pagination Envelope (TravelRuleSearchResponse)</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">total_matched</div><div class="dv ok">${mockRecords.length}</div></div>
+        <div class="dr"><div class="dk">page_size</div><div class="dv">${params.page_size||50}</div></div>
+        <div class="dr"><div class="dk">next_cursor</div><div class="dv" style="color:var(--dim);font-size:9px">${mockRecords.length < (params.page_size||50) ? 'absent (final page)' : 'eyJkYXRlIjoiMjAyNS0wMy0xNVQxMjowMDowMFoiLCJpZCI6IjU1MGU4NDAwIn0='}</div></div>
+        <div class="dr"><div class="dk">generated_at</div><div class="dv">${now}</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(210,153,34,.2)">
+      <div class="ch" style="background:rgba(210,153,34,.04)"><span>ℹ️</span><span class="ct">Scope Note</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.7">
+        Results are from <strong style="color:var(--text)">this VASP's local database only</strong>. For cross-VASP reconciliation,
+        fan out the same query to each counterparty and aggregate — all implementations share this schema so summing is straightforward.<br/>
+        <span style="color:var(--dim);font-size:10px">ISO 20022 analogy: camt.052 (intraday) / camt.053 (end-of-day statement)</span>
+      </div>
+    </div>
+
+    </div>`;
+    return;
+  }
+
+  // ── STATS ──────────────────────────────────────────────────────────────────
+  if (req._type === 'STATS') {
+    const { _type, ...params } = req;
+    const groupBy = params.group_by;
+
+    // Simulated stats — counterparty VASP breakdown
+    const mockTotals = {
+      record_count: 347,
+      volumes: [
+        { currency:'EUR', total_amount:'12850000.00', record_count:189 },
+        { currency:'USD', total_amount:'6250000.00',  record_count:112 },
+        { currency:'XXX', token_identification:{ dti:'DTID/4H95J0R2X', ticker:'BTC' }, total_amount:'4.82350000', record_count:46 }
+      ],
+      callback_pending_count: 23,
+      rejection_count: 31,
+      rejection_rate_pct: 8.93,
+      unhosted_wallet_count: 44
+    };
+
+    const mockBreakdown = groupBy === 'counterparty_vasp' ? [
+      { dimension_value:'7245007VX57GR4IUVZ79', dimension_label:'Bitvavo B.V.',
+        record_count:89, rejection_count:3, rejection_rate_pct:3.37,
+        volumes:[{ currency:'EUR', total_amount:'4200000.00', record_count:89 }] },
+      { dimension_value:'5299000DUFB71VFOHVB49', dimension_label:'Kraken Belgium BVBA',
+        record_count:76, rejection_count:11, rejection_rate_pct:14.47,
+        volumes:[{ currency:'EUR', total_amount:'1850000.00', record_count:41 },
+                 { currency:'XXX', token_identification:{ dti:'DTID/4H95J0R2X', ticker:'BTC' }, total_amount:'4.82350000', record_count:35 }] },
+      { dimension_value:'5493000IBP32UQZ0KL24', dimension_label:'Anchorage Digital',
+        record_count:68, rejection_count:6, rejection_rate_pct:8.82,
+        volumes:[{ currency:'USD', total_amount:'4100000.00', record_count:68 }] },
+      { dimension_value:'HWUPKR0MPOU8FGXBT394', dimension_label:'Triple-A Pte. Ltd.',
+        record_count:61, rejection_count:8, rejection_rate_pct:13.11,
+        volumes:[{ currency:'USD', total_amount:'2150000.00', record_count:44 }] },
+      { dimension_value:'635400DUFB71VFOHVB49', dimension_label:'Coinbase Europe',
+        record_count:53, rejection_count:3, rejection_rate_pct:5.66,
+        volumes:[{ currency:'EUR', total_amount:'6800000.00', record_count:53 }] },
+    ] : groupBy === 'chain' ? [
+      { dimension_value:'DLID/X9J9XDMTD', dimension_label:'Ethereum Mainnet',
+        record_count:198, rejection_count:14, rejection_rate_pct:7.07,
+        volumes:[{ currency:'EUR', total_amount:'8650000.00', record_count:112 },
+                 { currency:'USD', total_amount:'4200000.00', record_count:86 }] },
+      { dimension_value:'DLID/4H95J0R2X', dimension_label:'Bitcoin Mainnet',
+        record_count:89, rejection_count:9, rejection_rate_pct:10.11,
+        volumes:[{ currency:'XXX', token_identification:{ dti:'DTID/4H95J0R2X', ticker:'BTC' }, total_amount:'4.82350000', record_count:89 }] },
+      { dimension_value:'CHAINID:ETH-137', dimension_label:'Polygon Mainnet',
+        record_count:60, rejection_count:8, rejection_rate_pct:13.33,
+        volumes:[{ currency:'USD', total_amount:'2050000.00', record_count:60 }] },
+    ] : groupBy === 'wallet_type' ? [
+      { dimension_value:'HOSTED', dimension_label:'Hosted Wallet',
+        record_count:303, rejection_count:18, rejection_rate_pct:5.94,
+        volumes:[{ currency:'EUR', total_amount:'11900000.00', record_count:168 }] },
+      { dimension_value:'UNHOSTED', dimension_label:'Unhosted Wallet (EU TFR Art.17)',
+        record_count:44, rejection_count:13, rejection_rate_pct:29.55,
+        volumes:[{ currency:'XXX', token_identification:{ dti:'DTID/4H95J0R2X', ticker:'BTC' }, total_amount:'4.82350000', record_count:44 }] },
+    ] : [];
+
+    const maxCount = mockBreakdown.length ? Math.max(...mockBreakdown.map(b=>b.record_count)) : 1;
+    const maxRate  = mockBreakdown.length ? Math.max(...mockBreakdown.map(b=>b.rejection_rate_pct)) : 1;
+
+    const volHtml = vols => vols.map(v =>
+      `<span style="font-family:var(--mono);font-size:10px;color:var(--amber)">${v.total_amount}</span>
+       <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">${v.currency}${v.token_identification?.ticker?' ('+v.token_identification.ticker+')':''}</span>`
+    ).join('<span style="color:var(--border);margin:0 4px">·</span>');
+
+    const breakdownHtml = mockBreakdown.length ? `
+      <div class="card">
+        <div class="ch"><span>📊</span><span class="ct">Breakdown by ${groupBy.replace(/_/g,' ')}</span></div>
+        <div class="cb">
+          <div style="font-family:var(--mono);font-size:9px;color:var(--dim);display:grid;grid-template-columns:140px 1fr 80px 70px;gap:4px;padding-bottom:6px;border-bottom:1px solid var(--border);margin-bottom:8px">
+            <span>Counterparty / Value</span><span>Volume &amp; Count</span><span>Records</span><span>Rej. Rate</span>
+          </div>
+          ${mockBreakdown.map(b => {
+            const barW = Math.round(b.record_count / maxCount * 100);
+            const rateW = Math.round(b.rejection_rate_pct / Math.max(maxRate,1) * 100);
+            const rateColor = b.rejection_rate_pct > 10 ? 'var(--red)' : b.rejection_rate_pct > 5 ? 'var(--amber)' : 'var(--green)';
+            return `
+            <div class="stat-row">
+              <div class="stat-label" title="${b.dimension_value}">${b.dimension_label||b.dimension_value}</div>
+              <div class="stat-bar-wrap">
+                <div class="stat-bar" style="width:${barW}%"></div>
+                <div style="margin-top:3px;font-size:9px;color:var(--dim)">${volHtml(b.volumes||[])}</div>
+              </div>
+              <div style="font-family:var(--mono);font-size:11px;color:var(--text);text-align:right">${b.record_count}</div>
+              <div style="text-align:right">
+                <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:${rateColor}">${b.rejection_rate_pct}%</div>
+                <div class="stat-rate-bar-wrap"><div class="stat-rate-bar" style="width:${rateW}%;background:${rateColor}"></div></div>
+              </div>
+            </div>`;
+          }).join('')}
+          <div style="margin-top:8px;font-size:10px;color:var(--dim);line-height:1.5">
+            Rejection rate = data quality callbacks only. For cross-VASP totals: sum <code style="font-family:var(--mono);font-size:9px;color:var(--cyan)">rejection_count</code> and <code style="font-family:var(--mono);font-size:9px;color:var(--cyan)">record_count</code> across counterparties, then recalculate rate.
+          </div>
+        </div>
+      </div>` : '';
+
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/travel-rule/stats</span>
+       <span class="rt">${elapsed}ms</span>`;
+
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.05)">
+        <span>📊</span><span class="ct">Aggregate Totals — ${params.submitted_from?.slice(0,10)||'?'} → ${params.submitted_to?.slice(0,10)||'?'}</span>
+      </div>
+      <div class="cb">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+          <div class="stat-kpi"><div class="stat-kpi-n">${mockTotals.record_count}</div><div class="stat-kpi-l">Total Records</div></div>
+          <div class="stat-kpi"><div class="stat-kpi-n" style="color:var(--red)">${mockTotals.rejection_rate_pct}%</div><div class="stat-kpi-l">Rejection Rate</div></div>
+          <div class="stat-kpi"><div class="stat-kpi-n" style="color:var(--amber)">${mockTotals.callback_pending_count}</div><div class="stat-kpi-l">Pending Callbacks</div></div>
+          <div class="stat-kpi"><div class="stat-kpi-n" style="color:var(--amber)">${mockTotals.unhosted_wallet_count}</div><div class="stat-kpi-l">Unhosted Wallets</div></div>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Volumes (per currency — no cross-currency aggregation)</div>
+        ${mockTotals.volumes.map(v => `
+          <div class="dr">
+            <div class="dk">${v.currency}${v.token_identification?.ticker?' · '+v.token_identification.ticker:''}</div>
+            <div class="dv">
+              <span style="color:var(--amber)">${v.total_amount}</span>
+              <span style="color:var(--dim);font-size:9px;margin-left:6px">${v.record_count} records</span>
+            </div>
+          </div>`).join('')}
+        <div style="margin-top:8px;font-size:10px;color:var(--dim);line-height:1.5">
+          ⚠️ Amounts are <strong style="color:var(--text)">not summed across currencies</strong>. Apply your own FX rates to compute a single fiat equivalent.
+        </div>
+      </div>
+    </div>
+
+    ${breakdownHtml}
+
+    <div class="card" style="border-color:rgba(210,153,34,.2)">
+      <div class="ch" style="background:rgba(210,153,34,.04)"><span>ℹ️</span><span class="ct">Scope Note</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.7">
+        Stats cover <strong style="color:var(--text)">this VASP's own records only</strong>.
+        For network-wide stats, fan out to each counterparty and sum <code style="font-family:var(--mono);font-size:10px;color:var(--cyan)">totals.record_count</code> and per-currency volumes directly.
+        Recalculate <code style="font-family:var(--mono);font-size:10px;color:var(--cyan)">rejection_rate_pct</code> from the summed counts (do not average the rates).<br/>
+        <span style="color:var(--dim);font-size:10px">ISO 20022 analogy: camt.060 (account reporting / statistics request)</span>
+      </div>
+    </div>
+
+    </div>`;
+    return;
+  }
+
+  // ── PUT (CORRECTION) ───────────────────────────────────────────────────────
+  if (req._type === 'PUT') {
+    const { _type, correction_of_callback_ref: corr, ...body } = req;
+    const rid = body.travel_rule_data?.payment_identification?.uetr
+      || '550e8400-e29b-41d4-a716-446655440042';
+    const dname = body.travel_rule_data?.debtor?.name || '—';
+    const cname = body.travel_rule_data?.creditor?.name || '—';
+    const amt   = body.travel_rule_data?.interbank_settlement_amount?.amount || '—';
+    const ccy   = body.travel_rule_data?.interbank_settlement_amount?.currency || '—';
+
+    const corrHtml = corr ? `
+      <div class="card" style="border-color:rgba(63,185,80,.25)">
+        <div class="ch" style="background:rgba(63,185,80,.04)">
+          <span>🔗</span><span class="ct">correction_of_callback_ref — Rejection Linkage</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">callback_timestamp</div>
+            <div class="dv ok">${corr.callback_timestamp||'—'}</div></div>
+          ${corr.receiving_vasp_record_ref ? `<div class="dr"><div class="dk">receiving_vasp_record_ref</div>
+            <div class="dv ok">${corr.receiving_vasp_record_ref}</div></div>` : ''}
+          ${corr.correction_notes ? `<div class="dr"><div class="dk">correction_notes</div>
+            <div class="dv" style="color:var(--muted);font-size:10px;line-height:1.5">${corr.correction_notes}</div></div>` : ''}
+          <div style="margin-top:8px;font-size:10px;color:var(--dim);line-height:1.5">
+            The receiving VASP uses <code style="font-family:var(--mono);font-size:9px;color:var(--cyan)">callback_timestamp</code>
+            to locate their open rejection record and queue this correction for
+            targeted re-validation — checking only the previously rejected fields
+            rather than performing a full re-review.
+          </div>
+        </div>
+      </div>` : `
+      <div class="card" style="border-color:rgba(210,153,34,.2)">
+        <div class="ch" style="background:rgba(210,153,34,.04)">
+          <span>ℹ️</span><span class="ct">No correction_of_callback_ref provided</span>
+        </div>
+        <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+          Without <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">correction_of_callback_ref</code>,
+          the receiving VASP will treat this as an unsolicited update and perform a
+          full re-review rather than targeted re-validation. Consider adding the
+          rejected callback timestamp for a cleaner audit trail and faster processing.
+        </div>
+      </div>`;
+
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">PUT /v1/travel-rule/${rid}</span>
+       <span class="rt">${elapsed}ms</span>`;
+
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.05)">
+        <span>✏️</span><span class="ct">Correction Submitted — Record Updated</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">record_id</div><div class="dv hi">${rid}</div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv" style="color:var(--blue);font-weight:700">SUBMITTED</div></div>
+        <div class="dr"><div class="dk">previous_status</div>
+          <div class="dv" style="color:var(--red)">REJECTED</div></div>
+        <div class="dr"><div class="dk">updated_at</div><div class="dv">${now}</div></div>
+        <div class="dr"><div class="dk">debtor → creditor</div>
+          <div class="dv">${dname} → ${cname}</div></div>
+        <div class="dr"><div class="dk">amount</div>
+          <div class="dv" style="color:var(--amber)">${amt} ${ccy}</div></div>
+      </div>
+    </div>
+
+    ${corrHtml}
+
+    <div class="card">
+      <div class="ch"><span>🔄</span><span class="ct">Correction Lifecycle</span></div>
+      <div class="cb">
+        <div class="sflow">
+          <div class="fstep"><div class="fdot done"></div><div class="flabel done">SUBMITTED</div></div>
+          <div class="fline done"></div>
+          <div class="fstep"><div class="fdot done" style="background:var(--red);border-color:var(--red)"></div>
+            <div class="flabel" style="color:var(--red)">REJECTED</div></div>
+          <div class="fline done"></div>
+          <div class="fstep"><div class="fdot cur"></div><div class="flabel cur">SUBMITTED</div></div>
+          <div class="fline"></div>
+          <div class="fstep"><div class="fdot"></div><div class="flabel">ACCEPTED</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+          Record reset to <strong style="color:var(--blue)">SUBMITTED</strong>. The receiving VASP
+          will validate the corrected data and post a new callback —
+          ideally <strong style="color:var(--green)">ACCEPTED</strong> this time, or a further
+          <strong style="color:var(--red)">REJECTED</strong> with updated rejection reasons if
+          additional issues are found. The full callback history is retained on the record.
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(248,81,73,.2)">
+      <div class="ch" style="background:rgba(248,81,73,.04)"><span>⚠️</span>
+        <span class="ct" style="color:var(--red)">Sanctions — Unchanged by Correction</span>
+      </div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.7">
+        The REJECTED callback was a <strong style="color:var(--text)">data quality</strong> finding only.
+        The on-chain transfer executed independently and the receiving VASP's sanctions
+        screening is a separate process unaffected by this correction. Correcting
+        Travel Rule data does not retroactively alter any sanctions obligation.
+      </div>
+    </div>
+
+    </div>`;
+    return;
+  }
+
+  const sc = isGet ? 200 : 201;
+  const rid = isGet ? (req.record_id||'550e8400-e29b-41d4-a716-446655440000')
+    : '550e8400-e29b-'+Math.random().toString(16).slice(2,6)+'-a716-'+Date.now().toString(16).slice(-12);
+
+  const td = isGet ? {} : (req.travel_rule_data || {});
+  const bs = req.blockchain_settlement || {};
+  const legs = bs.legs || [];
+  const origLeg = legs.find(l=>l.leg_type==='ORIGINATION') || {};
+  const bridgeLeg = legs.find(l=>l.leg_type==='BRIDGE');
+  const dstLeg = legs.find(l=>l.leg_type==='DESTINATION');
+
+  const dname = td.debtor?.name || '—';
+  const cname = td.creditor?.name || '—';
+  const dwallet = td.debtor_account?.proxy?.identification || '—';
+  const cwallet = td.creditor_account?.proxy?.identification || '—';
+  const dwtype = td.debtor_wallet_type || 'HOSTED';
+  const cwtype = td.creditor_wallet_type || 'HOSTED';
+  const ovasp = td.debtor_agent?.financial_institution_identification?.name || '—';
+  const bvasp = td.creditor_agent?.financial_institution_identification?.name || '—';
+  const ocrypto = td.debtor_crypto_agent?.financial_institution_identification?.name;
+  const bcrypto = td.creditor_crypto_agent?.financial_institution_identification?.name;
+  const amt = td.interbank_settlement_amount?.amount || '—';
+  const ccy = td.interbank_settlement_amount?.currency || '—';
+  const fiat = td.instructed_amount;
+  const dti = td.payment_type_information?.local_instrument?.proprietary || '—';
+  const tokenMeta = TOKEN_META[dti] || {};
+  const ticker = tokenMeta.ticker || dti.replace('DTID/','');
+  const timing = req.submission_timing || 'PRE_TX';
+  const scrResult = g('f-scrresult');
+  const screener = g('f-screener');
+  const remit = td.remittance_information?.unstructured?.[0] || '—';
+  const invNb = td.remittance_information?.structured?.[0]?.referred_document_information?.[0]?.number;
+  const rr = td.regulatory_reporting || [];
+  const primaryChain = bs.primary_chain_id || '—';
+  const primaryMeta = CHAIN_META[primaryChain] || {};
+  const isBridge = !!dstLeg;
+
+  const timingCls = timing==='PRE_TX'?'timing-pre':timing==='POST_TX'?'timing-post':'timing-sim';
+  const timingLabel = timing==='PRE_TX'?'PRE-TX':timing==='POST_TX'?'POST-TX':'SIMULTANEOUS';
+
+  const ccyNote = ccy==='XXX'
+    ? `<span style="font-size:9px;color:var(--amber)"> XXX — native token, no fiat peg</span>`
+    : `<span style="font-size:9px;color:var(--dim)"> fiat-pegged stablecoin</span>`;
+
+  const fiatNote = fiat
+    ? `<div style="margin-top:5px;font-family:var(--mono);font-size:10px;color:var(--muted)">
+        Fiat equivalent: <span style="color:var(--green)">${fiat.amount} ${fiat.currency}</span> (instructed_amount)
+       </div>` : '';
+
+  // Token identification hierarchy
+  const isDti = dti.startsWith('DTID/');
+  const isIsin = dti.startsWith('ISIN/');
+  const idRows = [
+    { p:1, label:'DTI', val: isDti ? dti : '—', active: isDti, color:'var(--green)' },
+    { p:2, label:'ISIN', val: isIsin ? dti : '—', active: isIsin, color:'var(--cyan)' },
+    { p:3, label:'Contract addr', val:'→ token_identification extension (52+ chars)', active:false, color:'var(--muted)' },
+    { p:4, label:'Ticker', val: tokenMeta.ticker ? `${tokenMeta.ticker} (${tokenMeta.name})` : '—', active:false, color:'var(--dim)' },
+  ];
+  const idHierarchyHtml = idRows.map(r=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;
+      font-family:var(--mono);font-size:10px;
+      ${r.active?'background:rgba(63,185,80,.08);border:1px solid rgba(63,185,80,.2)':'background:var(--surface3);border:1px solid var(--border);opacity:.5'}">
+      <span style="color:var(--dim);font-size:9px;width:14px;text-align:right">${r.p}</span>
+      <span style="color:${r.color};font-size:8px;font-weight:700;text-transform:uppercase;width:68px">${r.label}</span>
+      <span style="flex:1;color:${r.active?'var(--text)':'var(--dim)'}">${r.val}</span>
+      <span>${r.active?'✅':''}</span>
+    </div>`).join('');
+
+  // Legs HTML
+  const legBorder = {ORIGINATION:'leg-o',BRIDGE:'leg-b',DESTINATION:'leg-d'};
+  const legTypeCls = {ORIGINATION:'lo',BRIDGE:'lb',DESTINATION:'ld'};
+  const legIcons = {ORIGINATION:'🔼',BRIDGE:'🌉',DESTINATION:'🔽'};
+  const legsHtml = legs.map(leg=>{
+    const statusColor = leg.tx_status==='CONFIRMED'?'ok':leg.tx_status==='PENDING'?'wa':'er';
+    const legMeta = CHAIN_META[leg.chain_id] || {};
+    const dli = leg.chain_dli || legMeta.dli;
+    return `<div class="leg ${legBorder[leg.leg_type]||''}">
+      <div class="leg-type ${legTypeCls[leg.leg_type]||''}">${legIcons[leg.leg_type]||''} ${leg.leg_type}</div>
+      <div class="leg-chain">${leg.chain_common_name||leg.chain_id}</div>
+      ${dli?`<div style="font-family:var(--mono);font-size:9px;color:var(--purple);margin-bottom:2px">DLI: ${dli} <span style="color:var(--dim)">· ISO 24165-2</span></div>`:''}
+      ${leg.tx_id?`<div class="leg-tx">${leg.tx_id.slice(0,44)}${leg.tx_id.length>44?'…':''}</div>`:''}
+      ${leg.token_dti?`<div class="leg-token">${leg.token_dti} · ${leg.token_amount||'?'} ${leg.token_currency||''}</div>`:''}
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${leg.tx_status?`<span class="leg-status dv ${statusColor}">${leg.tx_status}</span>`:''}
+        ${leg.confirmations?`<span class="leg-conf">${leg.confirmations} conf.</span>`:''}
+        ${leg.bridge_protocol?`<div class="bridge-tag">${leg.bridge_protocol}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Agent boxes
+  const agentBoxes = [
+    { role:'Debtor Agent', name:ovasp, lei:td.debtor_agent?.financial_institution_identification?.lei, extra:false },
+    ocrypto ? { role:'Debtor Crypto Agent', name:ocrypto, lei:td.debtor_crypto_agent?.financial_institution_identification?.lei, extra:true } : null,
+    { role:'Creditor Agent', name:bvasp, lei:td.creditor_agent?.financial_institution_identification?.lei, extra:false },
+    bcrypto ? { role:'Creditor Crypto Agent', name:bcrypto, lei:td.creditor_crypto_agent?.financial_institution_identification?.lei, extra:true } : null,
+  ].filter(Boolean);
+  const agentsHtml = agentBoxes.map(a=>`
+    <div class="abox ${a.extra?'acrypto':''}">
+      <div class="arole">${a.role}</div>
+      <div class="aname">${a.name||'—'}</div>
+      ${a.lei?`<div class="alei">LEI: ${a.lei}</div>`:''}
+    </div>`).join('');
+
+  // Regulatory reporting
+  const rrHtml = rr.map(r=>`
+    <div class="dr"><div class="dk">indicator</div><div class="dv ok">${r.debit_credit_reporting_indicator}</div></div>
+    <div class="dr"><div class="dk">authority</div><div class="dv">${r.authority?.name||'—'} (${r.authority?.country||'?'})</div></div>
+    <div class="dr"><div class="dk">reporting_code</div><div class="dv wa">${r.details?.[0]?.reporting_code||'—'}</div></div>
+    <div class="dr"><div class="dk">amount</div><div class="dv">${r.details?.[0]?.amount?.amount||'—'} ${r.details?.[0]?.amount?.currency||''}</div></div>
+  `).join('<hr style="border:none;border-top:1px solid var(--border);margin:6px 0"/>');
+
+  // Lifecycle flow — no ACKNOWLEDGED, no SANCTIONS_HIT
+  const flowHtml = `
+    <div class="fstep"><div class="fdot done"></div><div class="flabel done">SUBMITTED</div></div>
+    <div class="fline"></div>
+    <div class="fstep"><div class="fdot cur"></div><div class="flabel cur">awaiting callback</div></div>
+    <div class="fline"></div>
+    <div class="fstep"><div class="fdot"></div><div class="flabel">ACCEPTED</div></div>
+    <div class="fline"></div>
+    <div class="fstep"><div class="fdot"></div><div class="flabel">ARCHIVED</div></div>`;
+
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge s${sc}">${sc} ${sc===201?'Created':'OK'}</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${isGet?'GET':' POST'} /v1/travel-rule${isGet?'/'+rid.slice(0,18)+'…':''}</span>
+     <span class="timing ${timingCls}">${timingLabel}</span>
+     <span class="rt">${elapsed}ms</span>`;
+
+  document.getElementById('rbody').innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+
+  <div class="card">
+    <div class="ch"><span>✅</span><span class="ct">Record ${sc===201?'Created':'Retrieved'}</span></div>
+    <div class="cb">
+      <div class="dr"><div class="dk">record_id (primary key)</div><div class="dv hi">${rid}</div></div>
+      <div class="dr"><div class="dk">status</div><div class="dv wa">SUBMITTED — awaiting callback</div></div>
+      <div class="dr"><div class="dk">${sc===201?'submitted_at':'last_updated_at'}</div><div class="dv">${now}</div></div>
+      <div class="dr"><div class="dk">submission_timing</div><div class="dv"><span class="timing ${timingCls}">${timing}</span></div></div>
+      <div class="dr"><div class="dk">primary_chain_id</div><div class="dv wa">${primaryChain}</div></div>
+      ${primaryMeta.dli?`<div class="dr"><div class="dk">chain_dli</div><div class="dv" style="color:var(--purple)">${primaryMeta.dli} <span style="color:var(--dim);font-size:9px">· ISO 24165-2</span></div></div>`:''}
+      <div class="dr"><div class="dk">ISO 20022 settlement</div><div class="dv" style="font-size:10px;color:var(--muted)">ClearingSystem/Proprietary = ${primaryChain}</div></div>
+      ${isBridge?`<div class="dr"><div class="dk">transfer type</div><div class="dv wa">CROSS-CHAIN BRIDGE (${legs.length} legs)</div></div>`:''}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>⛓</span><span class="ct">Blockchain Settlement Legs${isBridge?' — Bridge Transfer':''}</span></div>
+    <div class="cb"><div class="legs">${legsHtml}</div></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>🪙</span><span class="ct">Digital Asset · Token Identification Hierarchy</span></div>
+    <div class="cb">
+      <div style="margin-bottom:10px">
+        <div class="apill">
+          <span class="at">${ticker}</span>
+          <span>${amt}</span>
+          <span class="af">${ccy}</span>
+        </div>
+        <span class="dti">${dti}</span>${ccyNote}
+      </div>
+      ${fiatNote}
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:8px 0 5px">
+        local_instrument/proprietary priority order
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">${idHierarchyHtml}</div>
+      <div style="margin-top:7px;font-size:10px;color:var(--dim);line-height:1.5">
+        Contract addresses exceed Max35Text (52+ chars with chain qualifier) →
+        use <code style="font-family:var(--mono);color:var(--purple)">token_identification</code> extension object.
+      </div>
+      <div class="dr" style="margin-top:8px"><div class="dk">proxy type</div><div class="dv" style="color:var(--cyan)">EWAL (Electronic Wallet)</div></div>
+      <div class="dr"><div class="dk">charge_bearer</div><div class="dv">SHAR</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>👤</span><span class="ct">Parties · PartyIdentification272 + CashAccount40</span></div>
+    <div class="cb">
+      <div class="pgrid">
+        <div class="pbox">
+          <div class="prole">Debtor (Originator)</div>
+          <div class="pname">${dname}</div>
+          <div class="paddr">${dwallet}</div>
+          <div><span class="wtag ${wTypeClass(dwtype)}">${dwtype}</span></div>
+        </div>
+        <div class="pbox">
+          <div class="prole">Creditor (Beneficiary)</div>
+          <div class="pname">${cname}</div>
+          <div class="paddr">${cwallet}</div>
+          <div><span class="wtag ${wTypeClass(cwtype)}">${cwtype}</span></div>
+        </div>
+      </div>
+      ${dwtype==='UNHOSTED'||cwtype==='UNHOSTED' ? `
+      <div class="callout callout-amber" style="margin-top:6px;margin-bottom:0">
+        ⚠️ <strong style="color:var(--amber)">Unhosted wallet</strong> —
+        EU TFR Art.17 enhanced due diligence. Verify ownership, retain counterparty data.
+      </div>` : ''}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>🏦</span><span class="ct">Agents · BranchAndFinancialInstitutionIdentification8</span></div>
+    <div class="cb">
+      <div class="agrid">${agentsHtml}</div>
+      ${ocrypto ? `<div class="callout" style="margin-top:8px;margin-bottom:0;font-size:10px">
+        <code>debtor_agent</code> = bank with KYC/Travel Rule obligation<br/>
+        <code>debtor_crypto_agent</code> = crypto custodian executing on-chain
+      </div>` : ''}
+    </div>
+  </div>
+
+  ${rr.length ? `
+  <div class="card">
+    <div class="ch"><span>⚖️</span><span class="ct">Regulatory Reporting · RegulatoryReporting10</span></div>
+    <div class="cb">${rrHtml}</div>
+  </div>` : ''}
+
+  <div class="card">
+    <div class="ch"><span>🛡</span><span class="ct">Sanctions Screening — Sending VASP Outgoing Audit Trail</span></div>
+    <div class="cb">
+      <div class="scr-${scrResult==='CLEAR'?'clear':'match'}" style="${scrResult!=='CLEAR'?'background:rgba(248,81,73,.08);border-color:rgba(248,81,73,.3)':''}">
+        <div class="scr-icon">${scrResult==='CLEAR'?'✅':'⚠️'}</div>
+        <div>
+          <div class="scr-label" style="${scrResult!=='CLEAR'?'color:var(--red)':''}">
+            ${scrResult} — outgoing pre-check
+          </div>
+          <div class="scr-sub">${screener||'Screening provider'} · OFAC-SDN · EU-CONSOLIDATED · UN-CONSOLIDATED</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--dim);line-height:1.5">
+        Sending VASP's outgoing screening audit trail only.
+        Receiving VASP screens independently on fund arrival — any hit means freeze + report, not a callback.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>📄</span><span class="ct">Remittance · RemittanceInformation26 (pacs.008 compatible)</span></div>
+    <div class="cb">
+      <div class="rblk">${remit}</div>
+      ${invNb ? `<div class="rref">🧾 ReferredDocument CINV: ${invNb}</div>` : ''}
+      <div style="margin-top:8px;font-size:10px;color:var(--dim);line-height:1.5">
+        Identical structure to pacs.008 — zero extra mapping for banks already processing ISO 20022.
+        Travels off-chain: no OP_RETURN size limits, no on-chain GDPR exposure.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>🔄</span><span class="ct">Record Lifecycle — Awaiting Callback</span></div>
+    <div class="cb">
+      <div class="sflow">${flowHtml}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+        Next: receiving VASP posts
+        <code style="font-family:var(--mono);font-size:10px;color:var(--blue)">POST /v1/travel-rule/${rid.slice(0,8)}…/callback</code>
+        with <code style="font-family:var(--mono);font-size:10px;color:var(--green)">ACCEPTED</code>,
+        <code style="font-family:var(--mono);font-size:10px;color:var(--red)">REJECTED</code> or
+        <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">UNDER_REVIEW</code>.
+        Load a Callback scenario above to simulate.
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="border-color:rgba(56,139,253,.25)">
+    <div class="ch" style="background:rgba(56,139,253,.05)"><span>🔗</span><span class="ct">Location Header</span></div>
+    <div class="cb">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--cyan);background:var(--surface3);border-radius:4px;padding:7px 9px">
+        /v1/travel-rule/${rid}
+      </div>
+    </div>
+  </div>
+
+  </div>`;
+}
+
+// Wire up all inputs for live preview
+document.querySelectorAll('input,select,textarea').forEach(el => {
+  el.addEventListener('input', updatePreview);
+  el.addEventListener('change', updatePreview);
+});
+</script>
+</body>
+</html>
