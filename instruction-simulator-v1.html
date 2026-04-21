@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blockchain Payment Instruction API v1 – pacs.crypto</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#21262d;
+      --border:#30363d;--border-hi:#388bfd;
+      --text:#e6edf3;--muted:#7d8590;--dim:#484f58;
+      --blue:#388bfd;--blue-bg:rgba(56,139,253,.12);
+      --green:#3fb950;--green-bg:rgba(63,185,80,.1);
+      --amber:#d29922;--amber-bg:rgba(210,153,34,.1);
+      --red:#f85149;--purple:#bc8cff;--cyan:#79c0ff;--teal:#39d353;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+
+    header{background:var(--surface);border-bottom:1px solid var(--border);height:52px;
+      display:flex;align-items:center;gap:10px;padding:0 20px;position:sticky;top:0;z-index:99}
+    .logo{width:28px;height:28px;background:linear-gradient(135deg,#7b3fd9,#bc8cff);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;
+      font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+    header h1{font-size:13px;font-weight:500;white-space:nowrap}
+    .hbadge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid;white-space:nowrap}
+    .hb-purple{color:var(--purple);background:rgba(188,140,255,.08);border-color:rgba(188,140,255,.25)}
+    .hb-cyan{color:var(--cyan);background:rgba(121,192,255,.07);border-color:rgba(121,192,255,.2)}
+    .hb-amber{color:var(--amber);background:var(--amber-bg);border-color:rgba(210,153,34,.25)}
+    .hb-green{color:var(--green);background:var(--green-bg);border-color:rgba(63,185,80,.25)}
+    .hb-ver{color:var(--muted);background:var(--surface3);border-color:var(--border)}
+    .hspace{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+    .app{display:grid;grid-template-columns:320px 1fr 1fr;height:calc(100vh - 52px);overflow:hidden}
+
+    aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .sb-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+    .sb-tab{flex:1;padding:9px 4px;font-family:var(--mono);font-size:10px;font-weight:700;
+      background:transparent;border:none;color:var(--dim);cursor:pointer;
+      border-bottom:2px solid transparent;transition:all .15s;text-align:center}
+    .sb-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+    .sb-pane{display:none;flex:1;overflow-y:auto;padding:14px}
+    .sb-pane.active{display:block}
+
+    .sb-title{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}
+    .mtabs{display:flex;gap:3px;margin-bottom:10px;flex-wrap:wrap}
+    .mtab{flex:1;padding:5px 3px;font-family:var(--mono);font-size:10px;font-weight:700;
+      border:1px solid var(--border);border-radius:4px;background:transparent;
+      color:var(--muted);cursor:pointer;text-align:center;transition:all .15s;min-width:40px}
+    .mtab.ap{background:var(--green-bg);border-color:rgba(63,185,80,.4);color:var(--green)}
+    .mtab.ag{background:var(--blue-bg);border-color:rgba(56,139,253,.4);color:var(--blue)}
+    .mtab.ard{background:rgba(248,81,73,.1);border-color:rgba(248,81,73,.3);color:var(--red)}
+    .ep{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-bottom:11px;word-break:break-all}
+    .mpill{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:4px}
+    .pp{background:rgba(63,185,80,.18);color:var(--green)}
+    .gp{background:rgba(56,139,253,.15);color:var(--blue)}
+    .rp-pill{background:rgba(248,81,73,.15);color:var(--red)}
+
+    select{width:100%;background:var(--surface3);border:1px solid var(--border);
+      border-radius:5px;color:var(--text);font-family:var(--sans);font-size:12px;
+      padding:7px 9px;cursor:pointer;outline:none;appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath fill='%237d8590' d='M5 7L0 0h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 9px center}
+    select:focus{border-color:var(--border-hi)}
+    .si{margin-top:8px;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;font-size:11px;
+      color:var(--muted);line-height:1.6}
+    .si strong{color:var(--cyan)}
+    .fsec{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;padding:10px 0 6px;
+      border-bottom:1px solid var(--border);margin-bottom:8px;margin-top:4px}
+    .fg{margin-bottom:7px}
+    .fl{font-size:10px;font-weight:500;color:var(--muted);margin-bottom:3px;
+      display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+    .ft{font-family:var(--mono);font-size:8px;color:var(--purple);
+      background:rgba(188,140,255,.08);border:1px solid rgba(188,140,255,.2);
+      border-radius:2px;padding:0 4px}
+    .freq{font-family:var(--mono);font-size:8px;color:var(--red);
+      background:rgba(248,81,73,.08);border:1px solid rgba(248,81,73,.2);
+      border-radius:2px;padding:0 4px}
+    input[type=text],input[type=number],textarea{width:100%;background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;color:var(--text);
+      font-family:var(--mono);font-size:11px;padding:6px 9px;outline:none;transition:border-color .15s}
+    input:focus,textarea:focus{border-color:var(--border-hi)}
+    textarea{resize:vertical;min-height:40px;line-height:1.5}
+    .callout{background:rgba(56,139,253,.06);border:1px solid rgba(56,139,253,.2);
+      border-left:3px solid var(--blue);border-radius:0 5px 5px 0;
+      padding:8px 11px;font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+    .callout code{font-family:var(--mono);font-size:10px;color:var(--cyan);
+      background:rgba(121,192,255,.08);padding:1px 4px;border-radius:3px}
+    .callout-amber{border-left-color:var(--amber);background:rgba(210,153,34,.06);border-color:rgba(210,153,34,.2)}
+    .callout-amber code{color:var(--amber);background:rgba(210,153,34,.08)}
+    .callout-green{border-left-color:var(--green);background:rgba(63,185,80,.04);border-color:rgba(63,185,80,.2)}
+
+    .sbtn{width:100%;padding:9px;border:none;border-radius:6px;font-family:var(--mono);
+      font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.04em;
+      transition:all .15s;display:flex;align-items:center;justify-content:center;
+      gap:7px;margin-top:8px}
+    .sbtn.sp{background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff}
+    .sbtn.sg{background:linear-gradient(135deg,#1b6fd9,#388bfd);color:#fff}
+    .sbtn.sr{background:linear-gradient(135deg,#b62324,#f85149);color:#fff}
+    .sbtn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+    .sbtn:active{transform:translateY(0);filter:brightness(.95)}
+
+    .panel{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+    .ph{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+    .pt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .pm{font-family:var(--mono);font-size:10px;color:var(--dim)}
+    .jv{flex:1;overflow-y:auto;padding:18px;font-family:var(--mono);font-size:11.5px;
+      line-height:1.7;background:var(--bg)}
+    .jv pre{white-space:pre-wrap;word-break:break-word}
+    .j-key{color:#79c0ff}.j-str{color:#a5d6ff}.j-num{color:#f2cc60}
+    .j-bool{color:#ff7b72}.j-null{color:var(--dim)}
+
+    .rp{display:flex;flex-direction:column;overflow:hidden}
+    .rh{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 18px;
+      display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:44px}
+    .sbadge{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:4px}
+    .s201,.s200{background:var(--green-bg);border:1px solid rgba(63,185,80,.35);color:var(--green)}
+    .s409{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--amber)}
+    .s404,.s400,.s422{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+    .rt{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
+    .rb{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden}
+    .ch{padding:9px 13px;background:var(--surface2);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:7px}
+    .ct{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .cb{padding:12px}
+    .dr{display:grid;grid-template-columns:160px 1fr;gap:6px;padding:4px 0;
+      border-bottom:1px solid var(--border);align-items:start}
+    .dr:last-child{border-bottom:none}
+    .dk{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .dv{font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-all}
+    .dv.hi{color:var(--cyan)}.dv.ok{color:var(--green)}.dv.wa{color:var(--amber)}.dv.er{color:var(--red)}
+    .dv.addr{color:var(--purple);font-size:9.5px}
+
+    .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+    .pbox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .prole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+    .pname{font-size:13px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .pdet{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:2px}
+    .paddr{font-family:var(--mono);font-size:9px;color:var(--purple);
+      background:rgba(188,140,255,.06);border-radius:3px;padding:3px 6px;margin-top:4px;word-break:break-all}
+    .agrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .abox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:8px 10px}
+    .arole{font-family:var(--mono);font-size:8px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+    .aname{font-size:12px;font-weight:500;color:var(--text);margin-bottom:2px}
+    .alei{font-family:var(--mono);font-size:9px;color:var(--muted)}
+    .apill{display:inline-flex;align-items:center;gap:8px;background:var(--surface3);
+      border:1px solid var(--border);border-radius:16px;padding:5px 13px;
+      font-family:var(--mono);font-size:12px;margin-bottom:6px}
+    .at{color:var(--amber);font-weight:700}.af{color:var(--dim);font-size:10px}
+    .dti-tag{color:var(--purple);font-size:9px;background:rgba(188,140,255,.07);
+      padding:1px 6px;border-radius:3px;margin-left:4px}
+
+    /* Status flow */
+    .sflow{display:flex;align-items:center;padding:8px 0}
+    .fstep{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:60px}
+    .fdot{width:10px;height:10px;border-radius:50%;border:2px solid var(--border);background:var(--bg)}
+    .fdot.done{background:var(--green);border-color:var(--green)}
+    .fdot.cur{background:var(--blue);border-color:var(--blue);box-shadow:0 0 8px rgba(56,139,253,.5)}
+    .fdot.fail{background:var(--red);border-color:var(--red)}
+    .fline{flex:1;height:2px;background:var(--border);min-width:10px;margin-top:-19px}
+    .fline.done{background:var(--green)}
+    .flabel{font-family:var(--mono);font-size:7.5px;color:var(--dim);text-align:center;line-height:1.3}
+    .flabel.done{color:var(--green)}.flabel.cur{color:var(--blue)}.flabel.fail{color:var(--red)}
+
+    /* Fee breakdown */
+    .fee-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:8px}
+    .fee-box{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px;text-align:center}
+    .fee-amt{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)}
+    .fee-lbl{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.07em}
+    .fee-lock{display:inline-block;font-family:var(--mono);font-size:8px;font-weight:700;
+      padding:2px 7px;border-radius:10px;margin-top:6px}
+    .fl-capped{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .fl-exact{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+    .fl-indicative{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+
+    /* Chain health */
+    .congestion{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;
+      padding:2px 8px;border-radius:10px}
+    .cong-low{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .cong-med{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .cong-high{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+
+    /* Finality */
+    .fin-bar-wrap{background:var(--surface3);border-radius:4px;height:8px;margin:6px 0}
+    .fin-bar{height:8px;border-radius:4px;transition:width .6s ease}
+    .fin-prob{background:var(--amber)}
+    .fin-final{background:var(--green)}
+
+    /* Ramp flow */
+    .ramp-flow{display:flex;align-items:center;gap:6px;padding:8px;
+      background:var(--surface3);border-radius:5px;margin-bottom:8px}
+    .ramp-box{flex:1;background:var(--surface2);border:1px solid var(--border);
+      border-radius:4px;padding:6px 9px;text-align:center}
+    .ramp-label{font-family:var(--mono);font-size:8px;color:var(--dim);margin-bottom:2px;text-transform:uppercase}
+    .ramp-val{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--amber)}
+    .ramp-arrow{color:var(--purple);font-size:16px;flex-shrink:0}
+
+    /* Slippage exceeded */
+    .slip-alert{background:rgba(248,81,73,.06);border:1px solid rgba(248,81,73,.3);
+      border-radius:5px;padding:12px;text-align:center}
+
+    .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:10px;color:var(--dim);padding:40px;text-align:center}
+    .ei{font-size:36px;opacity:.4}.et{font-size:15px;font-style:italic;color:var(--muted)}
+    .es{font-size:11px;line-height:1.6;max-width:240px}
+    .ldots{display:flex;gap:4px;align-items:center}
+    .ldots span{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:blink 1.2s infinite}
+    .ldots span:nth-child(2){animation-delay:.2s}.ldots span:nth-child(3){animation-delay:.4s}
+    @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+    @keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .ani{animation:fi .22s ease forwards}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+    /* Search rows */
+    .sr-list{display:flex;flex-direction:column;gap:6px}
+    .sr-row{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:9px 11px}
+    .sr-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px}
+    .sr-id{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .sr-parties{font-size:11px;margin-bottom:4px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+    .sr-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px}
+    .sr-amt{font-family:var(--mono);font-size:12px;color:var(--amber);font-weight:600}
+    .status-pill{font-family:var(--mono);font-size:8px;font-weight:700;padding:2px 7px;border-radius:10px}
+    .st-final{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .st-confirming{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .st-pending{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+    .st-failed,.st-slippage{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+    .st-cancelled,.st-expired{background:var(--surface);color:var(--dim);border:1px solid var(--border)}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">PI</div>
+  <h1>Blockchain Payment Instruction API v1</h1>
+  <span class="hbadge hb-ver">v1.0</span>
+  <div class="hspace">
+    <span class="hbadge hb-purple">pacs.008.001.14</span>
+    <span class="hbadge hb-cyan">DTI · DLI · LEI · ISO 24165</span>
+    <span class="hbadge hb-amber">Full Custody · Delegated Signing</span>
+    <span class="hbadge hb-green">Quote · Instruct · Status · Search</span>
+  </div>
+</header>
+
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside>
+  <div class="sb-tabs">
+    <button class="sb-tab active" onclick="switchTab('config')">⚙ Config</button>
+    <button class="sb-tab" onclick="switchTab('parties')">👤 Parties</button>
+    <button class="sb-tab" onclick="switchTab('chain')">⛓ Chain</button>
+    <button class="sb-tab" onclick="switchTab('ramp')">🔄 Ramp</button>
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div class="sb-pane active" id="tab-config">
+    <div class="callout" style="margin-bottom:12px">
+      <strong style="color:var(--cyan)">pacs.008 aligned:</strong>
+      Bank instructs VASP using familiar ISO 20022 components.
+      Wallet addresses in <code>CashAccount40/proxy/EWAL</code>.
+      Token in <code>local_instrument/proprietary</code>.
+    </div>
+
+    <div class="sb-title">Method &amp; Endpoint</div>
+    <div class="mtabs">
+      <button class="mtab ap" id="tab-quote" onclick="setMethod('QUOTE')" style="font-size:9px">QUOTE</button>
+      <button class="mtab" id="tab-post" onclick="setMethod('POST')" style="font-size:10px">POST</button>
+      <button class="mtab" id="tab-get" onclick="setMethod('GET')" style="font-size:10px">GET</button>
+      <button class="mtab ard" id="tab-delete" onclick="setMethod('DELETE')" style="font-size:9px">CANCEL</button>
+      <button class="mtab" id="tab-search" onclick="setMethod('SEARCH')" style="font-size:9px">SEARCH</button>
+    </div>
+    <div class="ep" id="ep-display">
+      <span class="mpill pp" id="mp">POST</span>/v1/instruction/quote
+    </div>
+
+    <div class="sb-title" style="margin-top:4px">Load Scenario</div>
+    <select id="scen" onchange="loadScenario(this.value)">
+      <option value="">— select a scenario —</option>
+      <option value="quote_usdc">💰 Quote — USDC 250k on Ethereum (full custody)</option>
+      <option value="usdc_b2b">🏢 POST — B2B USDC Acme DE → Bravo NL (full custody)</option>
+      <option value="onramp">🔄 POST — ONRAMP EUR→USDC (Bitvavo converts, full custody)</option>
+      <option value="btc_retail">👤 POST — BTC retail Jan de Vries (self-custody target)</option>
+      <option value="delegated">🔑 Delegated signing — full 5-step flow (POST→QUOTED→SIGN→BROADCAST→FINAL)</option>
+      <option value="get_final">✅ GET — Instruction FINAL (confirmed on-chain)</option>
+      <option value="get_confirming">⏳ GET — Instruction CONFIRMING (3 of 12 blocks)</option>
+      <option value="slippage">⚠️ GET — SLIPPAGE_EXCEEDED rejection</option>
+      <option value="cancel">🗑️ DELETE — Cancel pending instruction</option>
+      <option value="search_basic">🔎 SEARCH — June USDC instructions, FINAL only</option>
+    </select>
+    <div class="si" id="si">Select a scenario or fill in the fields across all tabs.</div>
+
+    <div class="fsec">Instruction</div>
+    <div class="fg">
+      <div class="fl">End-to-End ID <span class="ft">EndToEndId</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-e2e" placeholder="E2E-XXXX-001"/>
+    </div>
+    <div class="fg">
+      <div class="fl">UETR <span class="ft">UUIDv4</span></div>
+      <input type="text" id="f-uetr" placeholder="auto-generated"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Settlement Amount <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-amt" placeholder="250000.000000"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Currency <span class="ft">ISO 4217 / XXX</span></div>
+      <select id="f-ccy">
+        <option>USD</option><option>EUR</option><option>GBP</option>
+        <option>CHF</option><option>SGD</option><option>XXX</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Fiat Equivalent <span class="ft">instructed_amount</span></div>
+      <input type="text" id="f-fiat" placeholder="e.g. 250000.00 EUR when CCY=XXX"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Fiat Currency</div>
+      <select id="f-fiatccy">
+        <option value="">— none —</option>
+        <option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Expiry <span class="ft">expiry_date_time</span></div>
+      <input type="text" id="f-expiry" placeholder="2025-06-15T15:00:00Z"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Token ID <span class="ft">local_instrument/proprietary</span></div>
+      <input type="text" id="f-dti" placeholder="DTID/T9B3X8H2K"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Purpose <span class="ft">Purpose2Choice</span></div>
+      <select id="f-purp">
+        <option value="TRAD">TRAD – Trade</option>
+        <option value="SUPP">SUPP – Supplier Payment</option>
+        <option value="SALA">SALA – Salary</option>
+        <option value="INTC">INTC – Intra-Company</option>
+        <option value="INVS">INVS – Investment</option>
+        <option value="OTHR">OTHR – Other</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Custody Model <span class="freq">MANDATORY</span></div>
+      <select id="f-custody">
+        <option value="FULL_CUSTODY">FULL_CUSTODY — VASP holds keys</option>
+        <option value="DELEGATED_SIGNING">DELEGATED_SIGNING — Bank HSM signs</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Max Slippage Rate <span class="ft">decimal fraction</span></div>
+      <input type="text" id="f-slip" placeholder="0.005 = 0.5%"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Quote ID <span class="ft">locks fee schedule</span></div>
+      <input type="text" id="f-quoteid" placeholder="UUID from prior quote"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Travel Rule Record ID <span class="ft">links compliance record</span></div>
+      <input type="text" id="f-trid" placeholder="UUID from Travel Rule API"/>
+    </div>
+
+    <div class="fsec">Remittance <span class="ft">RemittanceInformation26</span></div>
+    <div class="fg">
+      <div class="fl">Invoice Number</div>
+      <input type="text" id="f-inv" placeholder="INV-2025-XXXX"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Unstructured <span class="ft">Max140Text</span></div>
+      <textarea id="f-ustrd" rows="2" placeholder="Free text (max 140 chars)"></textarea>
+    </div>
+
+    <!-- SEARCH fields -->
+    <div id="search-fields" style="display:none">
+      <div class="callout" style="margin-bottom:10px">
+        Search own instruction records at the VASP.
+        Analogous to ISO 20022 <code>camt.052</code>.
+      </div>
+      <div class="fsec">Time Range</div>
+      <div class="fg"><div class="fl">From</div>
+        <input type="text" id="f-sr-from" placeholder="2025-06-01T00:00:00Z"/></div>
+      <div class="fg"><div class="fl">To</div>
+        <input type="text" id="f-sr-to" placeholder="2025-06-30T23:59:59Z"/></div>
+      <div class="fsec">Filters</div>
+      <div class="fg"><div class="fl">Status</div>
+        <select id="f-sr-status">
+          <option value="">— all —</option>
+          <option value="FINAL">FINAL</option>
+          <option value="CONFIRMING">CONFIRMING</option>
+          <option value="PENDING">PENDING</option>
+          <option value="FAILED">FAILED</option>
+          <option value="SLIPPAGE_EXCEEDED">SLIPPAGE_EXCEEDED</option>
+          <option value="CANCELLED">CANCELLED</option>
+        </select></div>
+      <div class="fg"><div class="fl">Chain DLI <span class="ft">bare 9-char</span></div>
+        <input type="text" id="f-sr-chain" placeholder="X9J9XDMTD"/></div>
+      <div class="fg"><div class="fl">Token DTI <span class="ft">bare 9-char</span></div>
+        <input type="text" id="f-sr-token" placeholder="T9B3X8H2K"/></div>
+      <div class="fg"><div class="fl">Page Size</div>
+        <input type="number" id="f-sr-page" placeholder="50" value="50"/></div>
+    </div>
+
+    <button class="sbtn sp" id="sbtn" onclick="sendRequest()">
+      <span id="slbl">▶ Request Quote</span>
+    </button>
+  </div>
+
+  <!-- PARTIES TAB -->
+  <div class="sb-pane" id="tab-parties">
+    <div class="fsec">Debtor (Instructing Bank's Client)</div>
+    <div class="fg"><div class="fl">Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-dname" placeholder="Acme Trading GmbH"/></div>
+    <div class="fg"><div class="fl">LEI <span class="ft">ISO 17442</span></div>
+      <input type="text" id="f-dlei" placeholder="529900T8BM49AURSDO55"/></div>
+    <div class="fg"><div class="fl">Country</div>
+      <input type="text" id="f-dctry" placeholder="DE"/></div>
+    <div class="fg"><div class="fl">Wallet <span class="ft">proxy/EWAL</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-dwallet" placeholder="0x742d35Cc…"/></div>
+
+    <div class="fsec">Debtor Agent (Instructing Bank)</div>
+    <div class="fg"><div class="fl">Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-daname" placeholder="Bitvavo B.V."/></div>
+    <div class="fg"><div class="fl">LEI</div>
+      <input type="text" id="f-dalei" placeholder="7245007VX57GR4IUVZ79"/></div>
+    <div class="fg"><div class="fl">BIC</div>
+      <input type="text" id="f-dabic" placeholder="BITVNL2AXXX"/></div>
+
+    <div class="fsec">Creditor</div>
+    <div class="fg"><div class="fl">Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-cname" placeholder="Bravo Supplies B.V."/></div>
+    <div class="fg"><div class="fl">LEI <span class="ft">ISO 17442</span></div>
+      <input type="text" id="f-clei" placeholder="724500QHKL6MVSQQ1Z17"/></div>
+    <div class="fg"><div class="fl">Country</div>
+      <input type="text" id="f-cctry" placeholder="NL"/></div>
+    <div class="fg"><div class="fl">Wallet <span class="ft">proxy/EWAL</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-cwallet" placeholder="0xde0B2956…"/></div>
+
+    <div class="fsec">Creditor Agent (Receiving VASP)</div>
+    <div class="fg"><div class="fl">Name <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-caname" placeholder="Kraken Belgium BVBA"/></div>
+    <div class="fg"><div class="fl">LEI</div>
+      <input type="text" id="f-calei" placeholder="5299000DUFB71VFOHVB49"/></div>
+  </div>
+
+  <!-- CHAIN TAB -->
+  <div class="sb-pane" id="tab-chain">
+    <div class="callout" style="margin-bottom:12px">
+      Chain identified in <code>settlement_information/clearing_system/proprietary</code>
+      using <code>DLID/&lt;9-char&gt;</code> prefix (ISO 20022 generic field).
+      Token in <code>blockchain_instruction</code> as bare DTI — no prefix needed.
+    </div>
+    <div class="fsec">Settlement Chain</div>
+    <div class="fg"><div class="fl">Chain DLI <span class="ft">settlement_information</span></div>
+      <select id="f-chain">
+        <option value="DLID/X9J9XDMTD">Ethereum Mainnet (DLID/X9J9XDMTD)</option>
+        <option value="DLID/4H95J0R2X">Bitcoin Mainnet (DLID/4H95J0R2X)</option>
+        <option value="DLID/ZXTQFTM5G">Solana Mainnet (DLID/ZXTQFTM5G)</option>
+        <option value="DLID/N3P9VQ6R1">XRPL Mainnet (DLID/N3P9VQ6R1)</option>
+        <option value="DLID/T9B3X8H2K">Polygon Mainnet (DLID/T9B3X8H2K)</option>
+        <option value="CHAINID:ARB-1">Arbitrum One (CHAINID:ARB-1)</option>
+      </select></div>
+    <div class="fg"><div class="fl">Token DTI <span class="ft">blockchain_instruction — bare</span></div>
+      <input type="text" id="f-tokendti" placeholder="T9B3X8H2K"/></div>
+    <div class="fg"><div class="fl">Token Symbol</div>
+      <input type="text" id="f-tokensym" placeholder="USDC"/></div>
+    <div class="fg"><div class="fl">Contract Address</div>
+      <input type="text" id="f-contract" placeholder="0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"/></div>
+    <div class="fg"><div class="fl">Token Standard <span class="ft">informational</span></div>
+      <select id="f-tokstd">
+        <option value="ERC-20">ERC-20</option>
+        <option value="ERC-721">ERC-721</option>
+        <option value="ERC-1155">ERC-1155</option>
+        <option value="SPL">SPL (Solana)</option>
+        <option value="NATIVE">NATIVE</option>
+      </select></div>
+    <div class="fg"><div class="fl">Token Issuer Name</div>
+      <input type="text" id="f-issuer" placeholder="Circle Internet Financial LLC"/></div>
+    <div class="fg"><div class="fl">Token Issuer LEI</div>
+      <input type="text" id="f-issuerlei" placeholder="549300EZRIYGDZHEDL36"/></div>
+  </div>
+
+  <!-- RAMP TAB -->
+  <div class="sb-pane" id="tab-ramp">
+    <div class="callout" style="margin-bottom:12px">
+      Ramp instruction in <code>blockchain_instruction.ramp_instruction</code>
+      plus <code>instruction_for_next_agent</code> coded as
+      <code>ONRAMP/&lt;LEI&gt;</code> for ISO 20022 intermediaries.
+    </div>
+    <div class="fsec">Ramp Configuration</div>
+    <div class="fg"><div class="fl">Ramp Type</div>
+      <select id="f-ramptype">
+        <option value="NONE">NONE — no ramp</option>
+        <option value="ONRAMP">ONRAMP — instruct fiat, transfer token</option>
+        <option value="OFFRAMP">OFFRAMP — transfer token, deliver fiat</option>
+        <option value="ONRAMP_AND_OFFRAMP">ONRAMP_AND_OFFRAMP — fiat in, fiat out</option>
+      </select></div>
+    <div class="fg"><div class="fl">Instructed Token / Currency</div>
+      <input type="text" id="f-ramp-in" placeholder="EUR (fiat) or DTID/XXXXX (token)"/></div>
+    <div class="fg"><div class="fl">Execution Token <span class="ft">on-chain transfer token</span></div>
+      <input type="text" id="f-ramp-exec" placeholder="T9B3X8H2K (USDC)"/></div>
+    <div class="fg"><div class="fl">Max Ramp Slippage</div>
+      <input type="text" id="f-rampslip" placeholder="0.005 = 0.5%"/></div>
+    <div class="fg"><div class="fl">At VASP Discretion</div>
+      <select id="f-rampdiscr">
+        <option value="true">true — VASP selects route</option>
+        <option value="false">false — follow execution_token exactly</option>
+      </select></div>
+  </div>
+
+</aside>
+
+<!-- ═══ REQUEST PANEL ═══ -->
+<div class="panel">
+  <div class="ph">
+    <span class="pt">Request Body</span>
+    <span class="pm" id="req-meta">—</span>
+  </div>
+  <div class="jv" id="req-json">
+    <div class="empty">
+      <div class="ei">📋</div>
+      <div class="et">Select a scenario or fill in the fields</div>
+      <div class="es">The request body will appear here. Choose a method tab and load a scenario to get started.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESPONSE PANEL ═══ -->
+<div class="rp">
+  <div class="rh" id="rh">
+    <span class="rt">Response will appear after sending</span>
+  </div>
+  <div class="rb" id="rbody">
+    <div class="empty">
+      <div class="ei">🚀</div>
+      <div class="et">Ready to instruct</div>
+      <div class="es">Select a scenario and click the send button to see the simulated response.</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end .app -->
+
+<script>
+'use strict';
+
+let method = 'QUOTE';
+const g = id => document.getElementById(id)?.value || '';
+const s = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+
+// Shared state for sequential flows (delegated signing, quote→instruct, confirming→final)
+const simState = {
+  quoteId: 'a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8',
+  instructionId: null,
+  delegatedNonce: 142,
+  delegatedChainId: 1,
+  txHash: null
+};
+
+// ── TAB SWITCHING ────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.sb-tab').forEach((b,i) => {
+    const tabs = ['config','parties','chain','ramp'];
+    b.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.sb-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab)?.classList.add('active');
+}
+
+// ── METHOD SWITCHING ─────────────────────────────────────────────────────────
+function setMethod(m) {
+  method = m;
+  const isGet = m === 'GET';
+  const isSearch = m === 'SEARCH';
+  const isDelete = m === 'DELETE';
+  const isQuote = m === 'QUOTE';
+  const isPost = m === 'POST';
+  const isReadLike = isGet || isSearch;
+
+  ['quote','post','get','delete','search'].forEach(x => {
+    const btn = document.getElementById('tab-' + x);
+    if (!btn) return;
+    const active = m === x.toUpperCase() || (m === 'DELETE' && x === 'delete');
+    btn.className = 'mtab' + (active
+      ? (x === 'delete' ? ' ard'
+        : (x === 'get' || x === 'search' ? ' ag' : ' ap'))
+      : '');
+  });
+
+  const verb = isGet || isSearch ? 'GET' : isDelete ? 'DELETE' : isQuote ? 'POST' : 'POST';
+  const ep = isQuote   ? '/v1/instruction/quote'
+           : isPost    ? '/v1/instruction'
+           : isGet     ? '/v1/instruction/{instructionId}'
+           : isDelete  ? '/v1/instruction/{instructionId}'
+           : '/v1/instruction/search';
+
+  const pillClass = isGet || isSearch ? 'gp' : isDelete ? 'rp-pill' : 'pp';
+  document.getElementById('ep-display').innerHTML =
+    `<span class="mpill ${pillClass}" id="mp">${verb}</span>${ep}`;
+
+  const btnEl = document.getElementById('sbtn');
+  btnEl.className = 'sbtn ' + (isDelete ? 'sr' : isReadLike ? 'sg' : 'sp');
+  g('slbl'); // touch
+  document.getElementById('slbl').textContent =
+      isQuote  ? '▶ Request Quote'
+    : isPost   ? '▶ Submit Instruction'
+    : isGet    ? '▶ Retrieve Status'
+    : isDelete ? '▶ Cancel Instruction'
+    : '▶ Search Instructions';
+
+  document.getElementById('search-fields').style.display = isSearch ? '' : 'none';
+}
+
+// ── SCENARIOS ────────────────────────────────────────────────────────────────
+const SCENARIOS = {
+  quote_usdc: {
+    method: 'QUOTE',
+    info: '<strong>Quote — USDC 250k on Ethereum</strong><br/>Acme requests a pre-execution quote before committing the instruction. Quote returns gas estimate, VASP fee, and CAPPED fee lock. Use the green button to continue to Step 2: submit the instruction with the locked quote_id.',
+    f: { e2e:'', uetr:'', amt:'250000.000000', ccy:'USD', fiat:'', fiatccy:'', expiry:'',
+         dti:'DTID/T9B3X8H2K', purp:'TRAD', custody:'FULL_CUSTODY', slip:'0.001',
+         quoteid:'', trid:'', inv:'', ustrd:'' },
+    chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
+             contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
+             issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' }
+  },
+  usdc_b2b: {
+    method: 'POST',
+    info: '<strong>B2B USDC — Acme DE → Bravo NL</strong><br/>Acme Trading GmbH instructs Bitvavo (its VASP) to transfer 250,000 USDC on Ethereum to Bravo Supplies B.V. at Kraken Belgium. Full custody. Travel Rule record pre-submitted. Invoice remittance attached.',
+    f: { e2e:'E2E-ACME-BRV-20250615-001', uetr:'550e8400-e29b-41d4-a716-446655440099',
+         amt:'250000.000000', ccy:'USD', fiat:'250000.00', fiatccy:'USD',
+         expiry:'2025-06-15T15:00:00Z', dti:'DTID/T9B3X8H2K', purp:'TRAD',
+         custody:'FULL_CUSTODY', slip:'0.001',
+         quoteid:'a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8',
+         trid:'550e8400-e29b-41d4-a716-446655440042',
+         inv:'INV-2025-00342', ustrd:'INV-2025-00342 / Trade payment per contract DE-2025-007' },
+    parties: { dname:'Acme Trading GmbH', dlei:'529900T8BM49AURSDO55', dctry:'DE',
+               dwallet:'0x742d35Cc6634C0532925a3b8D4C9b8A1e3f6B7c9',
+               daname:'Bitvavo B.V.', dalei:'7245007VX57GR4IUVZ79', dabic:'BITVNL2AXXX',
+               cname:'Bravo Supplies B.V.', clei:'724500QHKL6MVSQQ1Z17', cctry:'NL',
+               cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',
+               caname:'Kraken Belgium BVBA', calei:'5299000DUFB71VFOHVB49' },
+    chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
+             contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
+             issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
+    ramp: { ramptype:'NONE' }
+  },
+  onramp: {
+    method: 'POST',
+    info: '<strong>ONRAMP EUR→USDC — Acme instructs in EUR</strong><br/>Acme instructs Bitvavo in EUR. Bitvavo onramps EUR to USDC and transfers USDC to Kraken Belgium. instruction_for_next_agent carries ONRAMP/LEI for ISO 20022 intermediaries. Ramp at VASP discretion within 0.5% slippage.',
+    f: { e2e:'E2E-ACME-RAMP-20250615-001', uetr:'660f9511-f3ac-52e5-b827-557766551153',
+         amt:'230000.00', ccy:'EUR', fiat:'', fiatccy:'',
+         expiry:'2025-06-15T16:00:00Z', dti:'DTID/T9B3X8H2K', purp:'TRAD',
+         custody:'FULL_CUSTODY', slip:'0.005', quoteid:'', trid:'',
+         inv:'INV-2025-00388', ustrd:'INV-2025-00388 / Supplier payment' },
+    parties: { dname:'Acme Trading GmbH', dlei:'529900T8BM49AURSDO55', dctry:'DE',
+               dwallet:'0x742d35Cc6634C0532925a3b8D4C9b8A1e3f6B7c9',
+               daname:'Bitvavo B.V.', dalei:'7245007VX57GR4IUVZ79', dabic:'BITVNL2AXXX',
+               cname:'Bravo Supplies B.V.', clei:'724500QHKL6MVSQQ1Z17', cctry:'NL',
+               cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',
+               caname:'Kraken Belgium BVBA', calei:'5299000DUFB71VFOHVB49' },
+    chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
+             contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
+             issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
+    ramp: { ramptype:'ONRAMP', 'ramp-in':'EUR', 'ramp-exec':'T9B3X8H2K',
+            rampslip:'0.005', rampdiscr:'true' }
+  },
+  btc_retail: {
+    method: 'POST',
+    info: '<strong>BTC Retail — Jan de Vries → self-custody</strong><br/>Retail customer Jan de Vries (NL, natural person) instructs Coinbase Europe to transfer 0.5 BTC to his self-custody wallet. Amount in XXX (native token). No Travel Rule required below threshold. Full custody.',
+    f: { e2e:'E2E-CB-BTC-20250615-001', uetr:'770a0622-a4bd-63f6-c938-668877662264',
+         amt:'0.50000000', ccy:'XXX', fiat:'28500.00', fiatccy:'EUR',
+         expiry:'2025-06-15T20:00:00Z', dti:'DTID/4H95J0R2X', purp:'INVS',
+         custody:'FULL_CUSTODY', slip:'', quoteid:'', trid:'', inv:'', ustrd:'' },
+    parties: { dname:'Jan de Vries', dlei:'', dctry:'NL',
+               dwallet:'bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq',
+               daname:'Coinbase Europe Ltd', dalei:'635400DUFB71VFOHVB49', dabic:'',
+               cname:'Jan de Vries', clei:'', cctry:'NL',
+               cwallet:'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+               caname:'Self-custody wallet', calei:'' },
+    chain: { chain:'DLID/4H95J0R2X', tokendti:'4H95J0R2X', tokensym:'BTC',
+             contract:'', tokstd:'NATIVE', issuer:'', issuerlei:'' },
+    ramp: { ramptype:'NONE' }
+  },
+  delegated: {
+    method: 'POST',
+    info: '<strong>Delegated Signing — Full 5-step flow</strong><br/><strong style="color:var(--amber)">Step 1 of 5:</strong> POST instruction. VASP validates and returns QUOTED status with unsigned RLP_EVM transaction. Then use the amber button to proceed through signing and broadcast.',
+    f: { e2e:'E2E-ACME-DEL-20250615-001', uetr:'880b1733-b5ce-74g7-d049-779988773375',
+         amt:'100000.000000', ccy:'USD', fiat:'', fiatccy:'',
+         expiry:'2025-06-15T15:00:00Z', dti:'DTID/T9B3X8H2K', purp:'TRAD',
+         custody:'DELEGATED_SIGNING', slip:'0.001', quoteid:'', trid:'',
+         inv:'INV-2025-00501', ustrd:'INV-2025-00501 / Delegated signing test' },
+    parties: { dname:'Acme Trading GmbH', dlei:'529900T8BM49AURSDO55', dctry:'DE',
+               dwallet:'0x742d35Cc6634C0532925a3b8D4C9b8A1e3f6B7c9',
+               daname:'Bitvavo B.V.', dalei:'7245007VX57GR4IUVZ79', dabic:'BITVNL2AXXX',
+               cname:'Bravo Supplies B.V.', clei:'724500QHKL6MVSQQ1Z17', cctry:'NL',
+               cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',
+               caname:'Kraken Belgium BVBA', calei:'5299000DUFB71VFOHVB49' },
+    chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
+             contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
+             issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
+    ramp: { ramptype:'NONE' }
+  },
+  get_final: {
+    method: 'GET',
+    info: '<strong>GET — Instruction FINAL</strong><br/>USDC B2B instruction confirmed on Ethereum. 24 confirmations, required 12. Finality status FINAL (Ethereum checkpoint). Gas cost actual vs estimated.',
+    f: { uetr:'550e8400-e29b-41d4-a716-446655440099' }
+  },
+  get_confirming: {
+    method: 'GET',
+    info: '<strong>GET — Instruction CONFIRMING</strong><br/>Transaction broadcast and included in a block. 3 of 12 required confirmations. FinalityStatus = PROBABILISTIC. Use the green button to simulate the next poll — instruction reaches FINAL.',
+    f: { uetr:'660f9511-f3ac-52e5-b827-557766551153' }
+  },
+  slippage: {
+    method: 'GET',
+    info: '<strong>GET — SLIPPAGE_EXCEEDED</strong><br/>Instruction rejected because DEX liquidity depth caused slippage exceeding the 0.1% maximum_slippage_rate. VASP declined to execute rather than transact at unexpected rate. Instructing party should re-assess and resubmit with wider tolerance or smaller amount.',
+    f: { uetr:'990c2844-c6df-85h8-e160-880099884486' }
+  },
+  cancel: {
+    method: 'DELETE',
+    info: '<strong>DELETE — Cancel pending instruction</strong><br/>Instruction is in PENDING status (not yet broadcast). Cancellation accepted. Had the transaction been in the mempool (BROADCAST), cancellation would have returned 409 CANCELLATION_TOO_LATE.',
+    f: { uetr:'770a0622-a4bd-63f6-c938-668877662264' }
+  },
+  search_basic: {
+    method: 'SEARCH',
+    info: '<strong>SEARCH — June USDC instructions, FINAL only</strong><br/>Retrieves all FINAL instructions on Ethereum in USDC during June 2025. Analogous to ISO 20022 camt.052 intraday account report.',
+    sr: { 'sr-from':'2025-06-01T00:00:00Z', 'sr-to':'2025-06-30T23:59:59Z',
+          'sr-status':'FINAL', 'sr-chain':'X9J9XDMTD', 'sr-token':'T9B3X8H2K',
+          'sr-page':'50' }
+  }
+};
+
+function loadScenario(key) {
+  if (!key) return;
+  const sc = SCENARIOS[key];
+  if (!sc) return;
+  setMethod(sc.method);
+  document.getElementById('si').innerHTML = sc.info;
+  if (sc.f)       Object.entries(sc.f).forEach(([k,v]) => s('f-'+k, v));
+  if (sc.parties) Object.entries(sc.parties).forEach(([k,v]) => s('f-'+k, v));
+  if (sc.chain)   Object.entries(sc.chain).forEach(([k,v]) => s('f-'+k, v));
+  if (sc.ramp)    Object.entries(sc.ramp).forEach(([k,v]) => s('f-'+k, v));
+  if (sc.sr)      Object.entries(sc.sr).forEach(([k,v]) => s('f-'+k, v));
+  updatePreview();
+}
+
+// ── BUILD REQUEST ────────────────────────────────────────────────────────────
+function buildReq() {
+  if (method === 'QUOTE') {
+    return { _type:'QUOTE',
+      token: {
+        token_dti: g('f-tokendti') || undefined,
+        contract_address: g('f-contract') || undefined,
+        chain_dli: g('f-tokendti') || undefined,
+        token_symbol: g('f-tokensym') || undefined,
+        token_standard: g('f-tokstd') || undefined,
+        token_issuer: g('f-issuer') ? { name: g('f-issuer'), lei: g('f-issuerlei')||undefined } : undefined
+      },
+      chain_dli: (g('f-chain')||'').replace('DLID/','').replace('CHAINID:',''),
+      amount: g('f-amt') || '250000.000000',
+      currency: g('f-ccy') || 'USD',
+      ramp_type: g('f-ramptype') || 'NONE',
+      custody_model: g('f-custody') || 'FULL_CUSTODY'
+    };
+  }
+  if (method === 'GET' || method === 'DELETE') {
+    return { _type: method, instruction_id: g('f-uetr') || '550e8400-e29b-41d4-a716-446655440099' };
+  }
+  if (method === 'SEARCH') {
+    return { _type:'SEARCH',
+      from: g('f-sr-from'), to: g('f-sr-to'),
+      status: g('f-sr-status') || undefined,
+      chain_dli: g('f-sr-chain') || undefined,
+      token_dti: g('f-sr-token') || undefined,
+      page_size: parseInt(g('f-sr-page')) || 50
+    };
+  }
+
+  // POST instruction body
+  const chainRaw = g('f-chain') || 'DLID/X9J9XDMTD';
+  const rampType = g('f-ramptype') || 'NONE';
+  const hasRamp = rampType !== 'NONE';
+
+  const body = {
+    _type: 'POST',
+    payment_identification: {
+      message_identification: g('f-e2e') ? 'MSG-' + g('f-e2e').replace('E2E-','') : undefined,
+      end_to_end_identification: g('f-e2e') || 'E2E-001',
+      uetr: g('f-uetr') || undefined,
+      quote_id: g('f-quoteid') || undefined
+    },
+    settlement_information: {
+      settlement_method: 'CLRG',
+      clearing_system: { proprietary: chainRaw }
+    },
+    payment_type_information: {
+      local_instrument: g('f-dti') ? { proprietary: g('f-dti') } : undefined,
+      category_purpose: { code: g('f-purp') || 'TRAD' }
+    },
+    interbank_settlement_amount: {
+      amount: g('f-amt') || '250000.000000',
+      currency: g('f-ccy') || 'USD'
+    },
+    instructed_amount: (g('f-fiat') && g('f-fiatccy')) ? {
+      amount: g('f-fiat'), currency: g('f-fiatccy')
+    } : undefined,
+    expiry_date_time: g('f-expiry') || undefined,
+    charge_bearer: 'DEBT',
+    debtor: {
+      name: g('f-dname') || 'Debtor Name',
+      lei: g('f-dlei') || undefined,
+      country: g('f-dctry') || undefined
+    },
+    debtor_account: {
+      type: { proprietary: 'DIGT' },
+      proxy: { type: { code: 'EWAL' }, identification: g('f-dwallet') || '0x0000…' }
+    },
+    debtor_agent: {
+      name: g('f-daname') || 'Debtor Agent',
+      lei: g('f-dalei') || undefined,
+      bic: g('f-dabic') || undefined
+    },
+    creditor_agent: {
+      name: g('f-caname') || 'Creditor Agent',
+      lei: g('f-calei') || undefined
+    },
+    creditor: {
+      name: g('f-cname') || 'Creditor Name',
+      lei: g('f-clei') || undefined,
+      country: g('f-cctry') || undefined
+    },
+    creditor_account: {
+      type: { proprietary: 'DIGT' },
+      proxy: { type: { code: 'EWAL' }, identification: g('f-cwallet') || '0x0000…' }
+    },
+    instruction_for_next_agent: hasRamp && g('f-calei') ? [{
+      instruction_information: rampType + '/' + g('f-calei')
+    }] : undefined,
+    purpose: { code: g('f-purp') || 'TRAD' },
+    travel_rule_record_id: g('f-trid') || undefined,
+    remittance_information: (g('f-inv') || g('f-ustrd')) ? {
+      structured: g('f-inv') ? { creditor_reference_information: {
+        type: { code_or_proprietary: { code: 'SCOR' } }, reference: g('f-inv')
+      }} : undefined,
+      unstructured: g('f-ustrd') || undefined
+    } : undefined,
+    blockchain_instruction: {
+      token: {
+        token_dti: g('f-tokendti') || undefined,
+        contract_address: g('f-contract') || undefined,
+        chain_dli: g('f-tokendti') || undefined,
+        token_symbol: g('f-tokensym') || undefined,
+        token_standard: g('f-tokstd') || undefined,
+        token_issuer: g('f-issuer') ? { name: g('f-issuer'), lei: g('f-issuerlei')||undefined } : undefined
+      },
+      chain_dli: chainRaw.replace('DLID/','').replace('CHAINID:',''),
+      custody_model: g('f-custody') || 'FULL_CUSTODY',
+      maximum_slippage_rate: g('f-slip') || undefined,
+      ramp_instruction: hasRamp ? {
+        ramp_type: rampType,
+        instructed_token: g('f-ramp-in') ? { token_symbol: g('f-ramp-in') } : undefined,
+        execution_token: g('f-ramp-exec') ? { token_dti: g('f-ramp-exec'), token_symbol: g('f-tokensym') } : undefined,
+        maximum_ramp_slippage_rate: g('f-rampslip') || undefined,
+        at_vasp_discretion: g('f-rampdiscr') === 'true'
+      } : undefined
+    }
+  };
+  return JSON.parse(JSON.stringify(body));
+}
+
+function updatePreview() {
+  const req = buildReq();
+  const { _type, ...body } = req;
+  const j = JSON.stringify(body, null, 2);
+  document.getElementById('req-json').innerHTML = `<pre>${highlight(j)}</pre>`;
+  document.getElementById('req-meta').textContent =
+    `${_type} · ${new TextEncoder().encode(j).length} bytes · application/json`;
+}
+
+function highlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      if (/^"/.test(m)) return /:$/.test(m) ? `<span class="j-key">${m}</span>` : `<span class="j-str">${m}</span>`;
+      if (/true|false/.test(m)) return `<span class="j-bool">${m}</span>`;
+      if (/null/.test(m)) return `<span class="j-null">${m}</span>`;
+      return `<span class="j-num">${m}</span>`;
+    });
+}
+
+// ── SEND REQUEST ─────────────────────────────────────────────────────────────
+function sendRequest() {
+  updatePreview();
+  const req = buildReq();
+  document.getElementById('rh').innerHTML = `<div class="ldots"><span></span><span></span><span></span></div>`;
+  document.getElementById('rbody').innerHTML = `<div class="empty"><div class="ldots"><span></span><span></span><span></span></div><div class="et">Processing…</div></div>`;
+  setTimeout(() => renderResponse(req), 620 + Math.random() * 400);
+}
+
+// ── RENDER RESPONSE ──────────────────────────────────────────────────────────
+function renderResponse(req) {
+  const now = new Date().toISOString();
+  const elapsed = Math.floor(80 + Math.random() * 180);
+  const { _type } = req;
+
+  // ── QUOTE ─────────────────────────────────────────────────────────────────
+  if (_type === 'QUOTE') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/instruction/quote</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+    <div class="card">
+      <div class="ch"><span>💰</span><span class="ct">Quote Response — Fee Estimate</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">quote_id</div>
+          <div class="dv hi">a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8</div></div>
+        <div class="dr"><div class="dk">valid_until</div>
+          <div class="dv ok">2025-06-15T13:45:00Z</div></div>
+        <div class="dr"><div class="dk">fee_lock_type</div>
+          <div class="dv"><span class="fee-lock fl-capped">CAPPED</span>
+            <span style="font-size:10px;color:var(--muted);margin-left:6px">VASP absorbs gas overrun above quoted</span></div></div>
+        <div class="dr"><div class="dk">est. confirmation</div>
+          <div class="dv wa">~13 min (Ethereum checkpoint finality)</div></div>
+      </div>
+    </div>
+    <div class="fee-grid">
+      <div class="fee-box"><div class="fee-amt">0.002847 ETH</div><div class="fee-lbl">Gas (native)</div></div>
+      <div class="fee-box"><div class="fee-amt">$8.23</div><div class="fee-lbl">Gas (USD equiv)</div></div>
+      <div class="fee-box"><div class="fee-amt">$25.00</div><div class="fee-lbl">VASP service fee</div></div>
+    </div>
+    <div class="fee-grid">
+      <div class="fee-box"><div class="fee-amt">0 bps</div><div class="fee-lbl">Slippage est.</div></div>
+      <div class="fee-box"><div class="fee-amt">—</div><div class="fee-lbl">Ramp spread</div></div>
+      <div class="fee-box" style="border-color:rgba(63,185,80,.3)"><div class="fee-amt" style="color:var(--green)">$33.23</div><div class="fee-lbl">Total cost</div></div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>⛓</span><span class="ct">Chain Conditions at Quotation</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">chain</div><div class="dv">Ethereum Mainnet (DLID/X9J9XDMTD)</div></div>
+        <div class="dr"><div class="dk">congestion</div>
+          <div class="dv"><span class="congestion cong-low">LOW</span></div></div>
+        <div class="dr"><div class="dk">base fee</div><div class="dv">12.4 gwei</div></div>
+        <div class="dr"><div class="dk">avg block time</div><div class="dv">12.1s</div></div>
+      </div>
+    </div>
+    <div class="card callout-green" style="border-radius:7px">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        Reference <strong style="color:var(--cyan)">a1b2c3d4-e5f6-4789-a012-b3c4d5e6f7a8</strong>
+        in <code style="font-family:var(--mono);font-size:10px;color:var(--cyan)">payment_identification/quote_id</code>
+        on the instruction to lock the CAPPED fee schedule until
+        <strong style="color:var(--green)">13:45 UTC</strong>.
+      </div>
+    </div>
+    <button onclick="continueFromQuote()" style="width:100%;margin-top:4px;padding:10px;
+      background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff;border:none;
+      border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:700;
+      cursor:pointer;letter-spacing:.04em">
+      → Step 2: Submit Instruction with locked quote_id
+    </button>
+    </div>`;
+    return;
+  }
+
+  // ── DELETE / CANCEL ───────────────────────────────────────────────────────
+  if (_type === 'DELETE') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">DELETE /v1/instruction/${req.instruction_id}</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+    <div class="card" style="border-color:rgba(248,81,73,.25)">
+      <div class="ch" style="background:rgba(248,81,73,.04)">
+        <span>🗑️</span><span class="ct">Instruction Cancelled</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">instruction_id</div>
+          <div class="dv hi">${req.instruction_id}</div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv er" style="font-weight:700">CANCELLED</div></div>
+        <div class="dr"><div class="dk">previous_status</div>
+          <div class="dv" style="color:var(--blue)">PENDING</div></div>
+        <div class="dr"><div class="dk">cancelled_at</div>
+          <div class="dv">${now}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>ℹ️</span><span class="ct">Cancellation Window</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        Cancellation is only possible in <strong style="color:var(--blue)">PENDING</strong> or
+        <strong style="color:var(--blue)">QUOTED</strong> status — before the transaction is
+        broadcast to the network. Once in <code style="font-family:var(--mono);font-size:10px">BROADCAST</code>
+        or beyond, the VASP returns <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">409 CANCELLATION_TOO_LATE</code>.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── SEARCH ────────────────────────────────────────────────────────────────
+  if (_type === 'SEARCH') {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/instruction/search</span>
+       <span class="rt">${elapsed}ms</span>`;
+    const rows = [
+      { id:'550e8400-e29b-41d4-a716-446655440099', debtor:'Acme Trading GmbH', creditor:'Bravo Supplies B.V.',
+        amt:'250,000.000000 USD', token:'USDC', chain:'Ethereum', st:'FINAL', hash:'0xa3f8…e5f8', date:'2025-06-15' },
+      { id:'661f9511-f3ac-52e5-b827-557766551155', debtor:'Vertex Capital US', creditor:'SingTech SG',
+        amt:'500,000.000000 USD', token:'USDC', chain:'Ethereum', st:'FINAL', hash:'0xb4e9…f9a9', date:'2025-06-18' },
+      { id:'772a0622-a4bd-63f6-c938-668877662267', debtor:'Alpha Finance GmbH', creditor:'Beta Trading NL',
+        amt:'75,000.000000 USD', token:'USDC', chain:'Ethereum', st:'FINAL', hash:'0xc5f0…a0ba', date:'2025-06-22' }
+    ];
+    const rowsHtml = rows.map(r => `
+      <div class="sr-row">
+        <div class="sr-top">
+          <span class="sr-id">${r.id.slice(0,18)}…</span>
+          <span class="status-pill st-final">FINAL</span>
+        </div>
+        <div class="sr-parties">
+          <span style="font-weight:500">${r.debtor}</span>
+          <span style="color:var(--dim)">→</span>
+          <span style="font-weight:500">${r.creditor}</span>
+        </div>
+        <div class="sr-meta">
+          <span class="sr-amt">${r.amt}</span>
+          <span class="dti-tag">${r.token}</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${r.chain}</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">${r.hash} · ${r.date}</div>
+      </div>`).join('');
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+    <div class="card">
+      <div class="ch"><span>🔎</span><span class="ct">Search Results — 3 instructions matched</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">total_matched</div><div class="dv ok">3</div></div>
+        <div class="dr"><div class="dk">page_size</div><div class="dv">50</div></div>
+        <div class="dr"><div class="dk">next_cursor</div><div class="dv" style="color:var(--dim)">null (all results)</div></div>
+        <div class="dr"><div class="dk">chain filter</div><div class="dv">X9J9XDMTD (Ethereum)</div></div>
+        <div class="dr"><div class="dk">token filter</div><div class="dv">T9B3X8H2K (USDC)</div></div>
+      </div>
+    </div>
+    <div class="sr-list">${rowsHtml}</div>
+    <div style="font-size:10px;color:var(--dim);line-height:1.6;padding:4px">
+      Queries this VASP's own instruction records. Analogous to ISO 20022
+      <strong style="color:var(--muted)">camt.052</strong> intraday account report.
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── GET STATUS ────────────────────────────────────────────────────────────
+  if (_type === 'GET') {
+    const iid = req.instruction_id;
+    const scenKey = document.getElementById('scen').value;
+    const isSlippage  = scenKey === 'slippage';
+    const isConfirming = scenKey === 'get_confirming';
+
+    if (isSlippage) {
+      document.getElementById('rh').innerHTML =
+        `<span class="sbadge s200">200 OK</span>
+         <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/instruction/${iid}</span>
+         <span class="rt">${elapsed}ms</span>`;
+      document.getElementById('rbody').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+      <div class="card" style="border-color:rgba(248,81,73,.3)">
+        <div class="ch" style="background:rgba(248,81,73,.04)">
+          <span>⚠️</span><span class="ct" style="color:var(--red)">SLIPPAGE_EXCEEDED — Instruction Rejected</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${iid}</div></div>
+          <div class="dr"><div class="dk">status</div>
+            <div class="dv er" style="font-weight:700">SLIPPAGE_EXCEEDED</div></div>
+          <div class="dr"><div class="dk">maximum_slippage_rate</div>
+            <div class="dv">0.001 (0.1%)</div></div>
+          <div class="dr"><div class="dk">actual_slippage_at_rejection</div>
+            <div class="dv er">0.0034 (0.34%) — exceeded tolerance</div></div>
+          <div class="dr"><div class="dk">failure_reason</div>
+            <div class="dv" style="color:var(--muted);font-size:10px;line-height:1.5">
+              DEX liquidity depth insufficient for 250,000 USDC at acceptable slippage.
+              Available liquidity in pool: ~$180,000 within 0.1% range.
+              Consider splitting into two instructions or widening tolerance.
+            </div></div>
+        </div>
+      </div>
+      <div class="slip-alert">
+        <div style="font-size:22px;margin-bottom:6px">🛡️</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--red);font-weight:700;margin-bottom:4px">Protected — transaction not executed</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">
+          The <code style="font-family:var(--mono);font-size:10px">maximum_slippage_rate</code> field prevented execution
+          at an unexpected rate. The VASP rejected rather than transacted. No funds moved.
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span>💡</span><span class="ct">Remediation Options</span></div>
+        <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.7">
+          <strong style="color:var(--text)">1.</strong> Split into two instructions of ~125,000 USDC each<br/>
+          <strong style="color:var(--text)">2.</strong> Widen <code style="font-family:var(--mono);font-size:10px">maximum_slippage_rate</code> to 0.005 (0.5%)<br/>
+          <strong style="color:var(--text)">3.</strong> Request a new quote to assess current pool depth before resubmitting
+        </div>
+      </div>
+      </div>`;
+      return;
+    }
+
+    if (isConfirming) {
+      document.getElementById('rh').innerHTML =
+        `<span class="sbadge s200">200 OK</span>
+         <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/instruction/${iid}</span>
+         <span class="rt">${elapsed}ms</span>`;
+      const pct = Math.round((3/12)*100);
+      document.getElementById('rbody').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+      <div class="card" style="border-color:rgba(210,153,34,.3)">
+        <div class="ch" style="background:rgba(210,153,34,.04)">
+          <span>⏳</span><span class="ct" style="color:var(--amber)">CONFIRMING — Awaiting Finality</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${iid}</div></div>
+          <div class="dr"><div class="dk">status</div>
+            <div class="dv wa" style="font-weight:700">CONFIRMING</div></div>
+          <div class="dr"><div class="dk">finality_status</div>
+            <div class="dv wa">PROBABILISTIC</div></div>
+          <div class="dr"><div class="dk">confirmation_depth</div>
+            <div class="dv">3 of 12 required</div></div>
+          <div class="dr"><div class="dk">tx_hash</div>
+            <div class="dv addr">0xb4e9e3d2c5f8a7b0c1d4e5f6a9b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9</div></div>
+          <div class="dr"><div class="dk">block_number</div><div class="dv">21847401</div></div>
+          <div class="dr"><div class="dk">debit_timing</div><div class="dv">ON_BROADCAST ✓ (debited)</div></div>
+        </div>
+      </div>
+      <div style="padding:8px 0">
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--dim);margin-bottom:4px">
+          <span>Confirmation progress</span><span>3 / 12 blocks</span>
+        </div>
+        <div class="fin-bar-wrap">
+          <div class="fin-bar fin-prob" style="width:${pct}%"></div>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:4px">
+          Est. ~9 more blocks (~2 min) to reach required depth. Poll every 15s.
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span>⛓</span><span class="ct">Ethereum Finality Note</span></div>
+        <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+          Ethereum post-merge achieves <strong style="color:var(--green)">economic finality</strong>
+          at 2 checkpoint epochs (~13 min), independent of confirmation depth.
+          <code style="font-family:var(--mono);font-size:10px">PROBABILISTIC</code> →
+          <code style="font-family:var(--mono);font-size:10px;color:var(--green)">FINAL</code>
+          when the VASP's required depth (12) is reached.
+        </div>
+      </div>
+    <button onclick="showFinal('${iid}')" style="width:100%;margin-top:4px;padding:10px;
+      background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff;border:none;
+      border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:700;
+      cursor:pointer;letter-spacing:.04em">
+      &#8594; Poll again — instruction now FINAL
+    </button>
+      </div>`;
+      return;
+    }
+
+    // FINAL status
+    const isCustody = document.getElementById('scen').value !== 'delegated';
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s200">200 OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/instruction/${iid}</span>
+       <span class="rt">${elapsed}ms</span>`;
+    document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+    <div class="card" style="border-color:rgba(63,185,80,.25)">
+      <div class="ch" style="background:rgba(63,185,80,.04)">
+        <span>✅</span><span class="ct" style="color:var(--green)">FINAL — Confirmed On-Chain</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${iid}</div></div>
+        <div class="dr"><div class="dk">status</div>
+          <div class="dv ok" style="font-weight:700">FINAL</div></div>
+        <div class="dr"><div class="dk">finality_status</div>
+          <div class="dv ok">FINAL (Ethereum checkpoint)</div></div>
+        <div class="dr"><div class="dk">confirmation_depth</div>
+          <div class="dv ok">24 / 12 required ✓</div></div>
+        <div class="dr"><div class="dk">tx_hash</div>
+          <div class="dv addr">0xa3f8d2c1b4e7f6a9d0c3b2e1f4a7d8c9b0e3f2a1d4c7b8e9f0a3d6c9b2e5f8</div></div>
+        <div class="dr"><div class="dk">block_number</div><div class="dv">21847392</div></div>
+        <div class="dr"><div class="dk">block_timestamp</div><div class="dv">2025-06-15T14:12:35Z</div></div>
+        <div class="dr"><div class="dk">debit_timing</div>
+          <div class="dv ok">ON_BROADCAST ✓ (debited at broadcast)</div></div>
+      </div>
+    </div>
+    <div style="padding:8px 0">
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--dim);margin-bottom:4px">
+        <span>Confirmation progress</span><span>24 / 12 required</span>
+      </div>
+      <div class="fin-bar-wrap">
+        <div class="fin-bar fin-final" style="width:100%"></div>
+      </div>
+    </div>
+    <div class="fee-grid">
+      <div class="fee-box"><div class="fee-amt">0.002631 ETH</div><div class="fee-lbl">Actual gas</div></div>
+      <div class="fee-box"><div class="fee-amt">$7.60</div><div class="fee-lbl">Gas (USD)</div></div>
+      <div class="fee-box"><div class="fee-amt">0.00000</div><div class="fee-lbl">Actual slippage</div></div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>🔗</span><span class="ct">Travel Rule Linkage</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">travel_rule_record_id</div>
+          <div class="dv hi">550e8400-e29b-41d4-a716-446655440042</div></div>
+        <div style="font-size:10px;color:var(--dim);margin-top:6px;line-height:1.5">
+          Travel Rule compliance record linked. Verify callback status in the
+          pacs.crypto Travel Rule API using this record_id.
+        </div>
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── POST INSTRUCTION ──────────────────────────────────────────────────────
+  const { _type: t2, ...body } = req;
+  const isDelegated = (body.blockchain_instruction?.custody_model === 'DELEGATED_SIGNING');
+  const hasRamp     = body.blockchain_instruction?.ramp_instruction?.ramp_type !== 'NONE'
+                   && body.blockchain_instruction?.ramp_instruction;
+  const iid = '550e8400-e29b-' + Math.random().toString(16).slice(2,6) + '-a716-' + Date.now().toString(16).slice(-12);
+  simState.instructionId = iid;
+  const amt = body.interbank_settlement_amount?.amount || '—';
+  const ccy = body.interbank_settlement_amount?.currency || '—';
+  const dname = body.debtor?.name || '—';
+  const cname = body.creditor?.name || '—';
+
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge s201">201 Created</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/instruction</span>
+     <span class="rt">${elapsed}ms</span>`;
+
+  const statusLabel = isDelegated ? 'QUOTED' : 'PENDING';
+  const statusColor = isDelegated ? 'var(--amber)' : 'var(--blue)';
+
+  const rampHtml = hasRamp ? `
+    <div class="card" style="border-color:rgba(188,140,255,.25)">
+      <div class="ch" style="background:rgba(188,140,255,.04)">
+        <span>🔄</span><span class="ct">Ramp Instruction</span>
+      </div>
+      <div class="cb">
+        <div class="ramp-flow">
+          <div class="ramp-box">
+            <div class="ramp-label">Instructed</div>
+            <div class="ramp-val">${hasRamp.instructed_token?.token_symbol || 'EUR'}</div>
+          </div>
+          <div class="ramp-arrow">→</div>
+          <div class="ramp-box" style="border-color:rgba(188,140,255,.3)">
+            <div class="ramp-label">On-chain</div>
+            <div class="ramp-val" style="color:var(--purple)">${hasRamp.execution_token?.token_dti || 'USDC'}</div>
+          </div>
+        </div>
+        <div class="dr"><div class="dk">ramp_type</div>
+          <div class="dv" style="color:var(--purple)">${hasRamp.ramp_type}</div></div>
+        <div class="dr"><div class="dk">max_ramp_slippage</div>
+          <div class="dv">${hasRamp.maximum_ramp_slippage_rate || '—'}</div></div>
+        <div class="dr"><div class="dk">at_vasp_discretion</div>
+          <div class="dv">${hasRamp.at_vasp_discretion ? 'true — VASP selects route' : 'false'}</div></div>
+        <div style="margin-top:8px;font-size:10px;color:var(--dim);line-height:1.5">
+          <code style="font-family:var(--mono);font-size:9px">instruction_for_next_agent</code>
+          carries <code style="font-family:var(--mono);font-size:9px;color:var(--purple)">ONRAMP/${body.creditor_agent?.lei||'LEI'}</code>
+          for ISO 20022 processing intermediaries.
+        </div>
+      </div>
+    </div>` : '';
+
+  const delegatedHtml = isDelegated ? `
+    <div class="card" style="border-color:rgba(210,153,34,.3)">
+      <div class="ch" style="background:rgba(210,153,34,.04)">
+        <span>🔑</span><span class="ct" style="color:var(--amber)">Unsigned Transaction — Sign &amp; Resubmit</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">transaction_format</div>
+          <div class="dv wa">RLP_EVM</div></div>
+        <div class="dr"><div class="dk">nonce</div>
+          <div class="dv wa">142</div></div>
+        <div class="dr"><div class="dk">gas_limit</div><div class="dv">65000</div></div>
+        <div class="dr"><div class="dk">max_fee_per_gas</div><div class="dv">18.2 gwei</div></div>
+        <div class="dr"><div class="dk">max_priority_fee</div><div class="dv">1.5 gwei</div></div>
+        <div class="dr"><div class="dk">chain_id</div><div class="dv">1 (Ethereum Mainnet)</div></div>
+        <div class="dr"><div class="dk">transaction_data</div>
+          <div class="dv addr">0x02f8…(RLP-encoded EIP-1559 tx)</div></div>
+        <div style="margin-top:8px;font-size:10px;color:var(--muted);line-height:1.6">
+          Sign with your HSM using nonce <strong style="color:var(--amber)">142</strong>, then POST to
+          <code style="font-family:var(--mono);font-size:9px">/v1/instruction/${iid}/signed-transaction</code>
+          with <code style="font-family:var(--mono);font-size:9px">transaction_format: "RLP_EVM"</code>.
+        </div>
+      </div>
+    </div>` : '';
+
+  // Lifecycle flow
+  const steps = isDelegated
+    ? ['PENDING','QUOTED','BROADCAST','CONFIRMING','FINAL']
+    : ['PENDING','BROADCAST','CONFIRMING','FINAL'];
+  const curIdx = isDelegated ? 1 : 0;
+  const flowHtml = steps.map((st, i) => {
+    const isDone = i < curIdx;
+    const isCur  = i === curIdx;
+    const lineHtml = i < steps.length-1
+      ? `<div class="fline${isDone?' done':''}"></div>` : '';
+    const dotClass = isDone ? 'done' : isCur ? 'cur' : '';
+    const lblClass = isDone ? 'done' : isCur ? 'cur' : '';
+    return `<div class="fstep"><div class="fdot ${dotClass}"></div><div class="flabel ${lblClass}">${st}</div></div>${lineHtml}`;
+  }).join('');
+
+  document.getElementById('rbody').innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+  <div class="card" style="border-color:rgba(56,139,253,.25)">
+    <div class="ch" style="background:rgba(56,139,253,.05)">
+      <span>${isDelegated?'🔑':'⚡'}</span>
+      <span class="ct">Instruction Accepted — ${isDelegated?'Awaiting Signature':'Queued for Execution'}</span>
+    </div>
+    <div class="cb">
+      <div class="dr"><div class="dk">instruction_id</div>
+        <div class="dv hi">${iid}</div></div>
+      <div class="dr"><div class="dk">status</div>
+        <div class="dv" style="color:${statusColor};font-weight:700">${statusLabel}</div></div>
+      <div class="dr"><div class="dk">custody_model</div>
+        <div class="dv">${body.blockchain_instruction?.custody_model||'FULL_CUSTODY'}</div></div>
+      <div class="dr"><div class="dk">debtor → creditor</div>
+        <div class="dv">${dname} → ${cname}</div></div>
+      <div class="dr"><div class="dk">amount</div>
+        <div class="dv wa">${amt} ${ccy}</div></div>
+      <div class="dr"><div class="dk">chain</div>
+        <div class="dv">${body.settlement_information?.clearing_system?.proprietary||'—'}</div></div>
+      <div class="dr"><div class="dk">token (DTI)</div>
+        <div class="dv"><span class="dti-tag">${body.blockchain_instruction?.token?.token_symbol||'—'}</span>
+          ${body.blockchain_instruction?.token?.token_dti ? `<span style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:4px">${body.blockchain_instruction.token.token_dti}</span>` : ''}</div></div>
+      <div class="dr"><div class="dk">max_slippage</div>
+        <div class="dv">${body.blockchain_instruction?.maximum_slippage_rate
+          ? (parseFloat(body.blockchain_instruction.maximum_slippage_rate)*100).toFixed(2)+'%'
+          : '<span style="color:var(--dim)">not set</span>'}</div></div>
+      <div class="dr"><div class="dk">debit_timing</div>
+        <div class="dv">ON_BROADCAST</div></div>
+      <div class="dr"><div class="dk">expiry</div>
+        <div class="dv">${body.expiry_date_time||'—'}</div></div>
+      ${body.travel_rule_record_id ? `<div class="dr"><div class="dk">travel_rule_record_id</div>
+        <div class="dv ok">${body.travel_rule_record_id} ✓</div></div>` : ''}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span>🔄</span><span class="ct">Instruction Lifecycle</span></div>
+    <div class="cb">
+      <div class="sflow">${flowHtml}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">
+        ${isDelegated
+          ? 'Sign the unsigned transaction with your HSM and POST to /signed-transaction. The VASP will broadcast and monitor confirmation.'
+          : 'VASP will sign and broadcast. Track via GET /instruction/'+iid+'. Est. ~13 min to FINAL on Ethereum (checkpoint finality).'}
+      </div>
+    </div>
+  </div>
+
+  ${rampHtml}
+  ${delegatedHtml}
+
+  <div class="card">
+    <div class="ch"><span>🛡️</span><span class="ct">Sanctions — Independent VASP Screening</span></div>
+    <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+      The VASP screens independently. If an instruction cannot be executed for reasons
+      that cannot be disclosed, <code style="font-family:var(--mono);font-size:10px;color:var(--red)">FAILED</code>
+      is returned with no <code style="font-family:var(--mono);font-size:10px">failure_reason</code> —
+      this is legally required (tipping-off prohibition, EU AMLD Art.39).
+      A <code style="font-family:var(--mono);font-size:10px">FINAL</code> status is not a sanctions clearance.
+    </div>
+  </div>
+
+  ${isDelegated ? `<button onclick="submitSignedTx('${iid}', ${simState.delegatedNonce})"
+    style="width:100%;margin-top:4px;padding:10px;
+    background:linear-gradient(135deg,#b07d10,#d29922);color:#fff;border:none;
+    border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:700;
+    cursor:pointer;letter-spacing:.04em">
+    &#8594; Step 2: Sign with HSM &amp; POST /signed-transaction
+  </button>` : ''}
+
+  </div>`;
+}
+
+// ── SEQUENTIAL FLOW HELPERS ──────────────────────────────────────────────────
+
+function continueFromQuote() {
+  // Loads the B2B POST scenario with the quote_id pre-filled, switches to POST
+  loadScenario('usdc_b2b');
+  // quote_id already set in usdc_b2b scenario data
+  document.getElementById('si').innerHTML =
+    '<strong style="color:var(--green)">Step 2 of 2</strong> — Quote locked. ' +
+    'quote_id pre-filled in payment_identification. Submit the instruction to continue.';
+}
+
+function submitSignedTx(instructionId, nonce) {
+  // Simulate signed transaction submission: POST /instruction/{id}/signed-transaction
+  simState.txHash = '0x' + Array.from({length:64}, () =>
+    '0123456789abcdef'[Math.floor(Math.random()*16)]).join('');
+  const elapsed = Math.floor(90 + Math.random()*150);
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge s200">200 OK</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">POST /v1/instruction/${instructionId}/signed-transaction</span>
+     <span class="rt">${elapsed}ms</span>`;
+  document.getElementById('rbody').innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+  <div class="card" style="border-color:rgba(63,185,80,.25)">
+    <div class="ch" style="background:rgba(63,185,80,.04)">
+      <span>📡</span><span class="ct" style="color:var(--green)">Signed Transaction Accepted — Broadcast</span>
+    </div>
+    <div class="cb">
+      <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${instructionId}</div></div>
+      <div class="dr"><div class="dk">status</div>
+        <div class="dv ok" style="font-weight:700">BROADCAST</div></div>
+      <div class="dr"><div class="dk">transaction_hash</div>
+        <div class="dv addr">${simState.txHash}</div></div>
+      <div class="dr"><div class="dk">broadcast_at</div>
+        <div class="dv">${new Date().toISOString()}</div></div>
+      <div class="dr"><div class="dk">transaction_format</div><div class="dv">RLP_EVM</div></div>
+      <div class="dr"><div class="dk">nonce used</div>
+        <div class="dv ok">${nonce} ✓ (matched VASP allocation)</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><span>🔄</span><span class="ct">Delegated Signing — Full Lifecycle</span></div>
+    <div class="cb">
+      <div class="sflow">
+        <div class="fstep"><div class="fdot done"></div><div class="flabel done">PENDING</div></div>
+        <div class="fline done"></div>
+        <div class="fstep"><div class="fdot done"></div><div class="flabel done">QUOTED</div></div>
+        <div class="fline done"></div>
+        <div class="fstep"><div class="fdot cur"></div><div class="flabel cur">BROADCAST</div></div>
+        <div class="fline"></div>
+        <div class="fstep"><div class="fdot"></div><div class="flabel">CONFIRMING</div></div>
+        <div class="fline"></div>
+        <div class="fstep"><div class="fdot"></div><div class="flabel">FINAL</div></div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">
+        Transaction in the Ethereum mempool. The VASP now monitors confirmation depth.
+        Poll <code style="font-family:var(--mono);font-size:9px">GET /v1/instruction/${instructionId}</code>
+        every ~15s until <code style="font-family:var(--mono);font-size:9px;color:var(--green)">FINAL</code>.
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><span>🔍</span><span class="ct">What Was Submitted</span></div>
+    <div class="cb">
+      <div class="dr"><div class="dk">transaction_format</div><div class="dv wa">RLP_EVM</div></div>
+      <div class="dr"><div class="dk">signed_transaction_data</div>
+        <div class="dv addr" style="font-size:9px">0x02f8748201…(RLP-encoded EIP-1559 signed tx)</div></div>
+      <div style="margin-top:8px;font-size:10px;color:var(--dim);line-height:1.5">
+        The VASP verified the signature, confirmed the nonce matched the allocation
+        (<strong style="color:var(--amber)">${nonce}</strong>), and relayed to the Ethereum network.
+        Had the nonce differed, the VASP would have returned
+        <code style="font-family:var(--mono);font-size:9px;color:var(--red)">400 NONCE_CONFLICT</code>.
+      </div>
+    </div>
+  </div>
+  <button onclick="pollForFinal('${instructionId}')" style="width:100%;padding:10px;
+    background:linear-gradient(135deg,#1b6fd9,#388bfd);color:#fff;border:none;
+    border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:700;
+    cursor:pointer;letter-spacing:.04em">
+    → Step 4: Poll GET — check confirmation status
+  </button>
+  </div>`;
+}
+
+function pollForFinal(instructionId) {
+  // Simulate CONFIRMING → FINAL poll sequence — shows one CONFIRMING then offers FINAL
+  const elapsed = Math.floor(70 + Math.random()*120);
+  const conf = 3 + Math.floor(Math.random()*4); // 3-6 confirmations at first poll
+  const pct = Math.round((conf/12)*100);
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge s200">200 OK</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/instruction/${instructionId} (poll 1)</span>
+     <span class="rt">${elapsed}ms</span>`;
+  document.getElementById('rbody').innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+  <div class="card" style="border-color:rgba(210,153,34,.3)">
+    <div class="ch" style="background:rgba(210,153,34,.04)">
+      <span>⏳</span><span class="ct" style="color:var(--amber)">CONFIRMING — ${conf} of 12 blocks</span>
+    </div>
+    <div class="cb">
+      <div class="dr"><div class="dk">status</div>
+        <div class="dv wa" style="font-weight:700">CONFIRMING</div></div>
+      <div class="dr"><div class="dk">finality_status</div>
+        <div class="dv wa">PROBABILISTIC</div></div>
+      <div class="dr"><div class="dk">confirmation_depth</div>
+        <div class="dv">${conf} of 12 required</div></div>
+      <div class="dr"><div class="dk">tx_hash</div>
+        <div class="dv addr">${simState.txHash || '0xa3f8…e5f8'}</div></div>
+    </div>
+  </div>
+  <div style="padding:4px 0">
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--dim);margin-bottom:4px">
+      <span>Confirmation progress</span><span>${conf} / 12</span>
+    </div>
+    <div class="fin-bar-wrap">
+      <div class="fin-bar fin-prob" style="width:${pct}%"></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:4px">
+      ~${12-conf} more blocks (~${(12-conf)*12} seconds). Poll again shortly.
+    </div>
+  </div>
+  <button onclick="showFinal('${instructionId}')" style="width:100%;padding:10px;
+    background:linear-gradient(135deg,#2ea043,#3fb950);color:#fff;border:none;
+    border-radius:6px;font-family:var(--mono);font-size:12px;font-weight:700;
+    cursor:pointer;letter-spacing:.04em">
+    → Step 5: Poll again — instruction now FINAL
+  </button>
+  </div>`;
+}
+
+function showFinal(instructionId) {
+  const elapsed = Math.floor(65 + Math.random()*100);
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge s200">200 OK</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /v1/instruction/${instructionId} (poll 2)</span>
+     <span class="rt">${elapsed}ms</span>`;
+  document.getElementById('rbody').innerHTML = `
+  <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+  <div class="card" style="border-color:rgba(63,185,80,.3)">
+    <div class="ch" style="background:rgba(63,185,80,.04)">
+      <span>✅</span><span class="ct" style="color:var(--green)">FINAL — Delegated Signing Complete</span>
+    </div>
+    <div class="cb">
+      <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${instructionId}</div></div>
+      <div class="dr"><div class="dk">status</div>
+        <div class="dv ok" style="font-weight:700">FINAL</div></div>
+      <div class="dr"><div class="dk">finality_status</div>
+        <div class="dv ok">FINAL (Ethereum checkpoint)</div></div>
+      <div class="dr"><div class="dk">confirmation_depth</div>
+        <div class="dv ok">14 / 12 required ✓</div></div>
+      <div class="dr"><div class="dk">tx_hash</div>
+        <div class="dv addr">${simState.txHash || '0xa3f8…e5f8'}</div></div>
+      <div class="dr"><div class="dk">actual_amount_transferred</div>
+        <div class="dv ok">100,000.000000 USDC</div></div>
+      <div class="dr"><div class="dk">actual_gas_cost</div>
+        <div class="dv">0.001847 ETH ($5.34)</div></div>
+      <div class="dr"><div class="dk">actual_slippage</div>
+        <div class="dv ok">0.00000 ✓</div></div>
+      <div class="dr"><div class="dk">debit_timing</div>
+        <div class="dv ok">ON_BROADCAST ✓ (debited at step 3)</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><span>🔄</span><span class="ct">Delegated Signing — Complete Flow</span></div>
+    <div class="cb">
+      <div class="sflow">
+        <div class="fstep"><div class="fdot done"></div><div class="flabel done">PENDING</div></div>
+        <div class="fline done"></div>
+        <div class="fstep"><div class="fdot done"></div><div class="flabel done">QUOTED</div></div>
+        <div class="fline done"></div>
+        <div class="fstep"><div class="fdot done"></div><div class="flabel done">BROADCAST</div></div>
+        <div class="fline done"></div>
+        <div class="fstep"><div class="fdot done"></div><div class="flabel done">CONFIRMING</div></div>
+        <div class="fline done"></div>
+        <div class="fstep"><div class="fdot done"></div><div class="flabel done">FINAL</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6">
+        Five steps completed: <strong style="color:var(--text)">POST instruction</strong> →
+        VASP returns <strong style="color:var(--amber)">unsigned tx</strong> →
+        <strong style="color:var(--text)">bank signs with HSM</strong> →
+        <strong style="color:var(--text)">POST signed-transaction</strong> →
+        VASP broadcasts and monitors →
+        <strong style="color:var(--green)">FINAL</strong>.
+        The bank's private key never left its HSM.
+      </div>
+    </div>
+  </div>
+  <div style="font-size:10px;color:var(--dim);text-align:center;padding:4px">
+    🎉 Delegated signing flow complete. The full lifecycle took ~14 min (Ethereum checkpoint finality).
+  </div>
+  </div>`;
+}
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+setMethod('QUOTE');
+document.getElementById('scen').addEventListener('change', e => loadScenario(e.target.value));
+['f-e2e','f-uetr','f-amt','f-expiry','f-dti','f-inv','f-ustrd','f-slip','f-quoteid','f-trid',
+ 'f-dname','f-dlei','f-dctry','f-dwallet','f-daname','f-dalei','f-dabic',
+ 'f-cname','f-clei','f-cctry','f-cwallet','f-caname','f-calei',
+ 'f-tokendti','f-tokensym','f-contract','f-issuer','f-issuerlei',
+ 'f-ramp-in','f-ramp-exec','f-rampslip',
+ 'f-sr-from','f-sr-to','f-sr-chain','f-sr-token','f-sr-page']
+  .forEach(id => document.getElementById(id)?.addEventListener('input', updatePreview));
+['f-ccy','f-fiatccy','f-purp','f-custody','f-chain','f-tokstd','f-ramptype','f-rampdiscr','f-sr-status']
+  .forEach(id => document.getElementById(id)?.addEventListener('change', updatePreview));
+</script>
+</body>
+</html>
