@@ -2,6 +2,8 @@
 
 First executable slice of the `pacs.crypto` reference stack.
 
+Conformance status for the spec-covered routes is tracked in [`../docs/conformance.md`](../docs/conformance.md).
+
 Current scope:
 
 - `GET /health`
@@ -53,20 +55,26 @@ Environment overrides:
 - `REF_SERVER_HOST`
 - `REF_SERVER_PORT`
 - `REF_SERVER_DB_PATH`
+- `REF_SERVER_WEBHOOK_AUTO_DISPATCH`
+- `REF_SERVER_WEBHOOK_DISPATCH_INTERVAL_MS`
+- `REF_SERVER_WEBHOOK_DISPATCH_BATCH_SIZE`
+- `REF_SERVER_WEBHOOK_RETRY_SCHEDULE_MS`
 
 ## Notes
 
 - Persistence uses Node's built-in `node:sqlite` module.
-- Instruction status progression is deterministic and mocked for now:
+- Instruction status progression now runs through an injected chain-adapter boundary.
+- The default adapter is a mocked EVM adapter with amount-aware fee, slippage, and finality modeling over the lifecycle:
   `PENDING -> BROADCAST -> CONFIRMING -> FINAL`
 - `execution-status` is the pacs.002-like read surface for lifecycle state and history.
 - `finality-receipt` is the camt.025-like read surface for transaction hash, confirmations, and finality proof.
 - `event-outbox` is the webhook-style delivery mirror. Event payloads are the same objects returned by `execution-status` and `finality-receipt`, so push and poll stay aligned.
 - Webhook deliveries are HMAC-signed with `x-pacscrypto-signature` over `<timestamp>.<raw-body>`, plus delivery and event ids in headers.
-- Delivery retries are persisted with `PENDING`, `RETRYING`, `DELIVERED`, and `FAILED` states. Dispatch is manual for now via `POST /webhook-deliveries/dispatch`.
+- Delivery retries are persisted with `PENDING`, `RETRYING`, `DELIVERED`, and `FAILED` states. Background dispatch is enabled by default in the server process, and dispatch can still be forced manually via `POST /webhook-deliveries/dispatch`.
 - `reporting/notifications` is the first reporting-family surface: a `camt.054` analogue for booked debtor debit and creditor credit notifications keyed to the instruction lifecycle.
 - `reporting/intraday` is the next reporting-family surface: a narrow `camt.052` analogue summarizing booked intraday movements and account views from those notifications.
 - `reporting/statements` starts the statement layer: a `camt.053` analogue that persists per-instruction account statements derived from the existing reporting notifications and instruction context.
 - Reporting notifications are also emitted as `reporting_notification.created` events through the same outbox and webhook delivery pipeline.
 - Delegated signing is intentionally not implemented in this first slice.
 - The root HTML simulators support both `Demo` mode and `Live API` mode against this server.
+- The adapter boundary is intentionally narrow: quote generation, fee estimates, settlement defaults, lifecycle advancement, and lifecycle timestamps now come from the chain adapter rather than being hard-coded in route or storage logic.

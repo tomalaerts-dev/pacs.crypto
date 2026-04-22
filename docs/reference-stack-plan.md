@@ -1,5 +1,12 @@
 # pacs.crypto Reference Stack Plan
 
+This document captures the original pivot from a specs-only repo to an executable reference stack.
+
+The active program-of-record now lives in:
+
+- [Roadmap](roadmap.md)
+- [Backlog](backlog.md)
+
 ## Objective
 
 Turn this repo from a strong proposal into a credible reference implementation for one serious bank-to-VASP payment flow.

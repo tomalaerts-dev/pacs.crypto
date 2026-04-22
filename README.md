@@ -42,7 +42,9 @@ The first executable slice lives in `reference-server/` and currently supports:
 - webhook endpoint registration, signed delivery attempts, and retry logs on top of the outbox
 - `camt.054`-like reporting notifications for booked debit and credit entries
 - `camt.052`-like intraday movement view built from the reporting notification feed
-- mocked EVM lifecycle progression: `PENDING → BROADCAST → CONFIRMING → FINAL`
+- `camt.053`-like statement view derived from reporting notifications and instruction context
+- adapter-backed mocked EVM lifecycle progression with amount-aware fee, slippage, and finality modeling:
+  `PENDING → BROADCAST → CONFIRMING → FINAL`
 
 The two HTML simulators can still run standalone in **Demo** mode, but now also support **Live API** mode against the local reference server.
 
@@ -62,6 +64,39 @@ Then open either simulator locally:
 - `instruction-simulator-v1.html`
 
 Switch **Execution Mode** to `Live API` and keep the default API base URL `http://127.0.0.1:5050`.
+
+### Roadmap And Backlog
+
+The active forward plan is now documented in:
+
+- [`docs/roadmap.md`](docs/roadmap.md) — 12-month roadmap for the execution wedge
+- [`docs/backlog.md`](docs/backlog.md) — prioritized execution backlog with dependencies and acceptance criteria
+- [`docs/conformance.md`](docs/conformance.md) — current spec-to-server conformance matrix
+- [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
+
+### Current Baseline
+
+Implemented now:
+
+- executable reference server with persistence, state transitions, and tests
+- live simulator support for the Travel Rule and instruction flows
+- status, finality, webhook, and reporting read surfaces
+
+Still mocked or partial:
+
+- chain lifecycle remains mocked, but now runs through an adapter-backed fee/finality policy
+- webhook delivery is background-driven with retries, but still demo-grade rather than production-hardened
+- incomplete OpenAPI conformance coverage against the YAML specs
+- no delegated signing implementation
+- no testnet path yet
+
+Explicitly deferred:
+
+- non-EVM chains
+- tokenized assets
+- CBDC
+- regulated DeFi
+- agent-driven submission
 
 ---
 
@@ -132,30 +167,29 @@ Intentionally out of scope: counterparty discovery, PKI/CA model, legal agreemen
 
 ---
 
-## Roadmap — where the family goes next
+## Roadmap
 
-These are areas under active exploration. Contributions, challenges, and alternative proposals are all welcome.
+The current roadmap is execution-first and narrow by design.
 
-### 1. Agent-driven submission — OpenClaw integration
+Current priority order:
 
-Personal AI agent platforms such as [OpenClaw](https://openclaw.ai) are emerging as a new kind of user interface to structured APIs — capable of assembling, validating, and dispatching API calls on behalf of a user, from natural language instructions, via any chat application.
+1. conformance and spec hardening
+2. chain adapter boundary and lifecycle realism
+3. webhook delivery maturity
+4. reporting completion and demo packaging
 
-Both pacs.crypto APIs are well suited to agent-driven submission. A returning VASP customer — whose identity has already been KYC-verified — could instruct their OpenClaw agent via WhatsApp or Telegram: *"send 0.5 ETH to this address for invoice INV-042"*. The agent, holding the user's verified identity fields in its persistent memory, constructs the full pacs.crypto submission, attaches the structured remittance information, and calls the VASP's API endpoint automatically. The VASP's KYC obligation is unchanged; what changes is the quality and consistency of the data arriving at the API — pre-formatted, correctly structured, with remittance detail already attached.
+The detailed program of record lives in [`docs/roadmap.md`](docs/roadmap.md) and [`docs/backlog.md`](docs/backlog.md).
 
-A reference OpenClaw skill for pacs.crypto submission is planned as a concrete deliverable.
+### Deferred expansion candidates
 
-### 2. Further family members under consideration
+These remain intentionally out of the current 12-month wedge:
 
-- **Account and balance reporting** — ISO 20022 camt.052/053 analogues for blockchain wallet balances and transaction history, enabling banks to monitor VASP-held positions in a familiar format
-- **Settlement finality notification** — a standalone camt.025 analogue confirming on-chain finality with chain-specific confirmation depth, reusable across both existing specs
-- **Tokenised asset transfers** — extensions for regulated tokenised securities, CBDCs, and stablecoin issuers where additional asset-specific fields and regulatory reporting requirements apply
-- **Regulated DeFi** — how the pacs.crypto data model applies when one or both counterparties interact via smart contract rather than a custodial VASP
-
-### 3. Pre-execution intelligence API — later phase
-
-Stablecoin and blockchain payments at institutional scale require answers to a set of pre-transaction questions that today have no standardised interface: what is the current slippage for this token and amount? What is the realistic gas cost right now? Is the bridge pool sufficiently liquid? What is the current peg deviation of the stablecoin being transacted?
-
-A pre-execution intelligence API surfacing this information in a consistent, chain-agnostic format would complete the picture for institutions using the instruction API. This is flagged as a **later phase effort** for an honest reason: unlike the other specs in the family, which define data exchanged between regulated parties who generate that data themselves, this API is fundamentally dependent on real-time external data sources — chain RPC nodes, DEX liquidity pool state, oracle feeds, bridge contract state. That introduces infrastructure dependencies and data quality challenges that make it significantly harder to specify well in practice. The right time to tackle this is once the instruction API has operational experience behind it.
+- delegated signing
+- non-EVM chains
+- tokenized assets
+- CBDC
+- regulated DeFi
+- agent-driven submission
 
 ---
 
