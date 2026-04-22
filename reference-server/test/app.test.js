@@ -3,84 +3,66 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 
 import { buildApp } from '../src/app.js';
+import { createMockEvmChainAdapter } from '../src/chain/mock-evm-adapter.js';
 
-test('travel rule submit -> callback -> retrieve', async () => {
-  const app = await buildApp();
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
-  const createResponse = await app.inject({
-    method: 'POST',
-    url: '/travel-rule',
-    payload: {
-      travel_rule_data: {
-        payment_identification: {
-          end_to_end_identification: 'E2E-TR-001',
-        },
-        debtor: { name: 'Acme Trading GmbH' },
-        debtor_account: {
-          proxy: { identification: '0xabc' },
-        },
-        creditor: { name: 'Bravo Supplies B.V.' },
-        creditor_account: {
-          proxy: { identification: '0xdef' },
-        },
+function deepMerge(base, overrides = {}) {
+  if (!isObject(base) || !isObject(overrides)) {
+    return overrides === undefined ? base : overrides;
+  }
+
+  const result = { ...base };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (isObject(value) && isObject(base[key])) {
+      result[key] = deepMerge(base[key], value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function buildQuoteRequest(overrides = {}) {
+  return deepMerge(
+    {
+      token: {
+        token_symbol: 'USDC',
+        token_dti: '4H95J0R2X',
       },
-    },
-  });
-
-  assert.equal(createResponse.statusCode, 201);
-  const createdRecord = createResponse.json();
-  assert.equal(createdRecord.status, 'SUBMITTED');
-  assert.equal(createdRecord.submission_timing, 'PRE_TX');
-
-  const callbackResponse = await app.inject({
-    method: 'POST',
-    url: `/travel-rule/${createdRecord.record_id}/callback`,
-    payload: {
-      callback_status: 'ACCEPTED',
-      description: 'Data quality sufficient.',
-    },
-  });
-
-  assert.equal(callbackResponse.statusCode, 200);
-  assert.equal(callbackResponse.json().status, 'ACCEPTED');
-
-  const getResponse = await app.inject({
-    method: 'GET',
-    url: `/travel-rule/${createdRecord.record_id}`,
-  });
-
-  assert.equal(getResponse.statusCode, 200);
-  assert.equal(getResponse.json().callbacks.length, 1);
-
-  await app.close();
-});
-
-test('quote -> instruction -> get status', async () => {
-  const app = await buildApp();
-
-  const quoteResponse = await app.inject({
-    method: 'POST',
-    url: '/instruction/quote',
-    payload: {
-      token: { token_symbol: 'USDC', token_dti: '4H95J0R2X' },
       chain_dli: 'X9J9XDMTD',
       amount: '250000.00',
       currency: 'USD',
       custody_model: 'FULL_CUSTODY',
     },
-  });
+    overrides,
+  );
+}
 
-  assert.equal(quoteResponse.statusCode, 200);
-  const quote = quoteResponse.json();
-  assert.ok(quote.quote_id);
-
-  const instructionResponse = await app.inject({
-    method: 'POST',
-    url: '/instruction',
-    payload: {
+function buildInstructionPayload(overrides = {}) {
+  return deepMerge(
+    {
       payment_identification: {
-        end_to_end_identification: 'INV-042',
-        quote_id: quote.quote_id,
+        end_to_end_identification: 'INV-BASE',
+      },
+      charge_bearer: 'DEBT',
+      debtor: {
+        name: 'Acme Trading GmbH',
+        lei: '529900T8BM49AURSDO55',
+      },
+      debtor_agent: {
+        name: 'Bankhaus Example AG',
+        lei: '7245007VX57GR4IUVZ79',
+      },
+      creditor: {
+        name: 'Bravo Supplies B.V.',
+        lei: '724500QHKL6MVSQQ1Z17',
+      },
+      creditor_agent: {
+        name: 'Kraken Belgium BVBA',
+        lei: '635400DUFB71VFOHVB49',
       },
       interbank_settlement_amount: {
         amount: '250000.00',
@@ -95,10 +77,253 @@ test('quote -> instruction -> get status', async () => {
         custody_model: 'FULL_CUSTODY',
       },
     },
+    overrides,
+  );
+}
+
+function buildTravelRuleSubmission(overrides = {}) {
+  return deepMerge(
+    {
+      submission_timing: 'PRE_TX',
+      travel_rule_data: {
+        payment_identification: {
+          end_to_end_identification: 'E2E-TR-BASE',
+        },
+        interbank_settlement_amount: {
+          amount: '50000.00',
+          currency: 'EUR',
+        },
+        charge_bearer: 'SHAR',
+        debtor: {
+          name: 'Acme Trading GmbH',
+          postal_address: {
+            country: 'DE',
+          },
+        },
+        debtor_account: {
+          proxy: {
+            identification: '0xabc',
+          },
+        },
+        debtor_agent: {
+          name: 'Coinbase Europe Ltd',
+          lei: '7245007VX57GR4IUVZ79',
+        },
+        creditor: {
+          name: 'Bravo Supplies B.V.',
+          postal_address: {
+            country: 'NL',
+          },
+        },
+        creditor_account: {
+          proxy: {
+            identification: '0xdef',
+          },
+        },
+        creditor_agent: {
+          name: 'Kraken Belgium BVBA',
+          lei: '635400DUFB71VFOHVB49',
+        },
+        counterparty_wallet_type: 'HOSTED',
+        blockchain_settlement: {
+          primary_chain_id: 'DLID/X9J9XDMTD',
+          legs: [{ leg_type: 'ORIGINATION' }],
+        },
+      },
+    },
+    overrides,
+  );
+}
+
+function buildTravelRuleCallback(overrides = {}) {
+  return deepMerge(
+    {
+      callback_status: 'ACCEPTED',
+      receiving_vasp: {
+        name: 'Bitvavo B.V.',
+        lei: '635400DUFB71VFOHVB49',
+      },
+      callback_timestamp: new Date().toISOString(),
+    },
+    overrides,
+  );
+}
+
+function assertUuid(value) {
+  assert.match(
+    value,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
+}
+
+function assertIsoDateTime(value) {
+  assert.equal(Number.isNaN(Date.parse(value)), false);
+}
+
+function assertTravelRuleRecordShape(record) {
+  assertUuid(record.record_id);
+  assertIsoDateTime(record.submitted_at);
+  assert.ok(record.status);
+  assert.ok(record.travel_rule_data);
+}
+
+function assertTravelRuleSearchResponseShape(response) {
+  assert.equal(typeof response.total_matched, 'number');
+  assert.equal(typeof response.page_size, 'number');
+  assertIsoDateTime(response.generated_at);
+  assert.ok(Array.isArray(response.records));
+}
+
+function assertTravelRuleStatsResponseShape(response) {
+  assertIsoDateTime(response.generated_at);
+  assert.ok(response.period);
+  assert.ok(response.totals);
+  assert.equal(typeof response.totals.record_count, 'number');
+  assert.ok(Array.isArray(response.totals.volumes));
+}
+
+function assertQuoteResponseShape(response) {
+  assertUuid(response.quote_id);
+  assertIsoDateTime(response.valid_until);
+  assertIsoDateTime(response.created_at);
+  assert.ok(response.fee_estimate);
+}
+
+function assertInstructionResponseShape(response) {
+  assertUuid(response.instruction_id);
+  assertUuid(response.uetr);
+  assert.ok(response.status);
+  assert.ok(response.custody_model);
+  assert.ok(response.fee_estimate);
+  assertIsoDateTime(response.created_at);
+}
+
+function assertInstructionStatusResponseShape(response) {
+  assertUuid(response.instruction_id);
+  assertUuid(response.uetr);
+  assert.ok(response.status);
+  assert.ok(response.payment_identification);
+  assert.ok(response.interbank_settlement_amount);
+  assert.ok(response.blockchain_instruction);
+  assertIsoDateTime(response.created_at);
+  assertIsoDateTime(response.updated_at);
+}
+
+function assertInstructionSearchResponseShape(response) {
+  assert.equal(typeof response.total_matched, 'number');
+  assert.equal(typeof response.page_size, 'number');
+  assertIsoDateTime(response.generated_at);
+  assert.ok(Array.isArray(response.instructions));
+}
+
+function assertTravelRuleCallbackReceiptShape(response) {
+  assertUuid(response.record_id);
+  assertIsoDateTime(response.callback_recorded_at);
+  assert.ok(response.current_status);
+}
+
+function assertCancellationResponseShape(response) {
+  assertUuid(response.instruction_id);
+  assert.equal(response.status, 'CANCELLED');
+  assertIsoDateTime(response.cancelled_at);
+}
+
+async function waitFor(assertion, { timeoutMs = 1500, intervalMs = 20 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+
+  while (Date.now() < deadline) {
+    try {
+      return await assertion();
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => {
+        setTimeout(resolve, intervalMs);
+      });
+    }
+  }
+
+  throw lastError ?? new Error('Timed out waiting for condition.');
+}
+
+test('travel rule submit -> callback -> retrieve', async () => {
+  const app = await buildApp();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/travel-rule',
+    payload: buildTravelRuleSubmission({
+      travel_rule_data: {
+        payment_identification: {
+          end_to_end_identification: 'E2E-TR-001',
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  const createdRecord = createResponse.json();
+  assertTravelRuleRecordShape(createdRecord);
+  assert.equal(createdRecord.status, 'SUBMITTED');
+  assert.equal(createdRecord.submission_timing, 'PRE_TX');
+
+  const callbackResponse = await app.inject({
+    method: 'POST',
+    url: `/travel-rule/${createdRecord.record_id}/callback`,
+    payload: buildTravelRuleCallback({
+      description: 'Data quality sufficient.',
+    }),
+  });
+
+  assert.equal(callbackResponse.statusCode, 200);
+  assertTravelRuleCallbackReceiptShape(callbackResponse.json());
+  assert.equal(callbackResponse.json().current_status, 'ACCEPTED');
+  assert.equal(callbackResponse.json().previous_status, 'SUBMITTED');
+
+  const getResponse = await app.inject({
+    method: 'GET',
+    url: `/travel-rule/${createdRecord.record_id}`,
+  });
+
+  assert.equal(getResponse.statusCode, 200);
+  assert.equal(getResponse.json().callbacks.length, 1);
+  assertTravelRuleRecordShape(getResponse.json());
+
+  await app.close();
+});
+
+test('quote -> instruction -> get status', async () => {
+  const app = await buildApp();
+
+  const quoteResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction/quote',
+    payload: buildQuoteRequest(),
+  });
+
+  assert.equal(quoteResponse.statusCode, 200);
+  const quote = quoteResponse.json();
+  assertQuoteResponseShape(quote);
+  assert.ok(quote.quote_id);
+
+  const instructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-042',
+        quote_id: quote.quote_id,
+      },
+      interbank_settlement_amount: {
+        amount: '250000.00',
+        currency: 'USD',
+      },
+    }),
   });
 
   assert.equal(instructionResponse.statusCode, 201);
   const instruction = instructionResponse.json();
+  assertInstructionResponseShape(instruction);
   assert.equal(instruction.status, 'PENDING');
   assert.equal(instruction.debit_timing, 'ON_BROADCAST');
   assert.ok(instruction.fee_estimate);
@@ -109,6 +334,7 @@ test('quote -> instruction -> get status', async () => {
   });
 
   assert.equal(getResponse.statusCode, 200);
+  assertInstructionStatusResponseShape(getResponse.json());
   assert.ok(getResponse.json().instruction_id);
   assert.ok(['PENDING', 'BROADCAST', 'CONFIRMING', 'FINAL'].includes(getResponse.json().status));
 
@@ -118,9 +344,10 @@ test('quote -> instruction -> get status', async () => {
   });
 
   assert.equal(searchResponse.statusCode, 200);
+  assertInstructionSearchResponseShape(searchResponse.json());
   assert.ok(Array.isArray(searchResponse.json().instructions));
   assert.equal(searchResponse.json().total_matched, 1);
-  assert.equal(searchResponse.json().instructions[0].debtor_name, null);
+  assert.equal(searchResponse.json().instructions[0].debtor_name, 'Acme Trading GmbH');
 
   await app.close();
 });
@@ -137,7 +364,106 @@ test('quote request validates required fields', async () => {
   });
 
   assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, 'INVALID_REQUEST');
+  assert.equal(response.json().message, 'Request validation failed.');
   assert.ok(Array.isArray(response.json().details));
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'token'),
+    true,
+  );
+
+  await app.close();
+});
+
+test('instruction submission enforces spec-required parties and charge bearer', async () => {
+  const app = await buildApp();
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: {
+      payment_identification: {
+        end_to_end_identification: 'INV-MISSING-FIELDS',
+      },
+      interbank_settlement_amount: {
+        amount: '25.00',
+        currency: 'USD',
+      },
+      blockchain_instruction: {
+        token: {
+          token_symbol: 'USDC',
+        },
+        chain_dli: 'bad-chain',
+        custody_model: 'BAD_MODEL',
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, 'INVALID_REQUEST');
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'charge_bearer'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some((detail) => detail.field === 'debtor'),
+    true,
+  );
+  assert.equal(
+    response.json().details.some(
+      (detail) => detail.field === 'blockchain_instruction.chain_dli',
+    ),
+    true,
+  );
+  assert.equal(
+    response.json().details.some(
+      (detail) => detail.field === 'blockchain_instruction.custody_model',
+    ),
+    true,
+  );
+
+  await app.close();
+});
+
+test('travel rule callback enforces receiving vasp identity and timestamp', async () => {
+  const app = await buildApp();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/travel-rule',
+    payload: buildTravelRuleSubmission({
+      travel_rule_data: {
+        payment_identification: {
+          end_to_end_identification: 'E2E-CB-VALIDATION-001',
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+
+  const callbackResponse = await app.inject({
+    method: 'POST',
+    url: `/travel-rule/${createResponse.json().record_id}/callback`,
+    payload: {
+      callback_status: 'REJECTED',
+      rejection_reasons: [{ code: 'INVALID_FORMAT' }],
+    },
+  });
+
+  assert.equal(callbackResponse.statusCode, 400);
+  assert.equal(
+    callbackResponse.json().details.some(
+      (detail) => detail.field === 'receiving_vasp',
+    ),
+    true,
+  );
+  assert.equal(
+    callbackResponse.json().details.some(
+      (detail) => detail.field === 'callback_timestamp',
+    ),
+    true,
+  );
 
   await app.close();
 });
@@ -146,20 +472,9 @@ test('duplicate end_to_end_identification returns 409 with original instruction 
   const app = await buildApp();
 
   const payload = {
+    ...buildInstructionPayload(),
     payment_identification: {
       end_to_end_identification: 'INV-042',
-    },
-    interbank_settlement_amount: {
-      amount: '250000.00',
-      currency: 'USD',
-    },
-    blockchain_instruction: {
-      token: {
-        token_symbol: 'USDC',
-        token_dti: '4H95J0R2X',
-      },
-      chain_dli: 'X9J9XDMTD',
-      custody_model: 'FULL_CUSTODY',
     },
   };
 
@@ -191,12 +506,40 @@ test('pending instruction can be cancelled before broadcast', async () => {
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-043',
       },
       interbank_settlement_amount: {
         amount: '1000.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  const cancelResponse = await app.inject({
+    method: 'DELETE',
+    url: `/instruction/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(cancelResponse.statusCode, 200);
+  assertCancellationResponseShape(cancelResponse.json());
+
+  await app.close();
+});
+
+test('ramp instructions fail early when estimated slippage exceeds the configured limit', async () => {
+  const app = await buildApp();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-RAMP-SLIP-001',
+      },
+      interbank_settlement_amount: {
+        amount: '25000.00',
         currency: 'USD',
       },
       blockchain_instruction: {
@@ -206,17 +549,26 @@ test('pending instruction can be cancelled before broadcast', async () => {
         },
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
+        maximum_slippage_rate: '0.0005',
+        ramp_instruction: {
+          ramp_type: 'ONRAMP',
+        },
       },
-    },
+    }),
   });
 
-  const cancelResponse = await app.inject({
-    method: 'DELETE',
-    url: `/instruction/${createResponse.json().instruction_id}`,
+  assert.equal(createResponse.statusCode, 201);
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
   });
 
-  assert.equal(cancelResponse.statusCode, 200);
-  assert.equal(cancelResponse.json().status, 'CANCELLED');
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'SLIPPAGE_EXCEEDED');
+  assert.match(statusResponse.json().failure_reason, /Estimated slippage/);
+  assert.equal(statusResponse.json().transaction_hash, null);
+  assert.equal(statusResponse.json().confirmation_depth, 0);
 
   await app.close();
 });
@@ -227,7 +579,7 @@ test('travel rule search and stats return spec-like envelope', async () => {
   const createResponse = await app.inject({
     method: 'POST',
     url: '/travel-rule',
-    payload: {
+    payload: buildTravelRuleSubmission({
       submission_timing: 'POST_TX',
       travel_rule_data: {
         payment_identification: {
@@ -237,22 +589,12 @@ test('travel rule search and stats return spec-like envelope', async () => {
           amount: '50000.00',
           currency: 'EUR',
         },
-        debtor: { name: 'Acme Trading GmbH' },
-        debtor_agent: { lei: '7245007VX57GR4IUVZ79' },
-        debtor_account: {
-          proxy: { identification: '0xabc' },
-        },
-        creditor: { name: 'Bravo Supplies B.V.' },
-        creditor_agent: { lei: '5299000DUFB71VFOHVB49' },
-        creditor_account: {
-          proxy: { identification: '0xdef' },
-        },
         blockchain_settlement: {
           primary_chain_id: 'DLID/X9J9XDMTD',
           legs: [{ leg_type: 'ORIGINATION' }],
         },
       },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -263,6 +605,7 @@ test('travel rule search and stats return spec-like envelope', async () => {
   });
 
   assert.equal(searchResponse.statusCode, 200);
+  assertTravelRuleSearchResponseShape(searchResponse.json());
   assert.equal(searchResponse.json().total_matched, 1);
   assert.equal(searchResponse.json().page_size, 1);
   assert.equal(searchResponse.json().records[0].latest_callback_status, 'PENDING');
@@ -274,6 +617,7 @@ test('travel rule search and stats return spec-like envelope', async () => {
   });
 
   assert.equal(statsResponse.statusCode, 200);
+  assertTravelRuleStatsResponseShape(statsResponse.json());
   assert.equal(statsResponse.json().totals.record_count, 1);
   assert.equal(statsResponse.json().totals.volumes[0].currency, 'EUR');
   assert.equal(statsResponse.json().direction, 'BOTH');
@@ -288,21 +632,13 @@ test('accepted travel rule record rejects superseding callback', async () => {
   const createResponse = await app.inject({
     method: 'POST',
     url: '/travel-rule',
-    payload: {
+    payload: buildTravelRuleSubmission({
       travel_rule_data: {
         payment_identification: {
           end_to_end_identification: 'E2E-ACCEPTED-001',
         },
-        debtor: { name: 'Acme Trading GmbH' },
-        debtor_account: {
-          proxy: { identification: '0xabc' },
-        },
-        creditor: { name: 'Bravo Supplies B.V.' },
-        creditor_account: {
-          proxy: { identification: '0xdef' },
-        },
       },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -310,20 +646,19 @@ test('accepted travel rule record rejects superseding callback', async () => {
   const acceptedResponse = await app.inject({
     method: 'POST',
     url: `/travel-rule/${createResponse.json().record_id}/callback`,
-    payload: {
-      callback_status: 'ACCEPTED',
-    },
+    payload: buildTravelRuleCallback(),
   });
 
   assert.equal(acceptedResponse.statusCode, 200);
+  assert.equal(acceptedResponse.json().current_status, 'ACCEPTED');
 
   const rejectedResponse = await app.inject({
     method: 'POST',
     url: `/travel-rule/${createResponse.json().record_id}/callback`,
-    payload: {
+    payload: buildTravelRuleCallback({
       callback_status: 'REJECTED',
-      rejection_reasons: [{ field: 'debtor.name', code: 'INVALID' }],
-    },
+      rejection_reasons: [{ field: 'debtor.name', code: 'INVALID_FORMAT' }],
+    }),
   });
 
   assert.equal(rejectedResponse.statusCode, 409);
@@ -337,7 +672,7 @@ test('execution status can be retrieved by instruction id and uetr', async () =>
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-044',
       },
@@ -345,15 +680,7 @@ test('execution status can be retrieved by instruction id and uetr', async () =>
         amount: '2750.00',
         currency: 'USD',
       },
-      blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
-        },
-        chain_dli: 'X9J9XDMTD',
-        custody_model: 'FULL_CUSTODY',
-      },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -391,7 +718,7 @@ test('finality receipt reflects settled on-chain state and supports uetr lookup'
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-045',
       },
@@ -399,15 +726,7 @@ test('finality receipt reflects settled on-chain state and supports uetr lookup'
         amount: '5000.00',
         currency: 'USD',
       },
-      blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
-        },
-        chain_dli: 'X9J9XDMTD',
-        custody_model: 'FULL_CUSTODY',
-      },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -449,7 +768,7 @@ test('execution status history captures cancellation as a terminal event', async
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-046',
       },
@@ -457,15 +776,7 @@ test('execution status history captures cancellation as a terminal event', async
         amount: '310.00',
         currency: 'USD',
       },
-      blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
-        },
-        chain_dli: 'X9J9XDMTD',
-        custody_model: 'FULL_CUSTODY',
-      },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -500,7 +811,7 @@ test('event outbox mirrors initial execution status and finality payloads', asyn
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-047',
       },
@@ -508,15 +819,7 @@ test('event outbox mirrors initial execution status and finality payloads', asyn
         amount: '725.00',
         currency: 'USD',
       },
-      blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
-        },
-        chain_dli: 'X9J9XDMTD',
-        custody_model: 'FULL_CUSTODY',
-      },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -565,7 +868,7 @@ test('event outbox records final lifecycle transitions with mirrored payloads', 
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-048',
       },
@@ -573,15 +876,7 @@ test('event outbox records final lifecycle transitions with mirrored payloads', 
         amount: '9825.00',
         currency: 'USD',
       },
-      blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
-        },
-        chain_dli: 'X9J9XDMTD',
-        custody_model: 'FULL_CUSTODY',
-      },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -663,7 +958,7 @@ test('webhook subscriptions receive signed deliveries for outbox events', async 
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-049',
       },
@@ -671,15 +966,7 @@ test('webhook subscriptions receive signed deliveries for outbox events', async 
         amount: '1800.00',
         currency: 'USD',
       },
-      blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
-        },
-        chain_dli: 'X9J9XDMTD',
-        custody_model: 'FULL_CUSTODY',
-      },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -773,7 +1060,7 @@ test('webhook deliveries retry on non-2xx endpoint responses', async () => {
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-050',
       },
@@ -781,15 +1068,7 @@ test('webhook deliveries retry on non-2xx endpoint responses', async () => {
         amount: '900.00',
         currency: 'USD',
       },
-      blockchain_instruction: {
-        token: {
-          token_symbol: 'USDC',
-          token_dti: '4H95J0R2X',
-        },
-        chain_dli: 'X9J9XDMTD',
-        custody_model: 'FULL_CUSTODY',
-      },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -827,16 +1106,91 @@ test('webhook deliveries retry on non-2xx endpoint responses', async () => {
   await app.close();
 });
 
+test('background webhook dispatch retries and eventually delivers due events', async () => {
+  let attempts = 0;
+  const app = await buildApp({
+    webhookDispatch: {
+      enabled: true,
+      intervalMs: 10,
+      batchSize: 10,
+    },
+    webhookRetryScheduleMs: [15, 30],
+    webhookSender: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        return {
+          status: 503,
+          bodyText: 'busy',
+        };
+      }
+
+      return {
+        status: 202,
+        bodyText: 'accepted',
+      };
+    },
+  });
+
+  const subscriptionResponse = await app.inject({
+    method: 'POST',
+    url: '/webhook-endpoints',
+    payload: {
+      url: 'https://receiver.example/background',
+      signing_secret: 'whsec_background_123456',
+      subscribed_event_types: ['execution_status.updated'],
+      max_attempts: 3,
+    },
+  });
+
+  assert.equal(subscriptionResponse.statusCode, 201);
+  const subscription = subscriptionResponse.json();
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-WEBHOOK-BG-001',
+      },
+      interbank_settlement_amount: {
+        amount: '1500.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+
+  const delivered = await waitFor(async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/webhook-endpoints/${subscription.subscription_id}/deliveries?event_type=execution_status.updated`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().total_matched, 1);
+    assert.equal(response.json().deliveries[0].delivery_state, 'DELIVERED');
+    return response.json().deliveries[0];
+  });
+
+  assert.ok(delivered.attempt_count >= 2);
+  assert.equal(delivered.response_status, 202);
+  assert.equal(attempts >= 2, true);
+
+  await app.close();
+});
+
 test('reporting notifications are created when an instruction reaches settlement milestones', async () => {
   const app = await buildApp();
 
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-051',
       },
+      charge_bearer: 'DEBT',
       debtor: {
         name: 'Acme Trading GmbH',
         lei: '529900T8BM49AURSDO55',
@@ -857,7 +1211,7 @@ test('reporting notifications are created when an instruction reaches settlement
       },
       creditor_agent: {
         name: 'Kraken Belgium BVBA',
-        lei: '5299000DUFB71VFOHVB49',
+        lei: '635400DUFB71VFOHVB49',
       },
       interbank_settlement_amount: {
         amount: '4250.00',
@@ -874,7 +1228,7 @@ test('reporting notifications are created when an instruction reaches settlement
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
       },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -991,15 +1345,23 @@ test('reporting notifications are emitted through outbox and webhook delivery', 
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-052',
       },
       debtor: { name: 'Acme Trading GmbH' },
+      debtor_agent: {
+        name: 'Bankhaus Example AG',
+        lei: '7245007VX57GR4IUVZ79',
+      },
       debtor_account: {
         proxy: { identification: '0xreportdebit' },
       },
       creditor: { name: 'Bravo Supplies B.V.' },
+      creditor_agent: {
+        name: 'Kraken Belgium BVBA',
+        lei: '635400DUFB71VFOHVB49',
+      },
       creditor_account: {
         proxy: { identification: '0xreportcredit' },
       },
@@ -1015,7 +1377,7 @@ test('reporting notifications are emitted through outbox and webhook delivery', 
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
       },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -1078,7 +1440,7 @@ test('intraday reporting view summarizes booked movements and supports account f
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-053',
       },
@@ -1108,7 +1470,7 @@ test('intraday reporting view summarizes booked movements and supports account f
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
       },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -1167,7 +1529,7 @@ test('statement reporting derives persisted account statements from reporting no
   const createResponse = await app.inject({
     method: 'POST',
     url: '/instruction',
-    payload: {
+    payload: buildInstructionPayload({
       payment_identification: {
         end_to_end_identification: 'INV-054',
       },
@@ -1197,7 +1559,7 @@ test('statement reporting derives persisted account statements from reporting no
         chain_dli: 'X9J9XDMTD',
         custody_model: 'FULL_CUSTODY',
       },
-    },
+    }),
   });
 
   assert.equal(createResponse.statusCode, 201);
@@ -1253,6 +1615,88 @@ test('statement reporting derives persisted account statements from reporting no
   assert.equal(filteredStatementsResponse.statusCode, 200);
   assert.equal(filteredStatementsResponse.json().total_matched, 1);
   assert.equal(filteredStatementsResponse.json().statements[0].statement_id, debtorStatement.statement_id);
+
+  await app.close();
+});
+
+test('chain adapter can be injected without changing route contracts', async () => {
+  const baseAdapter = createMockEvmChainAdapter();
+  const customAdapter = {
+    ...baseAdapter,
+    buildQuoteResponse(request) {
+      const quote = baseAdapter.buildQuoteResponse(request);
+      return {
+        ...quote,
+        chain_conditions: {
+          ...quote.chain_conditions,
+          congestion_level: 'HIGH',
+        },
+      };
+    },
+    deriveLifecycleState(record) {
+      const lifecycle = baseAdapter.deriveLifecycleState(record);
+      if (record.status === 'PENDING' && Date.now() - Date.parse(record.created_at) >= 1000) {
+        return {
+          status: 'BROADCAST',
+          failureReason: null,
+          onChainSettlement: {
+            ...lifecycle.onChainSettlement,
+            transaction_hash: '0xadapter00000000000000000000000000000000000000000000000000000000',
+            required_confirmation_depth: 9,
+          },
+        };
+      }
+      return lifecycle;
+    },
+  };
+
+  const app = await buildApp({ chainAdapter: customAdapter });
+
+  const quoteResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction/quote',
+    payload: buildQuoteRequest(),
+  });
+
+  assert.equal(quoteResponse.statusCode, 200);
+  assert.equal(quoteResponse.json().chain_conditions.congestion_level, 'HIGH');
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-ADAPTER-001',
+      },
+      interbank_settlement_amount: {
+        amount: '900.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  const instruction = createResponse.json();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  const agedTimestamp = new Date(Date.now() - 1500).toISOString();
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${instruction.instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'BROADCAST');
+  assert.equal(statusResponse.json().required_confirmation_depth, 9);
+  assert.equal(
+    statusResponse.json().transaction_hash,
+    '0xadapter00000000000000000000000000000000000000000000000000000000',
+  );
 
   await app.close();
 });

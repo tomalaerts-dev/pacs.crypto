@@ -2,7 +2,11 @@ import { loadConfig } from './config.js';
 import { buildApp } from './app.js';
 
 const config = loadConfig();
-const app = await buildApp({ dbPath: config.dbPath });
+const app = await buildApp({
+  dbPath: config.dbPath,
+  webhookDispatch: config.webhookDispatch,
+  webhookRetryScheduleMs: config.webhookRetryScheduleMs,
+});
 
 try {
   await app.listen({

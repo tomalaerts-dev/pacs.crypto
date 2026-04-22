@@ -3,6 +3,8 @@ import { dirname } from 'node:path';
 import { createHmac, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
+import { createMockEvmChainAdapter } from './chain/mock-evm-adapter.js';
+
 const TRAVEL_RULE_CALLBACK_STATUSES = new Set([
   'ACCEPTED',
   'REJECTED',
@@ -51,69 +53,28 @@ function buildWebhookSignature(signingSecret, timestamp, body) {
   return `t=${timestamp},v1=${digest}`;
 }
 
-function computeWebhookBackoffSeconds(attemptCount) {
-  const retryScheduleSeconds = [30, 120, 600, 1800];
-  return retryScheduleSeconds[Math.min(attemptCount - 1, retryScheduleSeconds.length - 1)];
+const DEFAULT_WEBHOOK_RETRY_SCHEDULE_MS = [30_000, 120_000, 600_000, 1_800_000];
+
+function normalizeRetryScheduleMs(retryScheduleMs) {
+  if (!Array.isArray(retryScheduleMs)) {
+    return [...DEFAULT_WEBHOOK_RETRY_SCHEDULE_MS];
+  }
+
+  const normalized = retryScheduleMs
+    .map((value) => Number.parseInt(value, 10))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+  return normalized.length > 0
+    ? normalized
+    : [...DEFAULT_WEBHOOK_RETRY_SCHEDULE_MS];
 }
 
-function buildNextAttemptAt(fromIso, attemptCount) {
+function buildNextAttemptAt(fromIso, attemptCount, retryScheduleMs) {
+  const schedule = normalizeRetryScheduleMs(retryScheduleMs);
+  const delayMs = schedule[Math.min(attemptCount - 1, schedule.length - 1)];
   return new Date(
-    Date.parse(fromIso) + (computeWebhookBackoffSeconds(attemptCount) * 1000),
+    Date.parse(fromIso) + delayMs,
   ).toISOString();
-}
-
-function buildFeeEstimate(request = {}) {
-  const amount = Number.parseFloat(request.amount ?? '0');
-  const gasFiat = amount >= 100000 ? '7.95' : '3.80';
-  const serviceFee = amount >= 100000 ? '45.00' : '12.50';
-
-  return {
-    gas_cost_native: {
-      amount: '0.0021',
-      currency: 'ETH',
-    },
-    gas_cost_fiat: {
-      amount: gasFiat,
-      currency: 'USD',
-    },
-    vasp_service_fee: {
-      amount: serviceFee,
-      currency: 'USD',
-    },
-    ramp_spread_bps: request.ramp_type && request.ramp_type !== 'NONE' ? 35 : 0,
-    slippage_estimate_bps: 8,
-    total_cost_fiat: {
-      amount: (Number.parseFloat(gasFiat) + Number.parseFloat(serviceFee)).toFixed(2),
-      currency: 'USD',
-    },
-  };
-}
-
-function buildQuoteResponse(request = {}) {
-  const createdAt = nowIso();
-  const validUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-  return {
-    quote_id: randomUUID(),
-    valid_until: validUntil,
-    fee_lock_type: 'CAPPED',
-    fee_estimate: buildFeeEstimate(request),
-    estimated_confirmation_seconds: 90,
-    chain_conditions: {
-      congestion_level: 'MEDIUM',
-      current_base_fee_gwei: '14.2',
-      average_block_time_seconds: 12,
-    },
-    created_at: createdAt,
-  };
-}
-
-function buildMockTransactionHash() {
-  return `0x${randomUUID().replaceAll('-', '').padEnd(64, '0').slice(0, 64)}`;
-}
-
-function hasExpired(expiryDateTime) {
-  return Boolean(expiryDateTime) && Date.parse(expiryDateTime) <= Date.now();
 }
 
 function normalizeTravelRuleSubmissionTiming(value) {
@@ -251,6 +212,15 @@ function buildTravelRuleSummary(record) {
   };
 }
 
+function buildTravelRuleCallbackReceipt(record, previousStatus, callbackRecordedAt) {
+  return {
+    record_id: record.record_id,
+    callback_recorded_at: callbackRecordedAt,
+    current_status: record.status,
+    previous_status: previousStatus ?? null,
+  };
+}
+
 function getTravelRuleBreakdownKey(record, groupBy) {
   const data = getTravelRuleData(record);
   const summary = buildTravelRuleSummary(record);
@@ -312,6 +282,14 @@ function buildInstructionResponse(record) {
     expiry_date_time: record.expiry_date_time,
     debit_timing: record.debit_timing,
     created_at: record.created_at,
+  };
+}
+
+function buildCancellationResponse(record, cancelledAt) {
+  return {
+    instruction_id: record.instruction_id,
+    status: 'CANCELLED',
+    cancelled_at: cancelledAt,
   };
 }
 
@@ -514,25 +492,6 @@ function normalizeInstructionStatusHistory(statusHistory, record) {
   ];
 }
 
-function normalizeOnChainSettlement(onChainSettlement, amount) {
-  return {
-    transaction_hash: null,
-    block_number: null,
-    block_timestamp: null,
-    confirmation_depth: 0,
-    required_confirmation_depth: 12,
-    finality_status: 'PENDING',
-    actual_amount_transferred: amount ?? '0',
-    actual_gas_cost_native: '0.0021',
-    actual_gas_cost_fiat: {
-      amount: '7.95',
-      currency: 'USD',
-    },
-    actual_slippage_rate: '0.0004',
-    ...onChainSettlement,
-  };
-}
-
 function appendInstructionStatusEvent(record, status, statusAt, failureReason = null) {
   const history = normalizeInstructionStatusHistory(record.status_history, record);
   if (history.at(-1)?.status === status) {
@@ -659,33 +618,6 @@ function hasInstructionReachedStatus(record, status) {
   return getInstructionStatusRank(record?.status) >= getInstructionStatusRank(status);
 }
 
-function getInstructionLifecycleTimestamp(record, status) {
-  const eventTimestamp = findInstructionStatusEvent(record, status)?.status_at;
-  if (eventTimestamp) {
-    return eventTimestamp;
-  }
-
-  const createdAt = Date.parse(record.created_at);
-  if (Number.isNaN(createdAt)) {
-    return record.updated_at ?? nowIso();
-  }
-
-  if (['PENDING', 'QUOTED'].includes(status)) {
-    return record.created_at;
-  }
-  if (status === 'BROADCAST') {
-    return new Date(createdAt + 1000).toISOString();
-  }
-  if (status === 'CONFIRMING') {
-    return new Date(createdAt + 3000).toISOString();
-  }
-  if (status === 'FINAL') {
-    return new Date(createdAt + 6000).toISOString();
-  }
-
-  return record.updated_at ?? nowIso();
-}
-
 function getDebitNotificationTriggerStatus(debitTiming) {
   if (debitTiming === 'ON_ACCEPTANCE') {
     return 'PENDING';
@@ -697,7 +629,7 @@ function getDebitNotificationTriggerStatus(debitTiming) {
   return 'BROADCAST';
 }
 
-function buildReportingNotificationRecord(record, notificationKind) {
+function buildReportingNotificationRecord(record, notificationKind, chainAdapter) {
   const isDebit = notificationKind === 'DEBTOR_DEBIT';
   const accountRole = isDebit ? 'DEBTOR' : 'CREDITOR';
   const party = isDebit ? record.debtor : record.creditor;
@@ -709,7 +641,7 @@ function buildReportingNotificationRecord(record, notificationKind) {
   const triggerStatus = isDebit
     ? getDebitNotificationTriggerStatus(record.debit_timing)
     : 'FINAL';
-  const bookingDateTime = getInstructionLifecycleTimestamp(record, triggerStatus);
+  const bookingDateTime = chainAdapter.getLifecycleTimestamp(record, triggerStatus);
 
   return {
     notification_id: randomUUID(),
@@ -1115,11 +1047,17 @@ function shouldEmitFinalityReceiptEvent(record, previousRecord) {
 }
 
 export class ReferenceStore {
-  constructor({ dbPath = ':memory:' } = {}) {
+  constructor({
+    dbPath = ':memory:',
+    chainAdapter = createMockEvmChainAdapter(),
+    webhookRetryScheduleMs = DEFAULT_WEBHOOK_RETRY_SCHEDULE_MS,
+  } = {}) {
     if (dbPath !== ':memory:') {
       mkdirSync(dirname(dbPath), { recursive: true });
     }
 
+    this.chainAdapter = chainAdapter;
+    this.webhookRetryScheduleMs = normalizeRetryScheduleMs(webhookRetryScheduleMs);
     this.db = new DatabaseSync(dbPath);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS travel_rule_records (
@@ -1392,15 +1330,18 @@ export class ReferenceStore {
       callback_status: callbackSubmission.callback_status,
       callback_timestamp: callbackSubmission.callback_timestamp ?? nowIso(),
       description: callbackSubmission.description ?? null,
+      review_reason: callbackSubmission.review_reason ?? null,
+      receiving_vasp: callbackSubmission.receiving_vasp ?? null,
       receiving_vasp_record_ref:
         callbackSubmission.receiving_vasp_record_ref ?? null,
       rejection_reasons: callbackSubmission.rejection_reasons ?? [],
     };
 
+    const callbackRecordedAt = nowIso();
     const updated = {
       ...current,
       status: callback.callback_status,
-      last_updated_at: nowIso(),
+      last_updated_at: callbackRecordedAt,
       callbacks: [...(current.callbacks ?? []), callback],
     };
 
@@ -1411,7 +1352,14 @@ export class ReferenceStore {
       recordId,
     );
 
-    return updated;
+    return {
+      record: updated,
+      receipt: buildTravelRuleCallbackReceipt(
+        updated,
+        current.status,
+        callbackRecordedAt,
+      ),
+    };
   }
 
   searchTravelRuleRecords(filters = {}) {
@@ -1601,7 +1549,7 @@ export class ReferenceStore {
   }
 
   createQuote(request) {
-    const quote = buildQuoteResponse(request);
+    const quote = this.chainAdapter.buildQuoteResponse(request);
     this.insertQuoteStmt.run(
       quote.quote_id,
       quote.valid_until,
@@ -1644,14 +1592,16 @@ export class ReferenceStore {
   createInstruction(submission) {
     const normalized = normalizeInstructionSubmission(submission);
     const createdAt = nowIso();
-    const initialStatus = hasExpired(normalized.expiry_date_time) ? 'EXPIRED' : 'PENDING';
+    const initialStatus = this.chainAdapter.hasExpired(normalized.expiry_date_time)
+      ? 'EXPIRED'
+      : 'PENDING';
     const feeEstimate = normalized.payment_identification.quote_id
       ? this.getQuote(normalized.payment_identification.quote_id)?.fee_estimate ??
-        buildFeeEstimate({
+        this.chainAdapter.buildFeeEstimate({
           amount: normalized.interbank_settlement_amount.amount,
           ramp_type: normalized.blockchain_instruction?.ramp_instruction?.ramp_type,
         })
-      : buildFeeEstimate({
+      : this.chainAdapter.buildFeeEstimate({
           amount: normalized.interbank_settlement_amount.amount,
           ramp_type: normalized.blockchain_instruction?.ramp_instruction?.ramp_type,
         });
@@ -1678,9 +1628,10 @@ export class ReferenceStore {
       remittance_information: normalized.remittance_information,
       blockchain_instruction: normalized.blockchain_instruction,
       fee_estimate: feeEstimate,
-      on_chain_settlement: normalizeOnChainSettlement(
+      on_chain_settlement: this.chainAdapter.normalizeOnChainSettlement(
         null,
         normalized.interbank_settlement_amount.amount,
+        normalized,
       ),
       travel_rule_record_id: normalized.travel_rule_record_id,
       created_at: createdAt,
@@ -2007,7 +1958,11 @@ export class ReferenceStore {
             ? attemptAt
             : attemptCount >= subscription.max_attempts
               ? attemptAt
-              : buildNextAttemptAt(attemptAt, attemptCount),
+              : buildNextAttemptAt(
+                  attemptAt,
+                  attemptCount,
+                  this.webhookRetryScheduleMs,
+                ),
           response_status: response.status,
           response_body_excerpt: response.bodyText?.slice(0, 500) ?? null,
           last_error: delivered ? null : `Endpoint returned HTTP ${response.status}.`,
@@ -2050,7 +2005,11 @@ export class ReferenceStore {
           next_attempt_at:
             attemptCount >= subscription.max_attempts
               ? attemptAt
-              : buildNextAttemptAt(attemptAt, attemptCount),
+              : buildNextAttemptAt(
+                  attemptAt,
+                  attemptCount,
+                  this.webhookRetryScheduleMs,
+                ),
           response_status: null,
           response_body_excerpt: null,
           last_error: error.message,
@@ -2135,7 +2094,11 @@ export class ReferenceStore {
     const debitTriggerStatus = getDebitNotificationTriggerStatus(record.debit_timing);
 
     if (!hasDebtorDebit && hasInstructionReachedStatus(record, debitTriggerStatus)) {
-      const notification = buildReportingNotificationRecord(record, 'DEBTOR_DEBIT');
+      const notification = buildReportingNotificationRecord(
+        record,
+        'DEBTOR_DEBIT',
+        this.chainAdapter,
+      );
       this.insertReportingNotificationStmt.run(
         notification.notification_id,
         notification.instruction_id,
@@ -2149,6 +2112,7 @@ export class ReferenceStore {
       const notification = buildReportingNotificationRecord(
         record,
         'CREDITOR_CREDIT',
+        this.chainAdapter,
       );
       this.insertReportingNotificationStmt.run(
         notification.notification_id,
@@ -2439,20 +2403,22 @@ export class ReferenceStore {
       return { error: 'too_late', current };
     }
 
+    const cancelledAt = nowIso();
     const updated = {
       ...current,
       status: 'CANCELLED',
-      updated_at: nowIso(),
+      updated_at: cancelledAt,
       failure_reason: null,
       status_history: appendInstructionStatusEvent(
         current,
         'CANCELLED',
-        nowIso(),
+        cancelledAt,
       ),
       on_chain_settlement: {
-        ...normalizeOnChainSettlement(
+        ...this.chainAdapter.normalizeOnChainSettlement(
           current.on_chain_settlement,
           current.interbank_settlement_amount?.amount,
+          current,
         ),
         transaction_hash: null,
         confirmation_depth: null,
@@ -2468,7 +2434,10 @@ export class ReferenceStore {
       emitNotifications: true,
     });
 
-    return { record: updated };
+    return {
+      record: updated,
+      cancellation: buildCancellationResponse(updated, cancelledAt),
+    };
   }
 
   searchInstructions(filters = {}) {
@@ -2519,9 +2488,10 @@ export class ReferenceStore {
   advanceInstructionLifecycle(record, { persist = false } = {}) {
     const normalized = {
       ...record,
-      on_chain_settlement: normalizeOnChainSettlement(
+      on_chain_settlement: this.chainAdapter.normalizeOnChainSettlement(
         record.on_chain_settlement,
         record.interbank_settlement_amount?.amount,
+        record,
       ),
       status_history: normalizeInstructionStatusHistory(record.status_history, record),
     };
@@ -2537,41 +2507,9 @@ export class ReferenceStore {
       return normalized;
     }
 
-    const elapsedMs = Date.now() - Date.parse(normalized.created_at);
-    let status = 'PENDING';
-    let confirmationDepth = 0;
-    let finalityStatus = 'PENDING';
-    let blockNumber = null;
-    let blockTimestamp = null;
-    let failureReason = normalized.failure_reason ?? null;
-    let transactionHash = normalized.on_chain_settlement?.transaction_hash ?? null;
-
-    if (normalized.status === 'PENDING' && hasExpired(normalized.expiry_date_time)) {
-      status = 'EXPIRED';
-      failureReason = 'Instruction expired before execution.';
-    } else if (elapsedMs >= 6000) {
-      status = 'FINAL';
-      confirmationDepth = 12;
-      finalityStatus = 'FINAL';
-      transactionHash = transactionHash ?? buildMockTransactionHash();
-      blockNumber = 22190456;
-      blockTimestamp = new Date(Date.parse(normalized.created_at) + 2500).toISOString();
-      failureReason = null;
-    } else if (elapsedMs >= 3000) {
-      status = 'CONFIRMING';
-      confirmationDepth = 4;
-      finalityStatus = 'PROBABILISTIC';
-      transactionHash = transactionHash ?? buildMockTransactionHash();
-      blockNumber = 22190456;
-      blockTimestamp = new Date(Date.parse(normalized.created_at) + 2500).toISOString();
-      failureReason = null;
-    } else if (elapsedMs >= 1000) {
-      status = 'BROADCAST';
-      confirmationDepth = 0;
-      finalityStatus = 'PENDING';
-      transactionHash = transactionHash ?? buildMockTransactionHash();
-      failureReason = null;
-    }
+    const lifecycleState = this.chainAdapter.deriveLifecycleState(normalized);
+    const status = lifecycleState.status;
+    const failureReason = lifecycleState.failureReason;
 
     const updatedAt =
       status === normalized.status
@@ -2593,14 +2531,7 @@ export class ReferenceStore {
               failureReason,
             ),
       on_chain_settlement: {
-        ...normalized.on_chain_settlement,
-        transaction_hash: transactionHash,
-        block_number:
-          blockNumber ?? normalized.on_chain_settlement?.block_number ?? null,
-        block_timestamp:
-          blockTimestamp ?? normalized.on_chain_settlement?.block_timestamp ?? null,
-        confirmation_depth: confirmationDepth,
-        finality_status: finalityStatus,
+        ...lifecycleState.onChainSettlement,
       },
     };
 

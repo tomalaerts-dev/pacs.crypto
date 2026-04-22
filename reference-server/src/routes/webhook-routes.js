@@ -1,4 +1,5 @@
 import {
+  formatValidationErrors,
   validateWebhookDispatchRequest,
   validateWebhookSubscriptionSubmission,
 } from '../validators.js';
@@ -6,7 +7,9 @@ import {
 function sendValidationError(reply, errors) {
   return reply.code(400).send({
     error: 'invalid_request',
-    details: errors,
+    code: 'INVALID_REQUEST',
+    message: 'Request validation failed.',
+    details: formatValidationErrors(errors),
   });
 }
 
@@ -72,10 +75,9 @@ export function registerWebhookRoutes(app) {
       return sendValidationError(reply, errors);
     }
 
-    const result = await app.store.dispatchPendingWebhookDeliveries({
-      sender: app.webhookSender,
+    const result = await app.dispatchDueWebhookDeliveries({
       limit: request.body?.limit,
-      subscriptionId: request.body?.subscription_id,
+      subscriptionId: request.body?.subscription_id ?? null,
     });
 
     return reply.code(200).send(result);

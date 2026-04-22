@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 
+import { createMockEvmChainAdapter } from './chain/mock-evm-adapter.js';
 import { ReferenceStore } from './db.js';
 import { registerEventRoutes } from './routes/event-routes.js';
 import { registerHealthRoutes } from './routes/health-routes.js';
@@ -22,15 +23,44 @@ async function defaultWebhookSender({ url, headers, body }) {
   };
 }
 
+function normalizeWebhookDispatchConfig(config = {}) {
+  const intervalMs = Number.parseInt(config.intervalMs ?? '1000', 10);
+  const batchSize = Number.parseInt(config.batchSize ?? '20', 10);
+
+  return {
+    enabled: config.enabled === true,
+    intervalMs: Number.isInteger(intervalMs) && intervalMs > 0 ? intervalMs : 1000,
+    batchSize: Number.isInteger(batchSize) && batchSize > 0 ? batchSize : 20,
+  };
+}
+
 export async function buildApp({
   dbPath = ':memory:',
+  chainAdapter = createMockEvmChainAdapter(),
   webhookSender = defaultWebhookSender,
+  webhookDispatch = {},
+  webhookRetryScheduleMs,
 } = {}) {
   const app = Fastify({ logger: false });
-  const store = new ReferenceStore({ dbPath });
+  const dispatchConfig = normalizeWebhookDispatchConfig(webhookDispatch);
+  const store = new ReferenceStore({
+    dbPath,
+    chainAdapter,
+    webhookRetryScheduleMs,
+  });
+  let dispatchTimer = null;
+  let dispatchInFlight = false;
 
   app.decorate('store', store);
+  app.decorate('chainAdapter', chainAdapter);
   app.decorate('webhookSender', webhookSender);
+  app.decorate('dispatchDueWebhookDeliveries', async ({ limit, subscriptionId } = {}) =>
+    store.dispatchPendingWebhookDeliveries({
+      sender: app.webhookSender,
+      limit: limit ?? dispatchConfig.batchSize,
+      subscriptionId: subscriptionId ?? null,
+    }),
+  );
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('access-control-allow-origin', '*');
@@ -48,7 +78,36 @@ export async function buildApp({
     }
   });
 
+  app.addHook('onReady', async () => {
+    if (!dispatchConfig.enabled) {
+      return;
+    }
+
+    dispatchTimer = setInterval(async () => {
+      if (dispatchInFlight) {
+        return;
+      }
+
+      dispatchInFlight = true;
+      try {
+        await app.dispatchDueWebhookDeliveries({
+          limit: dispatchConfig.batchSize,
+        });
+      } catch (error) {
+        app.log.error(error, 'background webhook dispatch failed');
+      } finally {
+        dispatchInFlight = false;
+      }
+    }, dispatchConfig.intervalMs);
+
+    dispatchTimer.unref?.();
+  });
+
   app.addHook('onClose', async () => {
+    if (dispatchTimer) {
+      clearInterval(dispatchTimer);
+      dispatchTimer = null;
+    }
     store.close();
   });
 

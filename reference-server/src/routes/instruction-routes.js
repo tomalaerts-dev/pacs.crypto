@@ -1,5 +1,5 @@
 import {
-  isPlainObject,
+  formatValidationErrors,
   validateInstructionSubmission,
   validateQuoteRequest,
 } from '../validators.js';
@@ -7,7 +7,9 @@ import {
 function sendValidationError(reply, errors) {
   return reply.code(400).send({
     error: 'invalid_request',
-    details: errors,
+    code: 'INVALID_REQUEST',
+    message: 'Request validation failed.',
+    details: formatValidationErrors(errors),
   });
 }
 
@@ -101,7 +103,7 @@ export function registerInstructionRoutes(app) {
       });
     }
 
-    return result.record;
+    return result.cancellation;
   });
 
   app.get('/instruction/:instructionId', async (request, reply) => {

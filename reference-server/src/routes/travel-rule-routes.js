@@ -1,5 +1,5 @@
 import {
-  isPlainObject,
+  formatValidationErrors,
   validateTravelRuleCallback,
   validateTravelRuleStatsQuery,
   validateTravelRuleSubmission,
@@ -8,7 +8,9 @@ import {
 function sendValidationError(reply, errors) {
   return reply.code(400).send({
     error: 'invalid_request',
-    details: errors,
+    code: 'INVALID_REQUEST',
+    message: 'Request validation failed.',
+    details: formatValidationErrors(errors),
   });
 }
 
@@ -76,19 +78,19 @@ export function registerTravelRuleRoutes(app) {
     }
 
     try {
-      const record = app.store.appendTravelRuleCallback(
+      const result = app.store.appendTravelRuleCallback(
         request.params.recordId,
         request.body,
       );
 
-      if (!record) {
+      if (!result) {
         return reply.code(404).send({
           error: 'not_found',
           message: 'Travel Rule record not found.',
         });
       }
 
-      return record;
+      return result.receipt;
     } catch (error) {
       return reply.code(error.code === 'CONFLICT' ? 409 : 400).send({
         error: 'invalid_request',
