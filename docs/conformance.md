@@ -17,14 +17,14 @@ Status meanings:
 | `GET /travel-rule/{recordId}` | `travel-rule-api-v3.yaml` | n/a | `TravelRuleRecord` | Implemented | Returns the persisted compliance record. |
 | `PUT /travel-rule/{recordId}` | `travel-rule-api-v3.yaml` | `TravelRuleSubmission` | `TravelRuleRecord` | Implemented | Correction flow remains tied to the current record lifecycle model. |
 | `POST /travel-rule/{recordId}/callback` | `travel-rule-api-v3.yaml` | `TravelRuleCallback` | `TravelRuleCallbackReceipt` | Implemented | Request validation follows the callback schema and the route now returns the receipt object defined in the spec. |
-| `GET /travel-rule/search` | `travel-rule-api-v3.yaml` | query params | `TravelRuleSearchResponse` | Implemented | Cursor-style envelope and summary objects are present. |
+| `GET /travel-rule/search` | `travel-rule-api-v3.yaml` | query params | `TravelRuleSearchResponse` | Implemented | Query validation now covers the spec-defined filter set used in the current server, including direction, status, callback status, currency, wallets, pagination, and sort. |
 | `GET /travel-rule/stats` | `travel-rule-api-v3.yaml` | query params | `TravelRuleStatsResponse` | Implemented | Stats envelope and aggregate totals are present for the current local dataset. |
 | `POST /instruction/quote` | `instruction-api-v1.yaml` | `QuoteRequest` | `QuoteResponse` | Implemented | Request validation now enforces token, DLI, amount, currency, and custody model fields. |
 | `POST /instruction` | `instruction-api-v1.yaml` | `PaymentInstruction` | `InstructionResponse` | Implemented | Current validation enforces the main mandatory pacs.008-derived parties, agents, amount, charge bearer, and blockchain instruction fields. |
 | `GET /instruction/{instructionId}` | `instruction-api-v1.yaml` | n/a | `InstructionStatusResponse` | Implemented | The returned object includes the required status surface plus extra reference-server fields. |
 | `DELETE /instruction/{instructionId}` | `instruction-api-v1.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
 | `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
-| `GET /instruction/search` | `instruction-api-v1.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope and compact summaries are present. |
+| `GET /instruction/search` | `instruction-api-v1.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
 
 ## Reference-server extensions
 
@@ -54,8 +54,9 @@ These routes are real, but they are outside the current root YAML specs and ther
 The current conformance work is intentionally limited to the bank-to-VASP wedge already implemented in code:
 
 - stricter request validation for the spec-covered write routes
+- stricter query validation for the spec-covered search and stats routes
 - response-shape coverage for the core spec-covered read and search routes
 - explicit documentation of the current out-of-scope spec surface:
   - delegated signing
 
-Delegated signing, non-EVM flows, and richer exception families remain outside the current conformance target.
+Delegated signing, non-EVM flows, and richer exception families remain outside the current conformance target. The current conformance layer is hand-authored in code for the implemented wedge rather than generated directly from the YAML.

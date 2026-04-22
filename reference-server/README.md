@@ -3,6 +3,7 @@
 First executable slice of the `pacs.crypto` reference stack.
 
 Conformance status for the spec-covered routes is tracked in [`../docs/conformance.md`](../docs/conformance.md).
+Current lifecycle and webhook/reporting decision rules are captured in [`../docs/spec-hardening.md`](../docs/spec-hardening.md).
 
 Current scope:
 
@@ -74,6 +75,7 @@ Environment overrides:
 - `reporting/notifications` is the first reporting-family surface: a `camt.054` analogue for booked debtor debit and creditor credit notifications keyed to the instruction lifecycle.
 - `reporting/intraday` is the next reporting-family surface: a narrow `camt.052` analogue summarizing booked intraday movements and account views from those notifications.
 - `reporting/statements` starts the statement layer: a `camt.053` analogue that persists per-instruction account statements derived from the existing reporting notifications and instruction context.
+- Reporting records now carry explicit traceability back to instruction, status, finality, transaction hash, and Travel Rule resources where available, plus statement derivation metadata sourced from booked notifications.
 - Reporting notifications are also emitted as `reporting_notification.created` events through the same outbox and webhook delivery pipeline.
 - Delegated signing is intentionally not implemented in this first slice.
 - The root HTML simulators support both `Demo` mode and `Live API` mode against this server.

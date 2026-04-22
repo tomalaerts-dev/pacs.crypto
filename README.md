@@ -43,6 +43,7 @@ The first executable slice lives in `reference-server/` and currently supports:
 - `camt.054`-like reporting notifications for booked debit and credit entries
 - `camt.052`-like intraday movement view built from the reporting notification feed
 - `camt.053`-like statement view derived from reporting notifications and instruction context
+- live statement and reporting traceability views in the instruction simulator
 - adapter-backed mocked EVM lifecycle progression with amount-aware fee, slippage, and finality modeling:
   `PENDING → BROADCAST → CONFIRMING → FINAL`
 
@@ -72,6 +73,7 @@ The active forward plan is now documented in:
 - [`docs/roadmap.md`](docs/roadmap.md) — 12-month roadmap for the execution wedge
 - [`docs/backlog.md`](docs/backlog.md) — prioritized execution backlog with dependencies and acceptance criteria
 - [`docs/conformance.md`](docs/conformance.md) — current spec-to-server conformance matrix
+- [`docs/spec-hardening.md`](docs/spec-hardening.md) — implementation decisions for lifecycle, failure, webhook, and reporting semantics
 - [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
 
 ### Current Baseline
@@ -86,7 +88,7 @@ Still mocked or partial:
 
 - chain lifecycle remains mocked, but now runs through an adapter-backed fee/finality policy
 - webhook delivery is background-driven with retries, but still demo-grade rather than production-hardened
-- incomplete OpenAPI conformance coverage against the YAML specs
+- spec-covered conformance is explicit and tested, but still hand-authored rather than YAML-generated
 - no delegated signing implementation
 - no testnet path yet
 

@@ -49,7 +49,7 @@ Acceptance criteria:
 
 ### Epic 2 - OpenAPI conformance layer
 Priority: `P0`
-Status: `In progress`
+Status: `Done`
 Depends on: existing route and test coverage
 
 Work items:
@@ -66,7 +66,7 @@ Acceptance criteria:
 
 ### Epic 3 - Spec hardening decisions
 Priority: `P0`
-Status: `Planned`
+Status: `Done`
 Depends on: OpenAPI review and current route behavior
 
 Work items:
@@ -75,6 +75,7 @@ Work items:
 - formalize terminal instruction failure semantics
 - formalize webhook event contract and canonical payload usage
 - formalize reporting-family boundaries and identifiers
+- publish the current decision record in `docs/spec-hardening.md`
 
 Acceptance criteria:
 
@@ -119,7 +120,7 @@ Acceptance criteria:
 
 ### Epic 6 - Reporting polish and traceability
 Priority: `P1`
-Status: `Planned`
+Status: `Done`
 Depends on: current reporting endpoints
 
 Work items:

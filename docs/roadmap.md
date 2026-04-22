@@ -32,7 +32,7 @@ The primary audience is standards-savvy reviewers who care about message-family 
 
 - chain lifecycle is still mocked, but now runs through an adapter-backed fee and finality policy
 - webhook dispatch is background-driven with persisted retries, but still demo-grade rather than production-hardened
-- OpenAPI conformance is incomplete
+- spec-covered conformance is hand-authored in code rather than generated directly from the YAML
 - delegated signing is intentionally unimplemented
 - no testnet execution path exists yet
 - no packaged reviewer demo exists yet
@@ -82,6 +82,10 @@ Success criteria:
 
 - runtime behavior and examples do not drift from the YAML
 - the repo can state exactly which spec surfaces are implemented in code
+
+Current status:
+
+- done for the current wedge: spec-covered Travel Rule and instruction routes now have explicit request/query validation, tested response-shape coverage, a conformance matrix, and an explicit delegated-signing out-of-scope path
 
 ### Phase 2 - Chain adapter and lifecycle realism
 Target window: Q3 2026
@@ -143,6 +147,10 @@ Success criteria:
 
 - a user can trace one payment from instruction submission to booked reporting outputs
 - reporting remains institution-facing rather than becoming a block-explorer surrogate
+
+Current status:
+
+- done for the current wedge: reporting notifications, intraday summaries, and statements now carry direct instruction/UETR/transaction/travel-rule traceability, statement derivation metadata is explicit, and the live simulator surfaces statements alongside the existing status, finality, and notification views
 
 ### Phase 5 - Demo package and reviewer kit
 Target window: Q1 2027
