@@ -1,0 +1,49 @@
+{
+  "payment_identification": {
+    "end_to_end_identification": "E2E-DEMO-2026-0001",
+    "quote_id": "79c52f2e-de14-48c6-b975-18b01c1ce8a0"
+  },
+  "charge_bearer": "DEBT",
+  "debtor": {
+    "name": "Acme Trading GmbH",
+    "lei": "529900T8BM49AURSDO55"
+  },
+  "debtor_account": {
+    "proxy": {
+      "identification": "0xdebtordemo000000000000000000000000000001"
+    }
+  },
+  "debtor_agent": {
+    "name": "Bankhaus Example AG",
+    "lei": "7245007VX57GR4IUVZ79"
+  },
+  "creditor": {
+    "name": "Bravo Supplies B.V.",
+    "lei": "724500QHKL6MVSQQ1Z17"
+  },
+  "creditor_account": {
+    "proxy": {
+      "identification": "0xcreditordemo0000000000000000000000000001"
+    }
+  },
+  "creditor_agent": {
+    "name": "Kraken Belgium BVBA",
+    "lei": "635400DUFB71VFOHVB49"
+  },
+  "interbank_settlement_amount": {
+    "amount": "125000.00",
+    "currency": "USD"
+  },
+  "remittance_information": {
+    "unstructured": "Invoice 78452 / Germany to Netherlands treasury settlement"
+  },
+  "blockchain_instruction": {
+    "token": {
+      "token_symbol": "USDC",
+      "token_dti": "4H95J0R2X"
+    },
+    "chain_dli": "X9J9XDMTD",
+    "custody_model": "FULL_CUSTODY"
+  },
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3"
+}

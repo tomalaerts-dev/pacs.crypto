@@ -1,0 +1,62 @@
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "status": "PENDING",
+  "custody_model": "FULL_CUSTODY",
+  "fee_estimate": {
+    "gas_cost_native": {
+      "amount": "0.001505",
+      "currency": "ETH"
+    },
+    "gas_cost_fiat": {
+      "amount": "5.70",
+      "currency": "USD"
+    },
+    "vasp_service_fee": {
+      "amount": "24.50",
+      "currency": "USD"
+    },
+    "ramp_spread_bps": 0,
+    "slippage_estimate_bps": 7,
+    "total_cost_fiat": {
+      "amount": "30.20",
+      "currency": "USD"
+    }
+  },
+  "expiry_date_time": "2026-04-22T14:18:23.344Z",
+  "debit_timing": "ON_BROADCAST",
+  "adapter_metadata": {
+    "adapter_id": "mock-evm",
+    "adapter_mode": "SIMULATED",
+    "chain_family": "EVM",
+    "chain_dli": "X9J9XDMTD",
+    "settlement_model": "PROBABILISTIC_TO_THRESHOLD_FINALITY",
+    "simulated": true,
+    "congestion_level": "MEDIUM",
+    "network_profile": {
+      "native_currency": "ETH",
+      "native_usd_price": 3785,
+      "reference_block_base_number": 22190456
+    },
+    "lifecycle_policy": {
+      "ramp_type": "NONE",
+      "maximum_slippage_rate": "0.0010",
+      "required_confirmation_depth": 12,
+      "estimated_confirmation_seconds": 144,
+      "block_time_seconds": 12,
+      "confirmation_interval_ms": 250,
+      "broadcast_delay_ms": 850,
+      "inclusion_delay_ms": 1800,
+      "finality_delay_ms": 4800
+    },
+    "fee_model": {
+      "gas_limit": 70000,
+      "base_fee_gwei": "19.8",
+      "priority_fee_gwei": "1.7",
+      "service_fee_usd": "24.50",
+      "ramp_spread_bps": 0,
+      "slippage_estimate_bps": 7
+    }
+  },
+  "created_at": "2026-04-22T13:48:23.344Z"
+}

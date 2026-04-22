@@ -46,6 +46,8 @@ The first executable slice lives in `reference-server/` and currently supports:
 - live statement and reporting traceability views in the instruction simulator
 - adapter-backed mocked EVM lifecycle progression with amount-aware fee, slippage, and finality modeling:
   `PENDING → BROADCAST → CONFIRMING → FINAL`
+- adapter metadata surfaced on quote, instruction, execution-status, and finality reads
+- webhook delivery stats and dead-letter reads for exhausted subscription attempts
 
 The two HTML simulators can still run standalone in **Demo** mode, but now also support **Live API** mode against the local reference server.
 
@@ -74,6 +76,11 @@ The active forward plan is now documented in:
 - [`docs/backlog.md`](docs/backlog.md) — prioritized execution backlog with dependencies and acceptance criteria
 - [`docs/conformance.md`](docs/conformance.md) — current spec-to-server conformance matrix
 - [`docs/spec-hardening.md`](docs/spec-hardening.md) — implementation decisions for lifecycle, failure, webhook, and reporting semantics
+- [`docs/chain-adapter.md`](docs/chain-adapter.md) — current adapter contract and swap-in boundary for later testnet work
+- [`docs/webhook-delivery.md`](docs/webhook-delivery.md) — delivery guarantees, retry model, and dead-letter handling
+- [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md) — reviewer walkthrough, sequence diagram, and live demo script
+- [`docs/architecture-note.md`](docs/architecture-note.md) — what changed architecturally once the proposal became executable
+- [`docs/demo-samples/happy-path/`](docs/demo-samples/happy-path/) — canonical happy-path payload pack
 - [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
 
 ### Current Baseline
@@ -86,11 +93,12 @@ Implemented now:
 
 Still mocked or partial:
 
-- chain lifecycle remains mocked, but now runs through an adapter-backed fee/finality policy
-- webhook delivery is background-driven with retries, but still demo-grade rather than production-hardened
+- chain lifecycle remains mocked, but now runs through an adapter-backed fee/finality policy with surfaced adapter metadata
+- webhook delivery is background-driven with retries, dead-letter handling, and operator stats, but still demo-grade rather than production-hardened
 - spec-covered conformance is explicit and tested, but still hand-authored rather than YAML-generated
 - no delegated signing implementation
 - no testnet path yet
+- reviewer/demo package is now present, but still built around the current mock EVM wedge
 
 Explicitly deferred:
 
@@ -175,10 +183,9 @@ The current roadmap is execution-first and narrow by design.
 
 Current priority order:
 
-1. conformance and spec hardening
-2. chain adapter boundary and lifecycle realism
-3. webhook delivery maturity
-4. reporting completion and demo packaging
+1. exception-family design
+2. testnet-readiness and reviewer-driven polish only where it sharpens the current wedge
+3. deferred expansion only after exception boundaries and demo feedback are incorporated
 
 The detailed program of record lives in [`docs/roadmap.md`](docs/roadmap.md) and [`docs/backlog.md`](docs/backlog.md).
 

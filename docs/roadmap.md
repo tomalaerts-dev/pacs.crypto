@@ -30,12 +30,12 @@ The primary audience is standards-savvy reviewers who care about message-family 
 
 ### Still mocked or partial
 
-- chain lifecycle is still mocked, but now runs through an adapter-backed fee and finality policy
-- webhook dispatch is background-driven with persisted retries, but still demo-grade rather than production-hardened
+- chain lifecycle is still mocked, but now runs through an adapter-backed fee and finality policy with surfaced adapter metadata
+- webhook dispatch is background-driven with persisted retries, dead-letter handling, and operator stats, but still demo-grade rather than production-hardened
 - spec-covered conformance is hand-authored in code rather than generated directly from the YAML
 - delegated signing is intentionally unimplemented
 - no testnet execution path exists yet
-- no packaged reviewer demo exists yet
+- reviewer demo package is now published under `docs/`
 
 ### Explicitly deferred
 
@@ -107,7 +107,7 @@ Success criteria:
 
 Current status:
 
-- in progress: quote generation, fee estimates, slippage gating, confirmation thresholds, settlement defaults, lifecycle progression, and lifecycle timestamps now run through the injected mock EVM adapter boundary
+- done for the current wedge: quote generation, fee estimates, slippage gating, confirmation thresholds, settlement defaults, lifecycle progression, lifecycle timestamps, and surfaced adapter metadata now run through the normalized mock EVM adapter boundary
 
 ### Phase 3 - Webhook and event delivery maturity
 Target window: Q3 to Q4 2026
@@ -129,7 +129,7 @@ Success criteria:
 
 Current status:
 
-- in progress: due deliveries can dispatch automatically in the background with persisted retry scheduling, while manual dispatch remains available for testing and operator forcing
+- done for the current wedge: due deliveries can dispatch automatically in the background with persisted retry scheduling, dead-letter handling, operator stats, and documented delivery guarantees, while manual dispatch remains available for testing and operator forcing
 
 ### Phase 4 - Reporting family completion
 Target window: Q4 2026
@@ -168,6 +168,10 @@ Success criteria:
 
 - a standards expert can understand the value in under ten minutes
 - the system reads as a coherent reference stack, not a UI mock
+
+Current status:
+
+- done for the current wedge: the repo now includes a reviewer walkthrough, sequence diagram, architecture note, and a canonical happy-path payload pack aligned to the running reference server
 
 ### Phase 6 - Deferred expansion
 Target window: after Q1 2027

@@ -1,0 +1,60 @@
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "end_to_end_identification": "E2E-DEMO-2026-0001",
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "instruction_status": "FINAL",
+  "chain_dli": "X9J9XDMTD",
+  "token": {
+    "token_symbol": "USDC",
+    "token_dti": "4H95J0R2X"
+  },
+  "settlement_amount": {
+    "amount": "125000.00",
+    "currency": "USD"
+  },
+  "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+  "broadcast_at": "2026-04-22T13:48:23.345Z",
+  "included_at": "2026-04-22T13:48:23.346Z",
+  "block_number": 22274289,
+  "block_timestamp": "2026-04-22T13:48:18.147Z",
+  "confirmation_depth": 12,
+  "required_confirmation_depth": 12,
+  "finality_status": "FINAL",
+  "observed_at": "2026-04-22T13:48:23.347Z",
+  "final_at": "2026-04-22T13:48:23.347Z",
+  "not_applicable_reason": null,
+  "adapter_metadata": {
+    "adapter_id": "mock-evm",
+    "adapter_mode": "SIMULATED",
+    "chain_family": "EVM",
+    "chain_dli": "X9J9XDMTD",
+    "settlement_model": "PROBABILISTIC_TO_THRESHOLD_FINALITY",
+    "simulated": true,
+    "congestion_level": "MEDIUM",
+    "network_profile": {
+      "native_currency": "ETH",
+      "native_usd_price": 3785,
+      "reference_block_base_number": 22190456
+    },
+    "lifecycle_policy": {
+      "ramp_type": "NONE",
+      "maximum_slippage_rate": "0.0010",
+      "required_confirmation_depth": 12,
+      "estimated_confirmation_seconds": 144,
+      "block_time_seconds": 12,
+      "confirmation_interval_ms": 250,
+      "broadcast_delay_ms": 850,
+      "inclusion_delay_ms": 1800,
+      "finality_delay_ms": 4800
+    },
+    "fee_model": {
+      "gas_limit": 70000,
+      "base_fee_gwei": "19.8",
+      "priority_fee_gwei": "1.7",
+      "service_fee_usd": "24.50",
+      "ramp_spread_bps": 0,
+      "slippage_estimate_bps": 7
+    }
+  }
+}

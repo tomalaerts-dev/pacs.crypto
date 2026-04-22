@@ -1,0 +1,132 @@
+{
+  "statement_id": "db2452bd-62fa-44d5-986e-c5864aa2cf1a",
+  "statement_key": "{\"instruction_id\":\"a6eef166-256b-459e-a8e1-4e525021137e\",\"account_role\":\"CREDITOR\"}",
+  "message_family": "camt.053_analogue",
+  "statement_type": "ACCOUNT_STATEMENT",
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "account_role": "CREDITOR",
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "statement_date": "2026-04-22",
+  "period": {
+    "from": "2026-04-22T13:48:23.347Z",
+    "to": "2026-04-22T13:48:23.347Z"
+  },
+  "statement_scope": {
+    "derivation_basis": "BOOKED_NOTIFICATIONS",
+    "account_role": "CREDITOR",
+    "source_notification_count": 1,
+    "source_notification_ids": [
+      "8774d448-8d1f-463f-b758-cd90e57e5c7b"
+    ],
+    "booking_date_time_from": "2026-04-22T13:48:23.347Z",
+    "booking_date_time_to": "2026-04-22T13:48:23.347Z"
+  },
+  "party": {
+    "name": "Bravo Supplies B.V.",
+    "lei": "724500QHKL6MVSQQ1Z17",
+    "wallet_address": "0xcreditordemo0000000000000000000000000001"
+  },
+  "counterparty": {
+    "name": "Acme Trading GmbH",
+    "lei": "529900T8BM49AURSDO55",
+    "wallet_address": "0xdebtordemo000000000000000000000000000001"
+  },
+  "chain_dli": "X9J9XDMTD",
+  "token": {
+    "token_symbol": "USDC",
+    "token_dti": "4H95J0R2X"
+  },
+  "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+  "instruction_context": {
+    "status": "FINAL",
+    "finality_status": "FINAL",
+    "debit_timing": "ON_BROADCAST",
+    "end_to_end_identification": "E2E-DEMO-2026-0001",
+    "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+    "related_notification_count": 1
+  },
+  "balance_summary": {
+    "opening_balance": {
+      "amount": "0",
+      "currency": "USD"
+    },
+    "closing_balance": {
+      "amount": "125000",
+      "currency": "USD"
+    },
+    "available_balance": {
+      "amount": "125000",
+      "currency": "USD"
+    }
+  },
+  "movement_summary": {
+    "entry_count": 1,
+    "debit_total": "0",
+    "credit_total": "125000",
+    "net_total": "125000"
+  },
+  "entries": [
+    {
+      "notification_id": "8774d448-8d1f-463f-b758-cd90e57e5c7b",
+      "entry_type": "CREDIT",
+      "account_role": "CREDITOR",
+      "booking_status": "BOOKED",
+      "booking_date_time": "2026-04-22T13:48:23.347Z",
+      "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+      "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+      "end_to_end_identification": "E2E-DEMO-2026-0001",
+      "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+      "party_name": "Bravo Supplies B.V.",
+      "counterparty_name": "Acme Trading GmbH",
+      "wallet_address": "0xcreditordemo0000000000000000000000000001",
+      "counterparty_wallet_address": "0xdebtordemo000000000000000000000000000001",
+      "amount": "125000.00",
+      "currency": "USD",
+      "token_symbol": "USDC",
+      "chain_dli": "X9J9XDMTD",
+      "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+      "traceability": {
+        "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+        "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+        "end_to_end_identification": "E2E-DEMO-2026-0001",
+        "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+        "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+        "account_role": "CREDITOR",
+        "notification_id": "8774d448-8d1f-463f-b758-cd90e57e5c7b",
+        "resource_paths": {
+          "instruction": "/instruction/a6eef166-256b-459e-a8e1-4e525021137e",
+          "execution_status": "/execution-status/a6eef166-256b-459e-a8e1-4e525021137e",
+          "finality_receipt": "/finality-receipt/a6eef166-256b-459e-a8e1-4e525021137e",
+          "reporting_notifications": "/reporting/notifications?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+          "reporting_statements": "/reporting/statements?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+          "reporting_notification": "/reporting/notifications/8774d448-8d1f-463f-b758-cd90e57e5c7b",
+          "travel_rule_record": "/travel-rule/af814c5f-a44c-40ea-b4c3-b764fb023ab3"
+        }
+      }
+    }
+  ],
+  "traceability": {
+    "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+    "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+    "end_to_end_identification": "E2E-DEMO-2026-0001",
+    "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+    "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+    "account_role": "CREDITOR",
+    "statement_id": "db2452bd-62fa-44d5-986e-c5864aa2cf1a",
+    "source_notification_ids": [
+      "8774d448-8d1f-463f-b758-cd90e57e5c7b"
+    ],
+    "resource_paths": {
+      "instruction": "/instruction/a6eef166-256b-459e-a8e1-4e525021137e",
+      "execution_status": "/execution-status/a6eef166-256b-459e-a8e1-4e525021137e",
+      "finality_receipt": "/finality-receipt/a6eef166-256b-459e-a8e1-4e525021137e",
+      "reporting_notifications": "/reporting/notifications?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+      "reporting_statements": "/reporting/statements?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+      "reporting_statement": "/reporting/statements/db2452bd-62fa-44d5-986e-c5864aa2cf1a",
+      "travel_rule_record": "/travel-rule/af814c5f-a44c-40ea-b4c3-b764fb023ab3"
+    }
+  },
+  "created_at": "2026-04-22T13:48:23.347Z",
+  "updated_at": "2026-04-22T13:48:23.347Z"
+}

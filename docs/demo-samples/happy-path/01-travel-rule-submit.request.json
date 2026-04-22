@@ -1,0 +1,53 @@
+{
+  "submission_timing": "PRE_TX",
+  "travel_rule_data": {
+    "payment_identification": {
+      "end_to_end_identification": "E2E-DEMO-2026-0001"
+    },
+    "interbank_settlement_amount": {
+      "amount": "125000.00",
+      "currency": "USD"
+    },
+    "charge_bearer": "SHAR",
+    "debtor": {
+      "name": "Acme Trading GmbH",
+      "postal_address": {
+        "country": "DE"
+      }
+    },
+    "debtor_account": {
+      "proxy": {
+        "identification": "0xdebtordemo000000000000000000000000000001"
+      }
+    },
+    "debtor_agent": {
+      "name": "Bankhaus Example AG",
+      "lei": "7245007VX57GR4IUVZ79"
+    },
+    "creditor": {
+      "name": "Bravo Supplies B.V.",
+      "postal_address": {
+        "country": "NL"
+      }
+    },
+    "creditor_account": {
+      "proxy": {
+        "identification": "0xcreditordemo0000000000000000000000000001"
+      }
+    },
+    "creditor_agent": {
+      "name": "Kraken Belgium BVBA",
+      "lei": "635400DUFB71VFOHVB49"
+    },
+    "debtor_wallet_type": "HOSTED",
+    "creditor_wallet_type": "HOSTED",
+    "blockchain_settlement": {
+      "primary_chain_id": "DLID/X9J9XDMTD",
+      "legs": [
+        {
+          "leg_type": "ORIGINATION"
+        }
+      ]
+    }
+  }
+}

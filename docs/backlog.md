@@ -86,7 +86,7 @@ Acceptance criteria:
 
 ### Epic 4 - Chain adapter abstraction
 Priority: `P1`
-Status: `In progress`
+Status: `Done`
 Depends on: stable status and finality response shapes
 
 Work items:
@@ -103,7 +103,7 @@ Acceptance criteria:
 
 ### Epic 5 - Webhook delivery maturity
 Priority: `P1`
-Status: `In progress`
+Status: `Done`
 Depends on: current outbox and webhook delivery persistence
 
 Work items:
@@ -138,7 +138,7 @@ Acceptance criteria:
 
 ### Epic 7 - Demo package
 Priority: `P2`
-Status: `Planned`
+Status: `Done`
 Depends on: conformance layer, chain adapter boundary, webhook maturity
 
 Work items:
