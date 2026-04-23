@@ -7,7 +7,7 @@ function sendNotFound(reply, resourceName) {
 
 export function registerStatusRoutes(app) {
   app.get('/execution-status/:instructionId', async (request, reply) => {
-    const instruction = app.store.getInstruction(request.params.instructionId);
+    const instruction = await app.store.getInstructionAsync(request.params.instructionId);
     if (!instruction) {
       return sendNotFound(reply, 'Instruction execution status');
     }
@@ -16,7 +16,7 @@ export function registerStatusRoutes(app) {
   });
 
   app.get('/execution-status/uetr/:uetr', async (request, reply) => {
-    const instruction = app.store.findInstructionByUetr(request.params.uetr);
+    const instruction = await app.store.findInstructionByUetrAsync(request.params.uetr);
     if (!instruction) {
       return sendNotFound(reply, 'Instruction execution status');
     }
@@ -25,7 +25,7 @@ export function registerStatusRoutes(app) {
   });
 
   app.get('/finality-receipt/:instructionId', async (request, reply) => {
-    const instruction = app.store.getInstruction(request.params.instructionId);
+    const instruction = await app.store.getInstructionAsync(request.params.instructionId);
     if (!instruction) {
       return sendNotFound(reply, 'Instruction finality receipt');
     }
@@ -34,7 +34,7 @@ export function registerStatusRoutes(app) {
   });
 
   app.get('/finality-receipt/uetr/:uetr', async (request, reply) => {
-    const instruction = app.store.findInstructionByUetr(request.params.uetr);
+    const instruction = await app.store.findInstructionByUetrAsync(request.params.uetr);
     if (!instruction) {
       return sendNotFound(reply, 'Instruction finality receipt');
     }

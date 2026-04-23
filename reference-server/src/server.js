@@ -1,9 +1,19 @@
 import { loadConfig } from './config.js';
 import { buildApp } from './app.js';
+import { createSepoliaUsdcAdapter } from './chain/sepolia-usdc-adapter.js';
+
+function buildConfiguredChainAdapter(config) {
+  if (config.chainAdapter.id === 'sepolia-usdc') {
+    return createSepoliaUsdcAdapter(config.chainAdapter.sepolia);
+  }
+
+  return null;
+}
 
 const config = loadConfig();
 const app = await buildApp({
   dbPath: config.dbPath,
+  chainAdapter: buildConfiguredChainAdapter(config),
   webhookDispatch: config.webhookDispatch,
   webhookRetryScheduleMs: config.webhookRetryScheduleMs,
 });

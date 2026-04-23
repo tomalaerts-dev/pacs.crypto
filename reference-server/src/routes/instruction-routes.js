@@ -21,7 +21,7 @@ export function registerInstructionRoutes(app) {
       return sendValidationError(reply, errors);
     }
 
-    const quote = app.store.createQuote(request.body);
+    const quote = await app.store.createQuoteAsync(request.body);
     return reply.code(200).send(quote);
   });
 
@@ -52,7 +52,7 @@ export function registerInstructionRoutes(app) {
     const endToEndIdentification =
       request.body.payment_identification?.end_to_end_identification;
     if (endToEndIdentification) {
-      const existing = app.store.findInstructionByEndToEndId(endToEndIdentification);
+      const existing = await app.store.findInstructionByEndToEndIdAsync(endToEndIdentification);
       if (existing) {
         return reply.code(409).send({
           error: 'duplicate_instruction',
@@ -83,12 +83,12 @@ export function registerInstructionRoutes(app) {
       });
     }
 
-    const instruction = app.store.createInstruction(request.body);
+    const instruction = await app.store.createInstructionAsync(request.body);
     return reply.code(201).send(app.store.toInstructionResponse(instruction));
   });
 
   app.delete('/instruction/:instructionId', async (request, reply) => {
-    const result = app.store.cancelInstruction(request.params.instructionId);
+    const result = await app.store.cancelInstructionAsync(request.params.instructionId);
     if (!result) {
       return reply.code(404).send({
         error: 'not_found',
@@ -108,7 +108,7 @@ export function registerInstructionRoutes(app) {
   });
 
   app.get('/instruction/:instructionId', async (request, reply) => {
-    const instruction = app.store.getInstruction(request.params.instructionId);
+    const instruction = await app.store.getInstructionAsync(request.params.instructionId);
     if (!instruction) {
       return reply.code(404).send({
         error: 'not_found',
@@ -132,6 +132,6 @@ export function registerInstructionRoutes(app) {
       return sendValidationError(reply, errors);
     }
 
-    return app.store.searchInstructions(request.query);
+    return app.store.searchInstructionsAsync(request.query);
   });
 }

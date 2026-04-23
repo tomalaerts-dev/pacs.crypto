@@ -20,7 +20,8 @@ An adapter is identified by:
 - `mode`
 - `chain_family`
 
-The current normalized contract supports these methods:
+The current normalized contract supports these methods. Methods may be
+synchronous for the mock adapter or asynchronous for real-chain adapters:
 
 - `hasExpired(expiryDateTime)`
 - `buildFeeEstimate(request)`
@@ -75,7 +76,7 @@ The current mock EVM adapter publishes:
 This gives later testnet work a stable place to expose chain-specific execution
 context without widening the API family.
 
-## Current Default Adapter
+## Current Adapters
 
 The default adapter is `mock-evm`.
 
@@ -86,6 +87,16 @@ It remains simulated, but it now models:
 - confirmation thresholds
 - probabilistic to final settlement progression
 - deterministic transaction and block references
+
+The first testnet adapter is `sepolia-usdc`.
+
+It is opt-in through `REF_SERVER_CHAIN_ADAPTER=sepolia-usdc` and supports:
+
+- read-only mode without private key material
+- USDC transfer broadcast when RPC URL, private key, source address, contract
+  address, and broadcast flag are configured
+- transaction receipt polling through the same status/finality reads
+- confirmation-threshold finality based on Sepolia block depth
 
 ## Swap-In Rule For Testnet Work
 
@@ -98,7 +109,7 @@ Future testnet work should respect these rules:
 
 That is the boundary that keeps the current wedge narrow and credible.
 
-## Current Next Target
+## Current Target Status
 
 The active backlog now assumes:
 
@@ -108,3 +119,6 @@ The active backlog now assumes:
 
 Those defaults should be treated as the first testnet adapter target unless the
 program of record is intentionally changed.
+
+The first adapter implementation is now in place. The remaining work is to run
+and capture a real Sepolia transaction for the reviewer demo package.

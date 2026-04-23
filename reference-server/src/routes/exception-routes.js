@@ -24,14 +24,14 @@ function sendNotFound(reply, resourceName) {
   });
 }
 
-function resolveInstructionReference(store, {
+async function resolveInstructionReference(store, {
   instructionId = null,
   uetr = null,
   instructionField = 'related_instruction_id',
   uetrField = 'related_uetr',
 } = {}) {
-  const byInstructionId = instructionId ? store.getInstruction(instructionId) : null;
-  const byUetr = uetr ? store.findInstructionByUetr(uetr) : null;
+  const byInstructionId = instructionId ? await store.getInstructionAsync(instructionId) : null;
+  const byUetr = uetr ? await store.findInstructionByUetrAsync(uetr) : null;
 
   if (instructionId && !byInstructionId) {
     return {
@@ -80,7 +80,7 @@ export function registerExceptionRoutes(app) {
       return sendValidationError(reply, errors);
     }
 
-    const reference = resolveInstructionReference(app.store, {
+    const reference = await resolveInstructionReference(app.store, {
       instructionId: request.body.related_instruction_id,
       uetr: request.body.related_uetr,
       instructionField: 'related_instruction_id',
@@ -176,7 +176,7 @@ export function registerExceptionRoutes(app) {
       return sendValidationError(reply, errors);
     }
 
-    const reference = resolveInstructionReference(app.store, {
+    const reference = await resolveInstructionReference(app.store, {
       instructionId: request.body.original_instruction_id,
       uetr: request.body.original_uetr,
       instructionField: 'original_instruction_id',
@@ -195,7 +195,7 @@ export function registerExceptionRoutes(app) {
 
     if (
       request.body.compensating_instruction_id &&
-      !app.store.getInstruction(request.body.compensating_instruction_id)
+      !(await app.store.getInstructionAsync(request.body.compensating_instruction_id))
     ) {
       return sendReferenceError(reply, {
         error: 'invalid_reference',
@@ -266,7 +266,7 @@ export function registerExceptionRoutes(app) {
 
     if (
       request.body.compensating_instruction_id &&
-      !app.store.getInstruction(request.body.compensating_instruction_id)
+      !(await app.store.getInstructionAsync(request.body.compensating_instruction_id))
     ) {
       return sendReferenceError(reply, {
         error: 'invalid_reference',

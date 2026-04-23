@@ -72,6 +72,23 @@ Environment overrides:
 - `REF_SERVER_WEBHOOK_DISPATCH_INTERVAL_MS`
 - `REF_SERVER_WEBHOOK_DISPATCH_BATCH_SIZE`
 - `REF_SERVER_WEBHOOK_RETRY_SCHEDULE_MS`
+- `REF_SERVER_CHAIN_ADAPTER` (`mock-evm` by default, or `sepolia-usdc`)
+- `REF_SERVER_SEPOLIA_RPC_URL`
+- `REF_SERVER_SEPOLIA_PRIVATE_KEY`
+- `REF_SERVER_SEPOLIA_USDC_CONTRACT_ADDRESS`
+- `REF_SERVER_SEPOLIA_SOURCE_ADDRESS`
+- `REF_SERVER_SEPOLIA_BROADCAST_ENABLED`
+- `REF_SERVER_SEPOLIA_REQUIRED_CONFIRMATIONS`
+- `REF_SERVER_SEPOLIA_GAS_LIMIT`
+- `REF_SERVER_SEPOLIA_MAX_FEE_GWEI`
+- `REF_SERVER_SEPOLIA_MAX_PRIORITY_FEE_GWEI`
+
+Sepolia execution is opt-in. The mock adapter remains the default. To enable
+the Sepolia adapter in read-only mode, set `REF_SERVER_CHAIN_ADAPTER=sepolia-usdc`.
+To broadcast transactions, also set `REF_SERVER_SEPOLIA_BROADCAST_ENABLED=true`,
+`REF_SERVER_SEPOLIA_RPC_URL`, `REF_SERVER_SEPOLIA_PRIVATE_KEY`,
+`REF_SERVER_SEPOLIA_SOURCE_ADDRESS`, and
+`REF_SERVER_SEPOLIA_USDC_CONTRACT_ADDRESS`.
 
 ## Notes
 
@@ -79,6 +96,7 @@ Environment overrides:
 - Instruction status progression now runs through an injected chain-adapter boundary.
 - The default adapter is a mocked EVM adapter with amount-aware fee, slippage, and finality modeling over the lifecycle:
   `PENDING -> BROADCAST -> CONFIRMING -> FINAL`
+- A `sepolia-usdc` adapter is available behind `REF_SERVER_CHAIN_ADAPTER`. It uses ethers for Sepolia RPC reads, USDC transfer broadcast, transaction receipt polling, and confirmation-depth based finality.
 - Adapter metadata is surfaced on quote, instruction, execution-status, and finality reads without adding new execution families.
 - `execution-status` is the pacs.002-like read surface for lifecycle state and history.
 - `finality-receipt` is the camt.025-like read surface for transaction hash, confirmations, and finality proof.

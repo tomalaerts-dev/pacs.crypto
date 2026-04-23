@@ -4,6 +4,7 @@ import { createHmac } from 'node:crypto';
 
 import { buildApp } from '../src/app.js';
 import { createMockEvmChainAdapter } from '../src/chain/mock-evm-adapter.js';
+import { createSepoliaUsdcAdapter } from '../src/chain/sepolia-usdc-adapter.js';
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -2261,6 +2262,111 @@ test('chain adapter can be partially injected without changing route contracts',
     statusResponse.json().adapter_metadata.lifecycle_policy.required_confirmation_depth,
     9,
   );
+
+  await app.close();
+});
+
+test('Sepolia USDC adapter can run read-only without changing route contracts', async () => {
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      usdcContractAddress: '0x0000000000000000000000000000000000000001',
+      broadcastEnabled: false,
+    }),
+  });
+
+  const quoteResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction/quote',
+    payload: buildQuoteRequest({
+      amount: '10.00',
+    }),
+  });
+
+  assert.equal(quoteResponse.statusCode, 200);
+  assertAdapterMetadataShape(quoteResponse.json().adapter_metadata, 'sepolia-usdc');
+  assert.equal(
+    quoteResponse.json().adapter_metadata.adapter_mode,
+    'TESTNET_READ_ONLY',
+  );
+  assert.equal(quoteResponse.json().adapter_metadata.simulated, false);
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-SEPOLIA-READONLY-001',
+        quote_id: quoteResponse.json().quote_id,
+      },
+      interbank_settlement_amount: {
+        amount: '10.00',
+        currency: 'USD',
+      },
+      creditor_account: {
+        proxy: {
+          identification: '0x0000000000000000000000000000000000000002',
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  assert.equal(createResponse.json().status, 'PENDING');
+  assertAdapterMetadataShape(createResponse.json().adapter_metadata, 'sepolia-usdc');
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'PENDING');
+  assert.equal(statusResponse.json().transaction_hash, null);
+  assert.equal(statusResponse.json().finality_status, 'PENDING');
+  assertAdapterMetadataShape(statusResponse.json().adapter_metadata, 'sepolia-usdc');
+
+  await app.close();
+});
+
+test('Sepolia broadcast mode fails safely when execution credentials are incomplete', async () => {
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      usdcContractAddress: '0x0000000000000000000000000000000000000001',
+      broadcastEnabled: true,
+    }),
+  });
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-SEPOLIA-SAFEFAIL-001',
+      },
+      interbank_settlement_amount: {
+        amount: '10.00',
+        currency: 'USD',
+      },
+      creditor_account: {
+        proxy: {
+          identification: '0x0000000000000000000000000000000000000002',
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FAILED');
+  assert.match(statusResponse.json().failure_reason, /RPC URL/);
+  assert.equal(statusResponse.json().transaction_hash, null);
+  assertAdapterMetadataShape(statusResponse.json().adapter_metadata, 'sepolia-usdc');
 
   await app.close();
 });

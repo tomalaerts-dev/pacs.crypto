@@ -74,6 +74,11 @@ Success criteria:
 - `execution-status` and `finality-receipt` remain the canonical read models
 - reporting, webhooks, and exceptions keep using the same identifiers
 
+Current status:
+
+- in progress: the `sepolia-usdc` adapter is implemented behind the existing adapter seam, read-only mode is available without private key material, and broadcast mode is environment-gated
+- remaining: run a funded-wallet Sepolia transaction and capture the resulting tx hash, confirmations, and finality receipt for the reviewer demo
+
 ### Phase B - Reviewer demo with real chain evidence
 Target window: Q3 2026
 

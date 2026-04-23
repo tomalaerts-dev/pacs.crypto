@@ -45,6 +45,10 @@ function serialize(value) {
   return JSON.stringify(value);
 }
 
+function isPromiseLike(value) {
+  return value !== null && typeof value === 'object' && typeof value.then === 'function';
+}
+
 function formatDecimalAmount(value, digits = 8) {
   return Number(value).toFixed(digits).replace(/\.?0+$/, '');
 }
@@ -2085,6 +2089,22 @@ export class ReferenceStore {
 
   createQuote(request) {
     const quote = this.chainAdapter.buildQuoteResponse(request);
+    if (isPromiseLike(quote)) {
+      throw new Error('createQuoteAsync must be used with an async chain adapter.');
+    }
+    this.insertQuoteStmt.run(
+      quote.quote_id,
+      quote.valid_until,
+      quote.created_at,
+      serialize(request),
+      serialize(quote),
+    );
+
+    return quote;
+  }
+
+  async createQuoteAsync(request) {
+    const quote = await this.chainAdapter.buildQuoteResponse(request);
     this.insertQuoteStmt.run(
       quote.quote_id,
       quote.valid_until,
@@ -2109,6 +2129,20 @@ export class ReferenceStore {
       .map((record) => this.advanceInstructionLifecycle(record, { persist: true }));
   }
 
+  async listInstructionsAsync() {
+    const records = this.listInstructionsStmt
+      .all()
+      .map((row) => parseJson(row.instruction_json, null))
+      .filter(Boolean);
+    const advanced = [];
+
+    for (const record of records) {
+      advanced.push(await this.advanceInstructionLifecycleAsync(record, { persist: true }));
+    }
+
+    return advanced;
+  }
+
   findInstructionByEndToEndId(endToEndIdentification) {
     return this.listInstructions().find(
       (record) =>
@@ -2117,8 +2151,25 @@ export class ReferenceStore {
     );
   }
 
+  async findInstructionByEndToEndIdAsync(endToEndIdentification) {
+    const instructions = await this.listInstructionsAsync();
+    return instructions.find(
+      (record) =>
+        record.payment_identification?.end_to_end_identification ===
+        endToEndIdentification,
+    );
+  }
+
   findInstructionByUetr(uetr) {
     return this.listInstructions().find(
+      (record) =>
+        record.uetr === uetr || record.payment_identification?.uetr === uetr,
+    );
+  }
+
+  async findInstructionByUetrAsync(uetr) {
+    const instructions = await this.listInstructionsAsync();
+    return instructions.find(
       (record) =>
         record.uetr === uetr || record.payment_identification?.uetr === uetr,
     );
@@ -2164,6 +2215,80 @@ export class ReferenceStore {
       blockchain_instruction: normalized.blockchain_instruction,
       fee_estimate: feeEstimate,
       on_chain_settlement: this.chainAdapter.normalizeOnChainSettlement(
+        null,
+        normalized.interbank_settlement_amount.amount,
+        normalized,
+      ),
+      travel_rule_record_id: normalized.travel_rule_record_id,
+      created_at: createdAt,
+      updated_at: createdAt,
+      expiry_date_time: normalized.expiry_date_time,
+      failure_reason: initialStatus === 'EXPIRED'
+        ? 'Instruction expired before execution.'
+        : null,
+      status_history: [
+        buildInstructionStatusEvent({
+          status: initialStatus,
+          statusAt: createdAt,
+          failureReason:
+            initialStatus === 'EXPIRED'
+              ? 'Instruction expired before execution.'
+              : null,
+        }),
+      ],
+    };
+
+    this.insertInstructionStmt.run(
+      record.instruction_id,
+      record.status,
+      record.created_at,
+      record.updated_at,
+      serialize(record),
+    );
+    this.appendInstructionOutboxEvents(record, null);
+    this.appendReportingNotifications(record);
+
+    return record;
+  }
+
+  async createInstructionAsync(submission) {
+    const normalized = normalizeInstructionSubmission(submission);
+    const createdAt = nowIso();
+    const initialStatus = this.chainAdapter.hasExpired(normalized.expiry_date_time)
+      ? 'EXPIRED'
+      : 'PENDING';
+    const fallbackFeeRequest = {
+      amount: normalized.interbank_settlement_amount.amount,
+      ramp_type: normalized.blockchain_instruction?.ramp_instruction?.ramp_type,
+    };
+    const feeEstimate = normalized.payment_identification.quote_id
+      ? this.getQuote(normalized.payment_identification.quote_id)?.fee_estimate ??
+        (await this.chainAdapter.buildFeeEstimate(fallbackFeeRequest))
+      : await this.chainAdapter.buildFeeEstimate(fallbackFeeRequest);
+
+    const record = {
+      instruction_id: randomUUID(),
+      uetr: normalized.payment_identification.uetr,
+      status: initialStatus,
+      custody_model: normalized.blockchain_instruction.custody_model,
+      debit_timing: 'ON_BROADCAST',
+      payment_identification: normalized.payment_identification,
+      settlement_information: normalized.settlement_information,
+      payment_type_information: normalized.payment_type_information,
+      debtor: normalized.debtor,
+      debtor_account: normalized.debtor_account,
+      debtor_agent: normalized.debtor_agent,
+      creditor: normalized.creditor,
+      creditor_account: normalized.creditor_account,
+      creditor_agent: normalized.creditor_agent,
+      interbank_settlement_amount: normalized.interbank_settlement_amount,
+      instructed_amount: normalized.instructed_amount,
+      instruction_for_next_agent: normalized.instruction_for_next_agent,
+      purpose: normalized.purpose,
+      remittance_information: normalized.remittance_information,
+      blockchain_instruction: normalized.blockchain_instruction,
+      fee_estimate: feeEstimate,
+      on_chain_settlement: await this.chainAdapter.normalizeOnChainSettlement(
         null,
         normalized.interbank_settlement_amount.amount,
         normalized,
@@ -3428,6 +3553,20 @@ export class ReferenceStore {
     return this.advanceInstructionLifecycle(current, { persist: true });
   }
 
+  async getInstructionAsync(instructionId) {
+    const row = this.getInstructionStmt.get(instructionId);
+    if (!row) {
+      return null;
+    }
+
+    const current = parseJson(row.instruction_json, null);
+    if (!current) {
+      return null;
+    }
+
+    return this.advanceInstructionLifecycleAsync(current, { persist: true });
+  }
+
   cancelInstruction(instructionId) {
     const current = this.getInstruction(instructionId);
     if (!current) {
@@ -3455,6 +3594,53 @@ export class ReferenceStore {
           current.interbank_settlement_amount?.amount,
           current,
         ),
+        transaction_hash: null,
+        confirmation_depth: null,
+        finality_status: null,
+        block_number: null,
+        block_timestamp: null,
+      },
+    };
+
+    this.saveInstruction(updated, {
+      previousRecord: current,
+      emitEvents: true,
+      emitNotifications: true,
+    });
+
+    return {
+      record: updated,
+      cancellation: buildCancellationResponse(updated, cancelledAt),
+    };
+  }
+
+  async cancelInstructionAsync(instructionId) {
+    const current = await this.getInstructionAsync(instructionId);
+    if (!current) {
+      return null;
+    }
+
+    if (!['PENDING', 'QUOTED'].includes(current.status)) {
+      return { error: 'too_late', current };
+    }
+
+    const cancelledAt = nowIso();
+    const updated = {
+      ...current,
+      status: 'CANCELLED',
+      updated_at: cancelledAt,
+      failure_reason: null,
+      status_history: appendInstructionStatusEvent(
+        current,
+        'CANCELLED',
+        cancelledAt,
+      ),
+      on_chain_settlement: {
+        ...(await this.chainAdapter.normalizeOnChainSettlement(
+          current.on_chain_settlement,
+          current.interbank_settlement_amount?.amount,
+          current,
+        )),
         transaction_hash: null,
         confirmation_depth: null,
         finality_status: null,
@@ -3520,6 +3706,52 @@ export class ReferenceStore {
     };
   }
 
+  async searchInstructionsAsync(filters = {}) {
+    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
+    const statuses = parseListFilter(filters.status);
+    const offset = decodeCursor(filters.cursor);
+    const allInstructions = await this.listInstructionsAsync();
+    const instructions = allInstructions.filter((record) => {
+      if (statuses.length && !statuses.includes(record.status)) {
+        return false;
+      }
+
+      if (
+        filters.chain_dli &&
+        record.blockchain_instruction?.chain_dli !== filters.chain_dli
+      ) {
+        return false;
+      }
+
+      if (
+        filters.token_dti &&
+        record.blockchain_instruction?.token?.token_dti !== filters.token_dti
+      ) {
+        return false;
+      }
+
+      if (filters.from && Date.parse(record.created_at) < Date.parse(filters.from)) {
+        return false;
+      }
+
+      if (filters.to && Date.parse(record.created_at) > Date.parse(filters.to)) {
+        return false;
+      }
+
+      return true;
+    });
+    const page = instructions.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+
+    return {
+      total_matched: instructions.length,
+      page_size: page.length,
+      ...(nextOffset < instructions.length ? { next_cursor: encodeCursor(nextOffset) } : { next_cursor: null }),
+      generated_at: nowIso(),
+      instructions: page.map((record) => buildInstructionSearchSummary(record)),
+    };
+  }
+
   advanceInstructionLifecycle(record, { persist = false } = {}) {
     const normalized = {
       ...record,
@@ -3545,6 +3777,69 @@ export class ReferenceStore {
     }
 
     const lifecycleState = this.chainAdapter.deriveLifecycleState(normalized);
+    const status = lifecycleState.status;
+    const failureReason = lifecycleState.failureReason;
+
+    const updatedAt =
+      status === normalized.status
+        ? normalized.updated_at
+        : new Date().toISOString();
+
+    const updated = {
+      ...normalized,
+      status,
+      updated_at: updatedAt,
+      failure_reason: failureReason,
+      status_history:
+        status === normalized.status
+          ? normalized.status_history
+          : appendInstructionStatusEvent(
+              normalized,
+              status,
+              updatedAt,
+              failureReason,
+            ),
+      on_chain_settlement: {
+        ...lifecycleState.onChainSettlement,
+      },
+    };
+
+    if (persist && serialize(updated) !== serialize(record)) {
+      this.saveInstruction(updated, {
+        previousRecord: record,
+        emitEvents: true,
+        emitNotifications: true,
+      });
+    }
+
+    return updated;
+  }
+
+  async advanceInstructionLifecycleAsync(record, { persist = false } = {}) {
+    const normalized = {
+      ...record,
+      on_chain_settlement:
+        record.on_chain_settlement ??
+        (await this.chainAdapter.normalizeOnChainSettlement(
+          record.on_chain_settlement,
+          record.interbank_settlement_amount?.amount,
+          record,
+        )),
+      status_history: normalizeInstructionStatusHistory(record.status_history, record),
+    };
+
+    if (!['PENDING', 'BROADCAST', 'CONFIRMING'].includes(normalized.status)) {
+      if (persist && serialize(normalized) !== serialize(record)) {
+        this.saveInstruction(normalized, {
+          previousRecord: record,
+          emitEvents: true,
+          emitNotifications: true,
+        });
+      }
+      return normalized;
+    }
+
+    const lifecycleState = await this.chainAdapter.deriveLifecycleState(normalized);
     const status = lifecycleState.status;
     const failureReason = lifecycleState.failureReason;
 

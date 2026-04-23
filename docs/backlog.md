@@ -45,7 +45,7 @@ These defaults are now part of the backlog, not open questions:
 
 ### Epic 10 - Testnet execution
 Priority: `P0`
-Status: `Planned`
+Status: `In progress`
 Depends on: completed chain-adapter boundary
 
 Work items:
@@ -55,6 +55,14 @@ Work items:
 - replace mock broadcast/finality state with real transaction submission, tracking, and confirmation reads
 - surface real execution context through existing `adapter_metadata`
 - keep the first live path restricted to `FULL_CUSTODY`
+
+Current status:
+
+- `sepolia-usdc` adapter exists and is opt-in by environment
+- mock adapter remains default
+- read-only Sepolia mode is covered by tests
+- incomplete broadcast configuration fails safely
+- real funded-wallet broadcast still needs to be run and captured
 
 Acceptance criteria:
 
