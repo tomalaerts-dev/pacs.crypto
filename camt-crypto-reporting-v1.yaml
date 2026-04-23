@@ -1,0 +1,2923 @@
+openapi: 3.1.0
+
+info:
+  title: pacs.crypto — Blockchain Account Reporting API
+  version: 1.0.0
+  description: |
+    # Blockchain Account Reporting API — Shared Data Model
+
+    **Third specification in the pacs.crypto family.**
+
+    This document defines the shared data model underpinning the pacs.crypto
+    Blockchain Account Reporting API. The API provides ISO 20022-aligned account
+    reporting and notification for blockchain wallet positions held by a VASP on
+    behalf of a bank or corporate treasury client.
+
+    Four reporting functions are defined, each modelled on its ISO 20022 camt
+    counterpart:
+
+    | pacs.crypto endpoint | ISO 20022 analogue | Function |
+    |---|---|---|
+    | `POST /report/query` | camt.060 | Account reporting query — request a report or notification subscription |
+    | `GET /report/intraday` | camt.052 | Intraday wallet report — balance snapshot and pending entries |
+    | `GET /report/statement` | camt.053 | End-of-period wallet statement — booked entries for reconciliation |
+    | `POST /report/notification` / webhook | camt.054 | Debit/credit notification — event-driven per-transaction notification with finality confirmation |
+
+    ## Note on DTI and DLI example values
+
+    Example DTI values (e.g. `T9B3X8H2K`, `X9J9XDMTD`) used throughout this
+    specification are illustrative and may not correspond to live entries in
+    the DTIF registry (https://dtif.org). ISO 24165-2 DLI is an emerging
+    companion standard to ISO 24165-1 DTI and its registration catalogue is
+    still being populated; until DLIs are broadly registered, implementers may
+    use the native-token DTI of a chain as a proxy chain identifier
+    (e.g. DTI `XB0MQJ1K5` for Ether → Ethereum Mainnet as the implied chain).
+    Implementers must verify actual DTI and DLI values against the DTIF
+    registry at integration time.
+
+    ## ISO 20022 alignment
+
+    The data model follows the `BankToCustomerAccountReport` (camt.052),
+    `BankToCustomerStatement` (camt.053), and `BankToCustomerDebitCreditNotification`
+    (camt.054) structures from ISO 20022, preserving field names, component
+    structures, and semantics wherever applicable.
+
+    Blockchain-specific extensions are introduced where camt has no equivalent:
+    wallet address identification, token and chain identification (ISO 24165 DTI/DLI),
+    on-chain transaction data (transaction hash, block number, gas detail), and
+    settlement finality semantics (`FinalityStatus`, `confirmation_depth`,
+    `confirmation_depth_at_finality`). These extensions follow the conventions
+    established in the pacs.crypto Travel Rule API and Blockchain Payment
+    Instruction API.
+
+    Elements of the camt messages not applicable to blockchain wallet reporting
+    (bank interest accruals, RTGS clearing references, cheque data, mandate
+    references) are omitted. The omissions are documented per component.
+
+    ## Account model
+
+    A blockchain wallet is represented using `CashAccount43` from the ISO 20022
+    camt message family, as closely as possible. The wallet address is carried in
+    `identification/proxy/identification` with `proxy/type/code = EWAL` (electronic
+    wallet) — the same convention used across the pacs.crypto family. The chain is
+    identified in `type/proprietary` as `DLID/<dli>`, consistent with the
+    `settlement_information/clearing_system/proprietary` pattern in the Instruction
+    API. A wallet may hold multiple tokens; each token position is reported as a
+    separate `WalletBalance` line under the same account, identified by its
+    `TokenIdentification`. Per-token balance lines use `CashBalance8` as their
+    basis, extended with `TokenAmount` in place of `ActiveOrHistoricCurrencyAndAmount`.
+
+    ## Finality semantics
+
+    Blockchain transactions do not settle instantaneously. The reporting model
+    distinguishes three finality states, consistent with the Blockchain Payment
+    Instruction API:
+
+    - **`PENDING`** — transaction is broadcast; not yet included in a confirmed block,
+      or included but confirmation depth is below the chain-specific threshold.
+    - **`PROBABILISTIC`** — transaction has reached a confirmation depth at which
+      reversal is statistically unlikely but not economically final.
+    - **`FINAL`** — transaction has achieved economic or cryptographic finality
+      per chain-specific criteria. For Ethereum post-merge: checkpoint finality
+      (~13 minutes, 2 epochs). For Bitcoin: 6-confirmation convention. For Solana:
+      Tower BFT finality (~400ms).
+
+    The `camt.054` analogue (notification) carries both states: an initial
+    notification at broadcast (`PENDING`) and a finality confirmation notification
+    (`FINAL`). Both use the same `BlockchainNotification` schema, distinguished by
+    `entry/finality_detail/finality_status`. This design absorbs the role of a
+    separate camt.025 analogue — the credit/debit notification itself carries the
+    finality confirmation, linked to the original instruction and Travel Rule record
+    via explicit reference fields.
+
+    ## Charges and gas fees
+
+    Gas fees are reported in two layers. The `gas_detail` object carries the
+    chain-native fee breakdown (gas units, gas price, priority fee for EVM chains,
+    native token amount). A fiat-equivalent rollup is provided in the standard ISO
+    20022 `charges_information` object so that treasury and accounting systems can
+    process the cost without parsing chain-specific fields. Where both are present,
+    `charges_information` is derived from `gas_detail` and the two must be consistent.
+
+    ## Relation to other pacs.crypto specifications
+
+    - `instruction_id` links a reported entry to the originating instruction in the
+      Blockchain Payment Instruction API.
+    - `travel_rule_record_id` links a reported entry to the associated Travel Rule
+      record in the Travel Rule API.
+    - `FinalityStatus`, `TokenIdentification`, `AgentIdentification`, `WalletAddress`,
+      `LEIIdentifier`, `DTIIdentifier`, and `DLIIdentifier` are defined identically
+      to their counterparts in the Instruction API — copy-paste compatible.
+
+    ## Sanctions compliance
+
+    Consistent with the rest of the pacs.crypto family, sanctions screening is
+    performed by the VASP as an independent regulatory obligation. No field in this
+    specification communicates a sanctions finding, wallet screening result, or
+    compliance hold status to the reporting recipient. The design rationale is
+    identical to that documented in the Travel Rule API and Instruction API.
+
+    ## Versioning policy
+
+    This specification follows semantic versioning (`MAJOR.MINOR.PATCH`).
+    Backwards compatibility is maintained within a major version. Minor version
+    increments add optional fields or new enum values. Patch increments correct
+    documentation errors. Implementers must tolerate unknown optional fields
+    (additive extension principle).
+
+servers:
+  - url: https://api.reporting.example.com/v1
+    description: Production
+  - url: https://sandbox.reporting.example.com/v1
+    description: Sandbox
+
+tags:
+  - name: Query
+    description: |
+      Account reporting query — request a report, balance snapshot, or
+      notification subscription. Analogue of ISO 20022 camt.060.
+  - name: Intraday
+    description: |
+      Intraday wallet report — balance snapshot and pending/booked entries
+      for the current or a specified intraday period. Analogue of camt.052.
+  - name: Statement
+    description: |
+      End-of-period wallet statement — all booked entries for a closed period,
+      suitable for reconciliation. Analogue of camt.053.
+  - name: Notification
+    description: |
+      Debit/credit notification — event-driven per-transaction notification
+      with finality confirmation. Analogue of camt.054.
+      Delivered by the VASP to the bank via webhook (push) or retrieved by
+      the bank via polling (pull).
+  - name: Search
+    description: |
+      Entry search and aggregate statistics across reported transactions.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── camt.060 ANALOGUE — REPORTING QUERY ───────────────────────────────────
+
+  /report/query:
+    post:
+      tags: [Query]
+      operationId: postReportQuery
+      summary: Request a report, balance snapshot, or notification subscription
+      description: |
+        Submits an account reporting query to the VASP. Analogue of camt.060
+        `AccountReportingRequest`.
+
+        **Query types and response behaviour:**
+
+        | `query_type` | Response mode | Returns |
+        |---|---|---|
+        | `BALANCE` | Synchronous | Current `WalletBalance` array for the account |
+        | `INTRADAY` | Synchronous | `IntradayReport` (camt.052 analogue) |
+        | `STATEMENT` | Synchronous or async | `WalletStatement` (camt.053 analogue); async delivery via `callback_url` for large periods |
+        | `NOTIFICATION_SUBSCRIBE` | Synchronous | Subscription confirmation with `subscription_id` |
+        | `NOTIFICATION_UNSUBSCRIBE` | Synchronous | Cancellation acknowledgement |
+
+        For `BALANCE` and `INTRADAY`, the full report payload is returned
+        in the `201` response body. For `STATEMENT` over large periods (implementer
+        discretion, typically > 90 days), the VASP may return `202 Accepted` and
+        deliver the statement asynchronously via the `callback_url`.
+
+        For `NOTIFICATION_SUBSCRIBE`, the VASP will subsequently POST
+        `BlockchainNotification` messages to the `callback_url` for each
+        qualifying transaction event on the subscribed account. The notification
+        format and callback authentication follow the pattern established in the
+        pacs.crypto Travel Rule API (`POST /travel-rule/{recordId}/callback`).
+
+        **Idempotency:** Requests with the same `query_identification` and
+        `query_type` from the same requesting party are idempotent within a
+        24-hour window. For `NOTIFICATION_SUBSCRIBE`, a duplicate subscription
+        request returns the existing `subscription_id` with status `409`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportQuery'
+            examples:
+              balance_query:
+                summary: Balance query for an Ethereum USDC wallet
+                value:
+                  query_identification: "QRY-20250422-001"
+                  query_type: BALANCE
+                  account:
+                    identification:
+                      proxy:
+                        type:
+                          code: EWAL
+                        identification: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                    type:
+                      proprietary: "DLID/X9J9XDMTD"
+                    name: "Treasury USDC Wallet"
+                  token_filter:
+                    - token_dti: "T9B3X8H2K"
+                      token_symbol: "USDC"
+              intraday_query:
+                summary: Intraday report request
+                value:
+                  query_identification: "QRY-20250422-002"
+                  query_type: INTRADAY
+                  account:
+                    identification:
+                      proxy:
+                        type:
+                          code: EWAL
+                        identification: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                    type:
+                      proprietary: "DLID/X9J9XDMTD"
+                  reporting_period:
+                    from_date_time: "2025-04-22T00:00:00Z"
+                    to_date_time: "2025-04-22T12:00:00Z"
+                  entry_status_filter: [BOOK, PDNG]
+              subscribe_notifications:
+                summary: Subscribe to debit/credit notifications
+                value:
+                  query_identification: "QRY-20250422-003"
+                  query_type: NOTIFICATION_SUBSCRIBE
+                  account:
+                    identification:
+                      proxy:
+                        type:
+                          code: EWAL
+                        identification: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                    type:
+                      proprietary: "DLID/X9J9XDMTD"
+                  callback_url: "https://bank.example.com/webhooks/blockchain-notifications"
+      responses:
+        "201":
+          description: |
+            Query accepted and report returned synchronously. Response body
+            contains the appropriate report object for the `query_type`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        "202":
+          description: |
+            Query accepted; report will be delivered asynchronously to
+            `callback_url`. Returned for `STATEMENT` queries over large
+            periods or when the VASP cannot respond synchronously.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query_identification:
+                    type: string
+                    description: Echo of the request `query_identification`.
+                  message:
+                    type: string
+                    example: "Statement will be delivered to the provided callback_url within 15 minutes."
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          description: |
+            Duplicate subscription. A notification subscription for this account
+            and callback URL is already active.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subscription_id:
+                    $ref: '#/components/schemas/UUIDv4'
+                  message:
+                    type: string
+                    example: "An active subscription already exists for this account and callback URL."
+
+  # ── camt.052 ANALOGUE — INTRADAY REPORT ───────────────────────────────────
+
+  /report/intraday:
+    get:
+      tags: [Intraday]
+      operationId: getIntradayReport
+      summary: Retrieve intraday wallet report
+      description: |
+        Returns a wallet balance snapshot and all entries (pending and booked)
+        for the current or a specified intraday period. Analogue of ISO 20022
+        camt.052 `BankToCustomerAccountReport`.
+
+        The report contains:
+        - Opening and current intraday balances per token (`WalletBalance` array),
+          with balance types `OPBD` (opening booked), `ITBD` (current intraday
+          booked), and `XPCD` (expected, including pending entries).
+        - All `BlockchainEntry` records within the period, ordered by
+          `booking_date` descending unless `sort` overrides.
+        - Entries at both `PDNG` and `BOOK` status are included by default;
+          use `entry_status` to filter.
+
+        **Pagination:** Results are cursor-paginated. The first request omits
+        `after`; subsequent pages use the `next_cursor` from the previous
+        response. An absent `next_cursor` in the response signals the last page.
+
+        **Relation to `POST /report/query`:** This endpoint is the pull equivalent
+        of the `INTRADAY` query type. Use `POST /report/query` for programmatic
+        report requests with structured parameters; use this GET endpoint for
+        direct integration by systems that prefer query-parameter-based retrieval.
+      parameters:
+        - name: wallet_address
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/WalletAddress'
+          description: |
+            Wallet address to report on. Must match
+            `WalletAccount/identification/proxy/identification` exactly.
+          example: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        - name: chain_dli
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/DLIIdentifier'
+          description: |
+            Chain DLI identifying the ledger on which the wallet exists.
+            Required alongside `wallet_address` for unambiguous account
+            identification (EVM-compatible chains share address formats).
+          example: "X9J9XDMTD"
+        - name: from_date_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: |
+            Inclusive start of the reporting period (ISO 8601 UTC).
+            Defaults to the start of the current calendar day (UTC) if omitted.
+          example: "2025-04-22T00:00:00Z"
+        - name: to_date_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: |
+            Inclusive end of the reporting period (ISO 8601 UTC).
+            Defaults to now if omitted.
+          example: "2025-04-22T12:00:00Z"
+        - name: token_dti
+          in: query
+          schema:
+            $ref: '#/components/schemas/DTIIdentifier'
+          description: |
+            Filter entries to a specific token by DTI. If omitted, entries
+            for all tokens held in the wallet are returned.
+          example: "T9B3X8H2K"
+        - name: entry_status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/EntryStatus'
+          style: form
+          explode: false
+          description: |
+            Filter entries by status. Comma-separated: `entry_status=BOOK,PDNG`.
+            Defaults to `BOOK,PDNG` (all active statuses) if omitted.
+          example: "BOOK,PDNG"
+        - name: credit_debit_indicator
+          in: query
+          schema:
+            type: string
+            enum: [CRDT, DBIT]
+          description: |
+            Filter to credit entries only (`CRDT`) or debit entries only (`DBIT`).
+            If omitted, both are returned.
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Number of entry records to return per page.
+        - name: after
+          in: query
+          schema:
+            type: string
+          description: |
+            Cursor for the next page. Use the `next_cursor` value from the
+            previous response. Opaque — do not construct manually.
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [booking_date_asc, booking_date_desc, amount_asc, amount_desc]
+            default: booking_date_desc
+          description: Sort order for entry results.
+      responses:
+        "200":
+          description: Intraday wallet report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntradayReport'
+              example:
+                group_header:
+                  message_identification: "INTRA-20250422-001"
+                  creation_date_time: "2025-04-22T12:05:00Z"
+                  message_recipient:
+                    name: "Acme Bank AG"
+                    lei: "635400DUFB71VFOHVB49"
+                report:
+                  identification: "RPT-ETH-20250422-001"
+                  creation_date_time: "2025-04-22T12:05:00Z"
+                  from_to_date:
+                    from_date_time: "2025-04-22T00:00:00Z"
+                    to_date_time: "2025-04-22T12:00:00Z"
+                  account:
+                    identification:
+                      proxy:
+                        type:
+                          code: EWAL
+                        identification: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                    type:
+                      proprietary: "DLID/X9J9XDMTD"
+                    name: "Treasury USDC Wallet"
+                    servicer:
+                      name: "CryptoVASP Ltd"
+                      lei: "7245007VX57GR4IUVZ79"
+                  balances:
+                    - balance_type: "OPBD"
+                      token:
+                        token_dti: "T9B3X8H2K"
+                        token_symbol: "USDC"
+                      token_amount:
+                        amount: "1000000.000000"
+                      credit_debit_indicator: CRDT
+                      date_time: "2025-04-22T00:00:00Z"
+                    - balance_type: "ITBD"
+                      token:
+                        token_dti: "T9B3X8H2K"
+                        token_symbol: "USDC"
+                      token_amount:
+                        amount: "1250000.000000"
+                      credit_debit_indicator: CRDT
+                      date_time: "2025-04-22T12:05:00Z"
+                      fiat_valuation:
+                        amount: "1250000.00"
+                        currency: "USD"
+                        exchange_rate: "1.00"
+                        valuation_time: "2025-04-22T12:05:00Z"
+                        valuation_source:
+                          name: "CryptoVASP internal pricing"
+                          lei: "7245007VX57GR4IUVZ79"
+                  total_entries: 3
+                  total_credit_entries: 2
+                  total_debit_entries: 1
+                  next_cursor: null
+                  entries:
+                    - entry_reference: "ENT-20250422-001"
+                      credit_debit_indicator: CRDT
+                      entry_status: BOOK
+                      booking_date: "2025-04-22T09:14:33Z"
+                      value_date: "2025-04-22"
+                      token:
+                        token_dti: "T9B3X8H2K"
+                        token_symbol: "USDC"
+                      token_amount:
+                        amount: "250000.000000"
+                      charges_information:
+                        amount: "2.18"
+                        currency: "USD"
+                        charge_bearer: DEBT
+                      blockchain_detail:
+                        transaction_hash: "0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"
+                        chain_dli: "X9J9XDMTD"
+                        block_number: 19847263
+                        block_timestamp: "2025-04-22T09:13:47Z"
+                        confirmation_depth: 64
+                        finality_status: FINAL
+                        confirmation_depth_at_finality: 64
+                        finality_achieved_at: "2025-04-22T09:27:00Z"
+                        gas_detail:
+                          native_fee:
+                            amount: "0.000841200000000000"
+                          fiat_equivalent:
+                            amount: "2.18"
+                            currency: "USD"
+                            exchange_rate: "2591.38"
+                            valuation_time: "2025-04-22T09:14:00Z"
+                          gas_used: 63000
+                          base_fee_per_gas: "12000000000"
+                          priority_fee_per_gas: "1333333333"
+                          effective_gas_price: "13333333333"
+                        instruction_id: "550e8400-e29b-41d4-a716-446655440000"
+                        travel_rule_record_id: "660f9511-f30c-42e5-b827-557766551111"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── camt.053 ANALOGUE — END-OF-PERIOD STATEMENT ───────────────────────────
+
+  /report/statement:
+    get:
+      tags: [Statement]
+      operationId: getWalletStatement
+      summary: Retrieve end-of-period wallet statement
+      description: |
+        Returns a definitive end-of-period wallet statement containing all
+        booked entries for the requested period. Analogue of ISO 20022
+        camt.053 `BankToCustomerStatement`.
+
+        The statement contains:
+        - Opening and closing balances per token (`WalletBalance` array),
+          with balance types `OPBD` (opening booked) and `CLBD` (closing booked).
+        - All `BlockchainEntry` records with `entry_status = BOOK` for the period.
+          Pending entries (`PDNG`) are excluded — use the intraday report for
+          a mixed-status view.
+        - Statement `identification` and `electronic_sequence_number` are assigned
+          by the VASP and stable across re-deliveries for the same period.
+
+        **Definitive record:** The statement is the authoritative document for
+        reconciliation and audit. Entries appearing here have `finality_status = FINAL`
+        and will not be reversed under normal network conditions. In the exceptional
+        event of a chain reorganisation affecting a `FINAL` entry, the VASP will
+        issue a corrected statement for the affected period with `copy_duplicate_indicator
+        = DUPL` and a `BlockchainNotification` with `notification_type = ENTRY_REVERSED`.
+
+        **Period boundaries:** Statements are issued for closed periods only.
+        The current intraday period cannot be retrieved as a statement — use
+        `GET /report/intraday` for the current period. The VASP determines
+        its statement cut-off time (typically end-of-business UTC or midnight UTC);
+        this should be disclosed in the bilateral service agreement.
+
+        **Pagination:** Same cursor-based pagination as the intraday endpoint.
+        Large statement periods may be paginated across multiple responses.
+        The final page has no `next_cursor`.
+      parameters:
+        - name: wallet_address
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/WalletAddress'
+          description: |
+            Wallet address to report on (`WalletAccount/identification/proxy/identification`).
+          example: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        - name: chain_dli
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/DLIIdentifier'
+          description: |
+            Chain DLI. Required for unambiguous wallet identification.
+          example: "X9J9XDMTD"
+        - name: from_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: |
+            Start date of the statement period (inclusive, UTC calendar date).
+            Must be a closed period — today's date is not accepted.
+          example: "2025-04-01"
+        - name: to_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: |
+            End date of the statement period (inclusive, UTC calendar date).
+            Must be a closed period.
+          example: "2025-04-21"
+        - name: token_dti
+          in: query
+          schema:
+            $ref: '#/components/schemas/DTIIdentifier'
+          description: |
+            Filter entries to a specific token. If omitted, all tokens are included.
+          example: "T9B3X8H2K"
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Number of entry records per page.
+        - name: after
+          in: query
+          schema:
+            type: string
+          description: Cursor for next page from previous response `next_cursor`.
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [booking_date_asc, booking_date_desc, amount_asc, amount_desc]
+            default: booking_date_asc
+          description: |
+            Sort order. Defaults to `booking_date_asc` for statements (chronological
+            order is conventional for reconciliation).
+      responses:
+        "200":
+          description: End-of-period wallet statement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletStatement'
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  # ── camt.054 ANALOGUE — NOTIFICATION (PULL) ───────────────────────────────
+
+  /report/notification/{notificationId}:
+    parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/UUIDv4'
+        description: |
+          VASP-assigned UUID notification identifier. Returned in the
+          `Location` header when the VASP first delivers the notification
+          to the bank's callback URL, and retrievable via `GET /report/notification/search`.
+    get:
+      tags: [Notification]
+      operationId: getNotification
+      summary: Retrieve a specific debit/credit notification by ID
+      description: |
+        Retrieves a single `BlockchainNotification` by its VASP-assigned UUID.
+        Analogue of ISO 20022 camt.054 `BankToCustomerDebitCreditNotification`.
+
+        **Push vs pull:** Notifications are primarily push — the VASP POSTs
+        `BlockchainNotification` to the bank's `callback_url` as transactions
+        occur. This GET endpoint supports:
+        - Gap-fill retrieval after a webhook delivery failure or bank system outage.
+        - Audit and reconciliation access to historical notification records.
+        - Pull-based integration for banks that prefer polling over webhook delivery.
+
+        **Two-notification pattern:** For each on-chain transaction, the VASP
+        issues two notifications:
+        1. `ENTRY_PENDING` — at broadcast or initial confirmation; `entry_status = PDNG`.
+        2. `ENTRY_FINAL` — at finality threshold; `entry_status = BOOK`.
+
+        Both are retrievable via this endpoint using their respective `notification_id`.
+        The `blockchain_detail/transaction_hash` is the same in both; the
+        `finality_status`, `confirmation_depth`, `entry_status`, and
+        `notification_type` differ.
+      responses:
+        "200":
+          description: Blockchain debit/credit notification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockchainNotification'
+              example:
+                group_header:
+                  message_identification: "NOTIF-20250422-0041"
+                  creation_date_time: "2025-04-22T09:27:05Z"
+                  message_recipient:
+                    name: "Acme Bank AG"
+                    lei: "635400DUFB71VFOHVB49"
+                notification_id: "770a9622-b41d-42e5-c838-558877662222"
+                notification_type: ENTRY_FINAL
+                account:
+                  identification:
+                    proxy:
+                      type:
+                        code: EWAL
+                      identification: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                  type:
+                    proprietary: "DLID/X9J9XDMTD"
+                  servicer:
+                    name: "CryptoVASP Ltd"
+                    lei: "7245007VX57GR4IUVZ79"
+                entry:
+                  entry_reference: "ENT-20250422-001"
+                  credit_debit_indicator: CRDT
+                  entry_status: BOOK
+                  booking_date: "2025-04-22T09:27:00Z"
+                  value_date: "2025-04-22"
+                  token:
+                    token_dti: "T9B3X8H2K"
+                    token_symbol: "USDC"
+                  token_amount:
+                    amount: "250000.000000"
+                  blockchain_detail:
+                    transaction_hash: "0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"
+                    chain_dli: "X9J9XDMTD"
+                    block_number: 19847263
+                    block_timestamp: "2025-04-22T09:13:47Z"
+                    confirmation_depth: 64
+                    finality_status: FINAL
+                    confirmation_depth_at_finality: 64
+                    finality_achieved_at: "2025-04-22T09:27:00Z"
+                    instruction_id: "550e8400-e29b-41d4-a716-446655440000"
+                    travel_rule_record_id: "660f9511-f30c-42e5-b827-557766551111"
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          $ref: '#/components/responses/NotFound'
+
+  /report/notification/callback:
+    post:
+      tags: [Notification]
+      operationId: postNotificationCallback
+      summary: Acknowledge receipt of a pushed notification (bank-side endpoint)
+      description: |
+        This endpoint is implemented by the **bank or corporate treasury**, not
+        the VASP. It is the webhook target to which the VASP POSTs
+        `BlockchainNotification` messages for subscribed accounts.
+
+        It is documented here for completeness and to specify the expected
+        acknowledgement behaviour. The bank's implementation of this endpoint
+        is outside the scope of this API but must follow the behaviour described.
+
+        **Acknowledgement rules:**
+        - The bank must return `200 OK` with an empty body or a minimal
+          acknowledgement JSON within the VASP's timeout window (recommended: 10s).
+        - A `200` response is the VASP's confirmation that delivery succeeded.
+          The VASP will not retry after receiving `200`.
+        - Any non-`200` response or timeout causes the VASP to retry with
+          exponential backoff (recommended: 3 attempts over 15 minutes).
+        - After exhausting retries, the notification is marked `DELIVERY_FAILED`
+          and available for gap-fill retrieval via `GET /report/notification/{notificationId}`.
+
+        **Scope of acknowledgement:** The acknowledgement confirms receipt of the
+        notification payload only. It does not communicate any compliance decision,
+        screening result, or acceptance/rejection of the underlying transaction
+        to the VASP. Consistent with the sanctions tipping-off prohibition documented
+        across the pacs.crypto family, the callback must not carry any compliance
+        signal. Data quality issues (malformed payload, unknown account reference)
+        should be raised bilaterally out-of-band.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BlockchainNotification'
+      responses:
+        "200":
+          description: |
+            Notification received. VASP will not retry delivery for this
+            `notification_id`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notification_id:
+                    $ref: '#/components/schemas/UUIDv4'
+                    description: Echo of the received notification ID, for correlation logging.
+
+  # ── ENTRY SEARCH ──────────────────────────────────────────────────────────
+
+  /report/search:
+    get:
+      tags: [Search]
+      operationId: searchEntries
+      summary: Search blockchain entries across reported transactions
+      description: |
+        Returns a paginated, filterable list of `BlockchainEntry` summaries
+        across all reported transactions for a given wallet account. Supports
+        filtering by token, chain, date range, finality status, credit/debit
+        direction, amount range, counterparty wallet, instruction reference,
+        and Travel Rule record reference.
+
+        **Scope:** This endpoint queries the VASP's own reporting records for
+        the authenticated requesting party's accounts. It does not provide
+        cross-VASP aggregation.
+
+        **Relation to intraday/statement:** The intraday and statement endpoints
+        return full structured reports with opening/closing balances and paginated
+        entries for a specific account and period. This search endpoint is
+        optimised for cross-period, cross-token, and cross-account lookup —
+        for example, finding all entries linked to a specific `instruction_id`,
+        or all USDC credits above a threshold in the past 30 days, regardless
+        of which statement period they fall in.
+      parameters:
+        - name: wallet_address
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/WalletAddress'
+          description: Wallet address to search entries for.
+          example: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        - name: chain_dli
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/DLIIdentifier'
+          description: Chain DLI for unambiguous wallet identification.
+          example: "X9J9XDMTD"
+        - name: from_date_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: |
+            Inclusive lower bound on `booking_date` (ISO 8601 UTC).
+            If omitted, no lower bound is applied.
+          example: "2025-04-01T00:00:00Z"
+        - name: to_date_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: |
+            Inclusive upper bound on `booking_date` (ISO 8601 UTC).
+            Defaults to now if omitted.
+          example: "2025-04-22T23:59:59Z"
+        - name: token_dti
+          in: query
+          schema:
+            $ref: '#/components/schemas/DTIIdentifier'
+          description: |
+            Filter to entries for a specific token by DTI.
+          example: "T9B3X8H2K"
+        - name: entry_status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/EntryStatus'
+          style: form
+          explode: false
+          description: |
+            Filter by entry status. Comma-separated: `entry_status=BOOK,PDNG`.
+            Defaults to all statuses if omitted.
+        - name: finality_status
+          in: query
+          schema:
+            $ref: '#/components/schemas/FinalityStatus'
+          description: |
+            Filter by on-chain finality status. Use `FINAL` to retrieve only
+            fully settled entries; `PENDING` or `PROBABILISTIC` for entries
+            still awaiting finality.
+        - name: credit_debit_indicator
+          in: query
+          schema:
+            type: string
+            enum: [CRDT, DBIT]
+          description: Filter to credits only (`CRDT`) or debits only (`DBIT`).
+        - name: amount_min
+          in: query
+          schema:
+            type: string
+            maxLength: 37
+          description: |
+            Minimum token amount (inclusive), as a decimal string.
+            Applied within the filtered `token_dti` only. Cross-token
+            amount comparison is not performed.
+          example: "10000.00"
+        - name: amount_max
+          in: query
+          schema:
+            type: string
+            maxLength: 37
+          description: Maximum token amount (inclusive), as a decimal string.
+          example: "500000.00"
+        - name: counterparty_wallet
+          in: query
+          schema:
+            $ref: '#/components/schemas/WalletAddress'
+          description: |
+            Filter by counterparty wallet address
+            (`blockchain_detail/counterparty_wallet`). Exact match.
+        - name: instruction_id
+          in: query
+          schema:
+            $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Filter entries linked to a specific instruction from the
+            pacs.crypto Instruction API (`blockchain_detail/instruction_id`).
+            Useful for tracing the full lifecycle of a submitted instruction
+            through to its reported entries.
+        - name: travel_rule_record_id
+          in: query
+          schema:
+            $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Filter entries linked to a specific Travel Rule record from the
+            pacs.crypto Travel Rule API (`blockchain_detail/travel_rule_record_id`).
+            Completes the audit chain: Travel Rule record → instruction →
+            on-chain entry → statement.
+        - name: transaction_hash
+          in: query
+          schema:
+            type: string
+            maxLength: 130
+          description: |
+            Filter by on-chain transaction hash (`blockchain_detail/transaction_hash`).
+            Exact match. Useful for looking up a specific on-chain event by its
+            chain-observable identifier.
+          example: "0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          description: Number of entry summaries to return per page.
+        - name: after
+          in: query
+          schema:
+            type: string
+          description: Cursor for next page from previous response `next_cursor`.
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [booking_date_asc, booking_date_desc, amount_asc, amount_desc]
+            default: booking_date_desc
+          description: Sort order for results.
+      responses:
+        "200":
+          description: Paginated list of matching entry summaries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntrySearchResponse'
+              example:
+                total_matched: 12
+                page_size: 50
+                next_cursor: null
+                query_period:
+                  from_date_time: "2025-04-01T00:00:00Z"
+                  to_date_time: "2025-04-22T23:59:59Z"
+                generated_at: "2025-04-22T14:00:00Z"
+                entries:
+                  - entry_reference: "ENT-20250422-001"
+                    credit_debit_indicator: CRDT
+                    entry_status: BOOK
+                    booking_date: "2025-04-22T09:27:00Z"
+                    token_dti: "T9B3X8H2K"
+                    token_symbol: "USDC"
+                    token_amount: "250000.000000"
+                    finality_status: FINAL
+                    transaction_hash: "0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"
+                    instruction_id: "550e8400-e29b-41d4-a716-446655440000"
+                    travel_rule_record_id: "660f9511-f30c-42e5-b827-557766551111"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── AGGREGATE STATISTICS ──────────────────────────────────────────────────
+
+  /report/stats:
+    get:
+      tags: [Search]
+      operationId: getReportStats
+      summary: Aggregate statistics over reported blockchain entries
+      description: |
+        Returns aggregate counts and token volumes over reported entries for a
+        given wallet account and period, optionally broken down by a grouping
+        dimension.
+
+        **Multi-token aggregation:** Token amounts are not summed across different
+        tokens — an ETH total and a USDC total cannot be meaningfully added without
+        an exchange rate. Statistics are therefore always returned grouped by token
+        (one entry per distinct `token_dti` or token symbol). An optional
+        `fiat_equivalent_total` is provided when the VASP can supply a consistent
+        valuation, using the same LEI-identified source convention as `WalletBalance`.
+
+        **Grouping:** The optional `group_by` parameter splits results into a
+        `breakdown` array, one entry per distinct value of the chosen dimension.
+        Useful groupings for treasury and compliance dashboards:
+        - `entry_status` — how many entries are still pending vs booked?
+        - `finality_status` — what proportion have reached finality?
+        - `credit_debit` — net flow split (credits vs debits)
+        - `token` — volume distribution across tokens held
+        - `day` — daily volume breakdown for a period (useful for trend reporting)
+        - `counterparty_wallet` — volume by counterparty address
+      parameters:
+        - name: wallet_address
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/WalletAddress'
+          description: Wallet address to aggregate stats for.
+        - name: chain_dli
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/DLIIdentifier'
+          description: Chain DLI for unambiguous wallet identification.
+        - name: from_date_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive start of the reporting period (ISO 8601 UTC).
+          example: "2025-04-01T00:00:00Z"
+        - name: to_date_time
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: Inclusive end of the reporting period (ISO 8601 UTC).
+          example: "2025-04-22T23:59:59Z"
+        - name: token_dti
+          in: query
+          schema:
+            $ref: '#/components/schemas/DTIIdentifier'
+          description: Pre-filter stats to a specific token before aggregating.
+        - name: entry_status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/EntryStatus'
+          style: form
+          explode: false
+          description: Pre-filter stats to specific entry statuses before aggregating.
+        - name: credit_debit_indicator
+          in: query
+          schema:
+            type: string
+            enum: [CRDT, DBIT]
+          description: Pre-filter to credits only or debits only.
+        - name: group_by
+          in: query
+          schema:
+            type: string
+            enum: [entry_status, finality_status, credit_debit, token, day, counterparty_wallet]
+          description: |
+            Dimension by which to break down the aggregate statistics.
+            If omitted, only top-level totals are returned.
+      responses:
+        "200":
+          description: Aggregate statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportStatsResponse'
+              example:
+                wallet_address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                chain_dli: "X9J9XDMTD"
+                period:
+                  from_date_time: "2025-04-01T00:00:00Z"
+                  to_date_time: "2025-04-22T23:59:59Z"
+                generated_at: "2025-04-22T14:00:00Z"
+                totals:
+                  - token_dti: "T9B3X8H2K"
+                    token_symbol: "USDC"
+                    total_entries: 12
+                    total_credit_entries: 8
+                    total_debit_entries: 4
+                    total_credit_amount: "1850000.000000"
+                    total_debit_amount: "600000.000000"
+                    net_amount: "1250000.000000"
+                    net_credit_debit_indicator: CRDT
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── HEALTH ────────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [Search]
+      operationId: getHealth
+      summary: API health check
+      description: Returns the operational status of the reporting API.
+      responses:
+        "200":
+          description: API is operational
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [OK, DEGRADED]
+                  timestamp:
+                    type: string
+                    format: date-time
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPONENTS — SHARED DATA MODEL
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+  schemas:
+
+    # ── PRIMITIVE IDENTIFIERS ─────────────────────────────────────────────────
+
+    LEIIdentifier:
+      type: string
+      pattern: '^[A-Z0-9]{18}[0-9]{2}$'
+      description: |
+        Legal Entity Identifier (LEI) — ISO 17442. 20-character alphanumeric code
+        uniquely identifying a legal entity. Preferred identifier for all
+        organisation parties in the pacs.crypto family.
+        Registry: https://gleif.org
+      example: "254900OPPU84GM83MG36"
+
+    BICIdentifier:
+      type: string
+      pattern: '^[A-Z0-9]{4,4}[A-Z]{2,2}[A-Z0-9]{2,2}([A-Z0-9]{3,3}){0,1}$'
+      description: |
+        Business Identifier Code (BIC) — ISO 9362:2014. Used for financial
+        institution identification where LEI is not available.
+      example: "DEUTDEDB"
+
+    DTIIdentifier:
+      type: string
+      pattern: '^[A-Z0-9]{9}$'
+      description: |
+        ISO 24165-1 Digital Token Identifier — bare 9-character value.
+        No `DTID/` prefix in this field; the field name makes the type explicit.
+        Use `DTID/<value>` only in generic ISO 20022 fields such as
+        `local_instrument/proprietary` where self-description is required.
+        Registry: https://dtif.org
+      example: "T9B3X8H2K"
+
+    DLIIdentifier:
+      type: string
+      pattern: '^[A-Z0-9]{9}$'
+      description: |
+        ISO 24165-2 Digital Ledger Identifier — bare 9-character value.
+        No `DLID/` prefix in this field; the field name makes the type explicit.
+        Use `DLID/<value>` only in generic ISO 20022 fields such as
+        `settlement_information/clearing_system/proprietary`.
+        Registry: https://dtif.org
+      example: "X9J9XDMTD"
+
+    UUIDv4:
+      type: string
+      format: uuid
+      pattern: '^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$'
+      description: |
+        Universally Unique Identifier version 4 (UUIDv4) — IETF RFC 4122.
+        Used for system-assigned record identifiers throughout the pacs.crypto family.
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    WalletAddress:
+      type: string
+      maxLength: 130
+      description: |
+        Blockchain wallet or contract address. Carried in ISO 20022 fields using
+        the `CashAccount40/proxy` convention: `proxy/type/code = EWAL`,
+        `proxy/identification` = wallet address string, `type/proprietary = DIGT`
+        for digital asset accounts. This convention is consistent across the
+        pacs.crypto family.
+
+        Address format is chain-specific:
+        - EVM chains: `0x` followed by 40 hex characters
+        - Bitcoin: Base58Check (P2PKH/P2SH) or Bech32 (P2WPKH/P2WSH)
+        - Solana: Base58-encoded 32-byte public key
+        - XRPL: Base58Check r-address (25–34 characters)
+      example: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+
+    # ── PARTY IDENTIFICATION ──────────────────────────────────────────────────
+
+    PartyIdentification:
+      type: object
+      description: |
+        Identifies a party to a transaction — either a natural person or a legal entity.
+        Follows `PartyIdentification272` from pacs.008.001.14 / camt.054.001.14.
+
+        For legal entities, `lei` is preferred and should be populated alongside `name`
+        where available. For natural persons, `date_and_place_of_birth` and/or
+        `national_id` are the primary identifiers; `lei` is not applicable.
+      properties:
+        name:
+          type: string
+          maxLength: 140
+          description: Full legal name of the party.
+        lei:
+          $ref: '#/components/schemas/LEIIdentifier'
+          description: |
+            Legal Entity Identifier. Recommended for all organisation parties.
+            Populate alongside `name` for maximum interoperability and GLEIF
+            registry cross-reference.
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          description: ISO 3166-1 alpha-2 country of incorporation or residence.
+        postal_address:
+          $ref: '#/components/schemas/PostalAddress'
+        date_and_place_of_birth:
+          type: object
+          description: |
+            Date and place of birth. Applicable to natural persons only.
+            Follows `DateAndPlaceOfBirth1` from ISO 20022.
+          required: [birth_date, city_of_birth, country_of_birth]
+          properties:
+            birth_date:
+              type: string
+              format: date
+            city_of_birth:
+              type: string
+              maxLength: 35
+            country_of_birth:
+              type: string
+              pattern: '^[A-Z]{2}$'
+        national_id:
+          type: object
+          description: National identification document for natural persons.
+          properties:
+            identification:
+              type: string
+              maxLength: 35
+            scheme_name:
+              type: string
+              maxLength: 35
+              description: |
+                Identification scheme. Use external code list values where applicable:
+                `NIDN` (national identity number), `CCPT` (passport),
+                `DRLC` (driving licence), `SOSE` (social security number).
+            issuer:
+              type: string
+              maxLength: 35
+            country_of_issue:
+              type: string
+              pattern: '^[A-Z]{2}$'
+        organisation_id:
+          type: object
+          description: |
+            Organisation identification (non-LEI). Use LEI where available.
+            Follows `OrganisationIdentification39` from pacs.008.001.14.
+          properties:
+            bic_or_bei:
+              $ref: '#/components/schemas/BICIdentifier'
+            other:
+              type: object
+              properties:
+                identification:
+                  type: string
+                  maxLength: 35
+                scheme_name:
+                  type: string
+                  maxLength: 35
+                  description: e.g. `COID` (company registration), `TXID` (tax identification).
+
+    PostalAddress:
+      type: object
+      description: |
+        Postal address. Follows `PostalAddress27` from pacs.008.001.14 and
+        the camt message family. Consistent with the Instruction API definition.
+      properties:
+        street_name:
+          type: string
+          maxLength: 140
+        building_number:
+          type: string
+          maxLength: 16
+        post_code:
+          type: string
+          maxLength: 16
+        town_name:
+          type: string
+          maxLength: 140
+        country_sub_division:
+          type: string
+          maxLength: 35
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+
+    AgentIdentification:
+      type: object
+      description: |
+        Financial institution or VASP identification.
+        Follows `BranchAndFinancialInstitutionIdentification8` from pacs.008.001.14.
+
+        **Identification convention:**
+        - VASPs: identify by `lei` (preferred) and `name`.
+        - Banks and correspondent institutions: identify by `bic` (preferred)
+          and/or `lei`.
+        - Populate both `bic` and `lei` where available for maximum
+          interoperability across ISO 20022 and crypto-native systems.
+      required: [name]
+      properties:
+        bic:
+          $ref: '#/components/schemas/BICIdentifier'
+        lei:
+          $ref: '#/components/schemas/LEIIdentifier'
+        name:
+          type: string
+          maxLength: 140
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+
+    # ── TOKEN AND CHAIN IDENTIFICATION ────────────────────────────────────────
+
+    TokenIdentification:
+      type: object
+      description: |
+        Identifies a blockchain token. Consistent with `TokenIdentification` in the
+        pacs.crypto Instruction API.
+
+        **Identifier priority order:**
+        1. `token_dti` — ISO 24165-1 DTI, preferred where registered
+        2. `contract_address` + `chain_dli` — universally resolvable on-chain fallback;
+           always include for EVM and other contract-based tokens
+        3. `isin` — for tokenised securities where ISIN is the primary identifier
+        4. `token_symbol` — human-readable fallback only; not machine-resolvable
+
+        At least one of `token_dti`, `contract_address`, or `token_symbol` must
+        be present. Populate multiple identifiers where available.
+
+        **Token issuer:** `token_issuer` provides the issuing entity's name and LEI.
+        Important for regulated stablecoins under MiCA and equivalent frameworks
+        (e.g. Circle Internet Financial LEI for USDC, Tether Ltd LEI for USDT).
+
+        **Compatibility note — Travel Rule API field names:**
+        The Travel Rule API (Spec 1) uses a slightly different TokenIdentification
+        field naming reflecting its earlier iteration. The Instruction API and this
+        Account Reporting API share the harmonised naming shown below. The Travel
+        Rule API uses `dti` (vs `token_dti`), `contract_chain_id` / `ticker_chain_id`
+        (vs a single `chain_dli`), and `ticker` (vs `token_symbol`). Semantics are
+        identical; only the field names differ. The Travel Rule API may be aligned
+        in a future major version.
+      properties:
+        token_dti:
+          $ref: '#/components/schemas/DTIIdentifier'
+        contract_address:
+          $ref: '#/components/schemas/WalletAddress'
+          description: |
+            Token contract address on the chain identified by `chain_dli`.
+            Always include for on-chain contract-based tokens. For native
+            chain assets (ETH, BTC, SOL), omit or use a well-known sentinel value.
+        chain_dli:
+          $ref: '#/components/schemas/DLIIdentifier'
+          description: |
+            Chain on which the contract is deployed. Required when `contract_address`
+            is present.
+        isin:
+          type: string
+          pattern: '^[A-Z]{2}[A-Z0-9]{9}[0-9]$'
+          description: ISIN — ISO 6166. For tokenised securities where ISIN is the primary identifier.
+        token_symbol:
+          type: string
+          maxLength: 20
+          description: |
+            Human-readable token symbol (e.g. USDC, ETH, WBTC). Not machine-resolvable;
+            use as fallback or alongside `token_dti`. Do not rely on this field
+            for programmatic resolution — symbols are not globally unique.
+        token_standard:
+          type: string
+          enum: [ERC20, ERC721, ERC1155, BEP20, SPL, NATIVE, OTHER]
+          description: |
+            Token contract standard. Informational; aids integration.
+            `NATIVE` for chain-native assets (ETH, BTC, SOL, XRP).
+        token_issuer:
+          type: object
+          description: |
+            Issuing entity of the token. Recommended for regulated stablecoins
+            and tokenised securities. Provides a verifiable legal anchor for
+            MiCA asset classification and AML/CFT due diligence.
+          properties:
+            name:
+              type: string
+              maxLength: 140
+            lei:
+              $ref: '#/components/schemas/LEIIdentifier'
+            bic:
+              $ref: '#/components/schemas/BICIdentifier'
+
+    # ── WALLET ACCOUNT ────────────────────────────────────────────────────────
+
+    WalletAccount:
+      type: object
+      description: |
+        Represents a blockchain wallet as an account. Follows `CashAccount43`
+        from camt.052/053/054 as closely as possible, with one unavoidable
+        blockchain extension: `type/proprietary` carries the chain identifier
+        in `DLID/<dli>` format (since ISO 20022 has no chain concept).
+
+        **ISO 20022 field mapping:**
+
+        | pacs.crypto field | CashAccount43 field | Value convention |
+        |---|---|---|
+        | `identification/proxy/type/code` | `CashAccount43/identification/proxy/type/code` | Always `EWAL` (electronic wallet) |
+        | `identification/proxy/identification` | `CashAccount43/identification/proxy/identification` | Wallet address string |
+        | `type/proprietary` | `CashAccount43/type/proprietary` | `DLID/<9-char-DLI>` — identifies the chain |
+        | `currency` | `CashAccount43/currency` | Omitted (wallet holds multiple tokens; currency is per balance line) |
+        | `name` | `CashAccount43/name` | Friendly label for the account |
+        | `owner` | `CashAccount43/owner` | Account owner (`PartyIdentification272`) |
+        | `servicer` | `CashAccount43/servicer` | VASP or custodian (`BranchAndFinancialInstitutionIdentification8`) |
+
+        **Multi-token wallet:** A single wallet account may hold multiple tokens.
+        Per-token balances are reported as a `WalletBalance` array on the enclosing
+        report or statement — one entry per token held. The chain context is
+        carried once on `WalletAccount/type/proprietary` and does not repeat
+        per balance line.
+
+        **Chain disambiguation:** EVM-compatible chains share address formats;
+        the same address string is valid on Ethereum, Polygon, Arbitrum, etc.
+        `type/proprietary = DLID/<dli>` is therefore mandatory for unambiguous
+        account identification. Do not rely on `identification/proxy/identification`
+        alone to identify a wallet.
+
+        **Custody type:** The optional `type/proprietary` sub-field `CUST/<code>`
+        may follow the DLI to convey the custody arrangement, e.g.
+        `DLID/X9J9XDMTD CUST/FULL`. If the bilateral agreement makes the custody
+        type implicit, this suffix may be omitted.
+      required: [identification, type]
+      properties:
+        identification:
+          type: object
+          description: |
+            Account identification. Follows `AccountIdentification4Choice` /
+            `CashAccount43/identification`. For blockchain wallets, always use
+            the `proxy` form — not IBAN or other/scheme.
+          required: [proxy]
+          properties:
+            proxy:
+              type: object
+              description: |
+                Proxy account identification carrying the wallet address.
+                Follows `ProxyAccountIdentification1` from ISO 20022.
+                `type/code = EWAL` is mandatory. This convention is consistent
+                across the pacs.crypto family (Travel Rule API, Instruction API,
+                and this reporting API).
+              required: [type, identification]
+              properties:
+                type:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      type: string
+                      enum: [EWAL]
+                      description: |
+                        Proxy type code. Always `EWAL` (electronic wallet) for
+                        blockchain wallet addresses. From the ISO 20022 external
+                        proxy account type code list.
+                identification:
+                  $ref: '#/components/schemas/WalletAddress'
+                  description: |
+                    The wallet address. Chain-specific format:
+                    - EVM: `0x` followed by 40 hex characters
+                    - Bitcoin: Base58Check or Bech32
+                    - Solana: Base58-encoded 32-byte public key
+                    - XRPL: Base58Check r-address
+                  example: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+        type:
+          type: object
+          description: |
+            Account type. Follows `CashAccountType2Choice` from ISO 20022.
+            The `proprietary` field carries the chain identifier and optionally
+            the custody type, since no ISO 20022 standard code covers blockchain
+            chain identification.
+          required: [proprietary]
+          properties:
+            proprietary:
+              type: string
+              maxLength: 70
+              description: |
+                Chain identifier in `DLID/<9-char-DLI>` format, consistent with
+                the `settlement_information/clearing_system/proprietary` convention
+                in the pacs.crypto Instruction API. Optionally followed by a space
+                and `CUST/<custody-code>` to convey the custody arrangement.
+
+                | Example value | Meaning |
+                |---|---|
+                | `DLID/X9J9XDMTD` | Ethereum Mainnet, custody type implicit |
+                | `DLID/4H95J0R2X` | Bitcoin Mainnet |
+                | `DLID/ZXTQFTM5G` | Solana Mainnet |
+                | `DLID/X9J9XDMTD CUST/FULL` | Ethereum Mainnet, full custody |
+                | `DLID/X9J9XDMTD CUST/DELEG` | Ethereum Mainnet, delegated signing |
+                | `DLID/X9J9XDMTD CUST/MULTI` | Ethereum Mainnet, multi-sig |
+              example: "DLID/X9J9XDMTD"
+        name:
+          type: string
+          maxLength: 70
+          description: |
+            Friendly name for the account, assigned by the owner or VASP.
+            Informational. Follows `CashAccount43/name`.
+          example: "Treasury USDC Wallet — Ethereum"
+        owner:
+          $ref: '#/components/schemas/PartyIdentification'
+          description: |
+            Legal owner of the account. Follows `CashAccount43/owner`
+            (`PartyIdentification272`). For bank-instructed VASP accounts,
+            this is the bank's customer (the ultimate beneficial owner of
+            the wallet position).
+        servicer:
+          $ref: '#/components/schemas/AgentIdentification'
+          description: |
+            VASP or custodian that holds and reports on this account.
+            Follows `CashAccount43/servicer`
+            (`BranchAndFinancialInstitutionIdentification8`).
+            Identified by LEI (preferred) for VASPs; BIC for banks.
+
+    # ── TOKEN BALANCE ─────────────────────────────────────────────────────────
+
+    WalletBalance:
+      type: object
+      description: |
+        Balance of a single token within a wallet account at a point in time.
+        Follows `CashBalance8` from camt.052/053/054, extended for blockchain.
+
+        A wallet account may hold multiple tokens. Each token is reported as a
+        separate `WalletBalance` entry under the same `WalletAccount`. The token
+        is identified via `TokenIdentification`; the chain context is provided by
+        the enclosing `WalletAccount`.
+
+        **Balance types** follow the `BalanceType13Choice` / external code list
+        from ISO 20022. The most relevant codes for blockchain reporting are:
+
+        | Code | Meaning in blockchain context |
+        |---|---|
+        | `CLAV` | Closing available — confirmed balance available at end of period |
+        | `CLBD` | Closing booked — confirmed balance including all booked entries |
+        | `OPAV` | Opening available — confirmed balance at start of period |
+        | `OPBD` | Opening booked — booked balance at start of period |
+        | `ITAV` | Intraday available — current available balance at report time |
+        | `ITBD` | Intraday booked — current booked balance at report time |
+        | `FWAV` | Forward available — projected available balance (e.g. after pending confirms) |
+        | `XPCD` | Expected — balance including pending/unconfirmed entries |
+
+        For blockchain, `CLBD` / `ITBD` report on-chain confirmed balances (entries
+        with `BOOK` status). `XPCD` includes mempool-pending or low-confirmation
+        entries. Implementers should populate at minimum `ITBD` or `CLBD` as the
+        primary balance; additional balance types may be added per bilateral agreement.
+
+        **Fiat valuation:** The optional `fiat_valuation` sub-object provides the
+        fiat equivalent of the token balance at a stated valuation time and source.
+        Treasury systems use this for position reporting without requiring token
+        price feeds of their own. The valuation source is identified by LEI
+        (e.g. the LEI of the price data provider or exchange). Implementers must
+        treat valuations as indicative unless the bilateral service agreement
+        specifies otherwise.
+      required: [balance_type, token, token_amount, date_time]
+      properties:
+        balance_type:
+          type: string
+          maxLength: 4
+          description: |
+            Balance type code from the ISO 20022 external BalanceType code list.
+            Most common values: `CLBD`, `ITBD`, `OPBD`, `XPCD`, `FWAV`.
+          example: "ITBD"
+        token:
+          $ref: '#/components/schemas/TokenIdentification'
+          description: Token to which this balance applies.
+        token_amount:
+          $ref: '#/components/schemas/TokenAmount'
+          description: Balance amount in token units.
+        credit_debit_indicator:
+          type: string
+          enum: [CRDT, DBIT]
+          description: |
+            Indicates whether the balance is a credit (`CRDT`) or debit (`DBIT`)
+            balance. Follows `CreditDebitCode` from ISO 20022. For standard wallet
+            balances, this will typically be `CRDT`. A `DBIT` balance indicates a
+            net short or liability position.
+        date_time:
+          type: string
+          format: date-time
+          description: |
+            Date and time at which the balance was calculated. For intraday reports,
+            this is the snapshot time. For closing balances, this is the end of the
+            reporting period. Follows `DateAndDateTime2Choice` from ISO 20022.
+        fiat_valuation:
+          type: object
+          description: |
+            Optional fiat-equivalent valuation of the token balance. Provided
+            for treasury and accounting systems that require a fiat position.
+            Must not be relied upon for trading, settlement, or legal purposes
+            without independent verification.
+          properties:
+            amount:
+              type: string
+              maxLength: 19
+              description: Fiat equivalent amount.
+              example: "1250000.00"
+            currency:
+              type: string
+              pattern: '^[A-Z]{3}$'
+              description: ISO 4217 currency code.
+              example: "USD"
+            exchange_rate:
+              type: string
+              maxLength: 19
+              description: |
+                Exchange rate applied: token units per fiat unit.
+                (e.g. `1.00` for USDC/USD at peg, `3200.00` for ETH/USD)
+            valuation_time:
+              type: string
+              format: date-time
+              description: |
+                Timestamp at which the exchange rate was sourced. Implementers
+                must include this field whenever `fiat_valuation` is populated —
+                stale valuations without a timestamp are misleading.
+            valuation_source:
+              type: object
+              description: |
+                Provider of the exchange rate / price data. Identified by LEI
+                (e.g. the LEI of the exchange, price oracle provider, or
+                custodian using its own internal valuation model).
+              properties:
+                name:
+                  type: string
+                  maxLength: 140
+                  description: Name of the valuation source.
+                  example: "Refinitiv Elektron"
+                lei:
+                  $ref: '#/components/schemas/LEIIdentifier'
+                  description: |
+                    LEI of the valuation source entity. Use the LEI of the data
+                    vendor, exchange, or oracle provider. This provides an
+                    auditable, machine-resolvable reference to the price source.
+
+    TokenAmount:
+      type: object
+      description: |
+        An amount expressed in token units. Used wherever a token-denominated
+        quantity is required. Complements `ActiveOrHistoricCurrencyAndAmount`
+        (which carries fiat amounts) by providing a parallel structure for
+        token amounts, which require significantly higher decimal precision.
+
+        `token` is omitted here when `TokenAmount` is used within a context
+        that already identifies the token (e.g. inside `WalletBalance` where
+        `token` is a sibling field). Include `token` when `TokenAmount` appears
+        standalone (e.g. in `GasDetail/native_fee`).
+
+        **Why 36 digits:** ISO 20022 fiat amounts (`ActiveOrHistoricCurrencyAndAmount`)
+        use a maximum of 18 digits total. Token amounts require more. ETH and most
+        ERC-20 tokens have 18 decimal places: 1 ETH = 10^18 Wei, meaning a
+        full-precision amount needs up to 18 digits after the decimal point plus
+        sufficient digits before it for the integer part. 36 total digits (18 integer
+        + 18 decimal) comfortably covers all current tokens, including high-precision
+        DeFi tokens and native chain assets, with headroom for future token designs.
+        Amounts are expressed at the token native decimal precision (e.g. ETH in
+        ETH with up to 18 decimal places, USDC in USDC with up to 6 decimal places)
+        rather than in the smallest indivisible unit (Wei, Satoshi, Lamport), since
+        the latter would produce unwieldy integer strings and lose the human-readable
+        denomination context.
+      required: [amount]
+      properties:
+        amount:
+          type: string
+          maxLength: 37
+          pattern: '^\d{1,18}(\.\d{1,18})?$'
+          description: |
+            Token amount as a decimal string. Maximum 18 digits before the decimal
+            point and 18 digits after, for a total of up to 36 significant digits
+            (plus the decimal separator). Represented as a string to avoid
+            floating-point precision loss — IEEE 754 double precision loses
+            accuracy beyond 15-16 significant digits, which is insufficient for
+            full-precision 18-decimal token amounts.
+
+            A leading zero is required when the integer part is zero
+            (e.g. `0.000000001`). Trailing zeros after the decimal point are
+            permitted but not required.
+          example: "1250000.000000000000000000"
+        token:
+          $ref: '#/components/schemas/TokenIdentification'
+          description: Token to which this amount refers. Include when not implied by context.
+
+    # ── GAS AND CHARGES ───────────────────────────────────────────────────────
+
+    GasDetail:
+      type: object
+      description: |
+        Chain-native gas fee detail for an executed blockchain transaction.
+        Carries the full fee breakdown in chain-native terms. A fiat equivalent
+        rollup is provided separately in `ChargesInformation` (see below).
+
+        **Two-layer charges model:**
+        Gas fees are reported in two complementary layers:
+        1. `gas_detail` — chain-native breakdown (this object), for blockchain
+           operations teams and reconciliation of on-chain costs.
+        2. `charges_information` — ISO 20022 `ChargesInformation22` analogue,
+           expressing the fiat-equivalent gas cost as a standard charge line,
+           for treasury accounting systems that process charges in fiat.
+
+        Where both are present, `charges_information/amount` must be consistent
+        with `gas_detail/fiat_equivalent`. The `gas_detail` object is authoritative
+        for the on-chain cost; `charges_information` is derived from it.
+
+        **EVM-specific fields:** `gas_limit`, `gas_used`, `base_fee_per_gas`,
+        `priority_fee_per_gas`, and `effective_gas_price` are EVM-specific and
+        should be populated for Ethereum, Polygon, Arbitrum, and other EVM chains.
+        For non-EVM chains (Bitcoin, Solana, XRPL), populate `native_fee` and
+        `fiat_equivalent` and omit the EVM-specific fields.
+      properties:
+        native_fee:
+          $ref: '#/components/schemas/TokenAmount'
+          description: |
+            Total fee paid in the chain's native token (e.g. ETH for Ethereum,
+            SOL for Solana, BTC for Bitcoin). This is the authoritative on-chain cost.
+            For EVM: `native_fee = gas_used × effective_gas_price` (in wei, converted
+            to ETH). Always populate this field.
+        fiat_equivalent:
+          type: object
+          description: |
+            Fiat equivalent of the native fee at the time of transaction inclusion.
+            Derived from `native_fee` using the rate in `exchange_rate`.
+            Provided for treasury accounting. Source and timestamp documented
+            in `valuation_source` and `valuation_time`.
+          properties:
+            amount:
+              type: string
+              maxLength: 19
+              example: "3.42"
+            currency:
+              type: string
+              pattern: '^[A-Z]{3}$'
+              example: "USD"
+            exchange_rate:
+              type: string
+              maxLength: 19
+              description: Native token to fiat exchange rate applied.
+            valuation_time:
+              type: string
+              format: date-time
+            valuation_source:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 140
+                lei:
+                  $ref: '#/components/schemas/LEIIdentifier'
+        gas_limit:
+          type: integer
+          description: |
+            EVM only. Maximum gas units the sender authorised for this transaction.
+            A transaction that reaches the gas limit fails (reverts); the fee is
+            still charged.
+        gas_used:
+          type: integer
+          description: |
+            EVM only. Actual gas units consumed by the transaction.
+            Always ≤ `gas_limit`.
+        base_fee_per_gas:
+          type: string
+          maxLength: 30
+          description: |
+            EVM only (post-EIP-1559). Protocol-determined base fee per gas unit
+            in wei. This portion of the fee is burned and does not accrue to the
+            validator.
+        priority_fee_per_gas:
+          type: string
+          maxLength: 30
+          description: |
+            EVM only (post-EIP-1559). Tip paid to the validator per gas unit, in
+            wei. Incentivises inclusion in the current block.
+        effective_gas_price:
+          type: string
+          maxLength: 30
+          description: |
+            EVM only. Total gas price per unit actually paid: `base_fee + priority_fee`.
+            In wei. `native_fee (in wei) = gas_used × effective_gas_price`.
+
+    ChargesInformation:
+      type: object
+      description: |
+        ISO 20022 charges information for the gas fee. Follows `ChargesInformation22`
+        from camt.054.001.14 / pacs.008.001.14.
+
+        This object carries the fiat-equivalent gas cost as a standard ISO 20022
+        charge line, enabling treasury and ERP systems to process gas costs as
+        ordinary charges without parsing blockchain-specific fields.
+
+        **Relation to GasDetail:**
+        `ChargesInformation` is derived from `GasDetail/fiat_equivalent`. Where both
+        are present, `amount` here must equal `GasDetail/fiat_equivalent/amount` and
+        `currency` must match. `GasDetail` is the authoritative source; this object
+        is the ISO 20022 representation of the same cost.
+
+        **Charge bearer (`charge_bearer`):**
+        Follows `ChargeBearerType1Code` from ISO 20022:
+        - `DEBT` — gas fees charged to the debtor (instructing party)
+        - `CRED` — gas fees charged to the creditor (beneficiary)
+        - `SHAR` — shared; each party bears their own charges
+        - `SLEV` — per service level agreement
+
+        Typically `DEBT` for bank-instructed VASP transfers (the instructing bank
+        bears the gas cost), consistent with `charge_bearer` in the Instruction API.
+      properties:
+        amount:
+          type: string
+          maxLength: 19
+          description: |
+            Fiat-equivalent charge amount. Must be consistent with
+            `GasDetail/fiat_equivalent/amount` where both are populated.
+          example: "3.42"
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: ISO 4217 currency code.
+          example: "USD"
+        charge_bearer:
+          type: string
+          enum: [DEBT, CRED, SHAR, SLEV]
+          description: |
+            Party bearing the charge. Follows `ChargeBearerType1Code` from ISO 20022.
+            See description above.
+        agent:
+          $ref: '#/components/schemas/AgentIdentification'
+          description: |
+            Agent collecting the charge (e.g. the VASP). Follows
+            `ChargesInformation22/agent`. Populate when the charging party
+            differs from the reporting VASP.
+
+    # ── BLOCKCHAIN ENTRY ──────────────────────────────────────────────────────
+
+    EntryStatus:
+      type: string
+      enum: [BOOK, PDNG, INFO, FUTR]
+      description: |
+        Status of a transaction entry. Follows `EntryStatus1Code` from ISO 20022,
+        adapted for blockchain finality semantics.
+
+        | Code | ISO 20022 meaning | Blockchain interpretation |
+        |---|---|---|
+        | `BOOK` | Booked — entry is final | Transaction has reached `FINAL` finality status (chain-specific threshold met) |
+        | `PDNG` | Pending — entry is not yet final | Transaction is broadcast and confirmed to a depth below the finality threshold, or is in mempool |
+        | `INFO` | Informational — entry is provided for information only | Used for mempool/pending transactions where inclusion is not guaranteed |
+        | `FUTR` | Future — entry is scheduled | Reserved for pre-authorised or time-locked transactions |
+
+        The transition from `PDNG` to `BOOK` triggers a second `camt.054` notification
+        (the finality confirmation). See `FinalityStatus` for chain-specific thresholds.
+
+    FinalityStatus:
+      type: string
+      enum: [PENDING, PROBABILISTIC, FINAL]
+      description: |
+        On-chain finality status of a transaction. Provides a finer-grained view of
+        settlement certainty than `EntryStatus`. Consistent with `FinalityStatus`
+        in the pacs.crypto Blockchain Payment Instruction API.
+
+        | Value | Meaning |
+        |---|---|
+        | `PENDING` | Transaction is broadcast to the network; not yet included in a confirmed block, or included but confirmation depth is below the minimum threshold for `PROBABILISTIC` |
+        | `PROBABILISTIC` | Transaction has reached a confirmation depth at which reversal requires re-mining a significant portion of the chain. Risk is low but non-zero. For Bitcoin: ≥1 confirmation. For EVM: ≥1 block inclusion |
+        | `FINAL` | Transaction has achieved economic or cryptographic finality. Reversal is not possible under normal network conditions. Chain-specific thresholds: Ethereum post-merge: checkpoint finality (~13 min, 2 epochs); Bitcoin: 6-confirmation convention; Solana: Tower BFT (~400ms); XRPL: ledger close (~3-5s) |
+
+        `FinalityStatus` is reported alongside `confirmation_depth` to serve two
+        audiences: `FINAL` is the actionable signal for treasury systems; `confirmation_depth`
+        provides the chain-observable evidence for audit and reconciliation purposes.
+
+    BlockchainTransactionDetail:
+      type: object
+      description: |
+        On-chain transaction data associated with a reported entry.
+        This is the blockchain-specific extension to the ISO 20022 entry structure,
+        analogous to `EntryTransaction14` supplementary details.
+
+        Carries the transaction hash, block data, finality status, gas detail,
+        and references back to the originating instruction and Travel Rule record.
+        This object is present in all three reporting message types (intraday,
+        statement, notification) wherever an on-chain transaction underlies the entry.
+      required: [transaction_hash, chain_dli]
+      properties:
+        transaction_hash:
+          type: string
+          maxLength: 130
+          description: |
+            On-chain transaction identifier. Format is chain-specific:
+            - EVM: `0x` followed by 64 hex characters (32-byte Keccak-256 hash)
+            - Bitcoin: 64 hex characters (32-byte double SHA-256 hash)
+            - Solana: Base58-encoded 64-byte signature
+            - XRPL: 64 hex characters
+          example: "0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060"
+        chain_dli:
+          $ref: '#/components/schemas/DLIIdentifier'
+          description: |
+            Chain on which this transaction was executed. Provided here even though
+            the enclosing `WalletAccount` carries the chain, because individual
+            entries in a bridge transfer may settle on a different chain than the
+            reporting wallet's primary chain.
+        block_number:
+          type: integer
+          description: |
+            Block height at which the transaction was included. Chain-specific.
+            For XRPL, use the ledger index. For Solana, use the slot number.
+          example: 19847263
+        block_hash:
+          type: string
+          maxLength: 130
+          description: Hash of the block containing this transaction. Chain-specific format.
+        block_timestamp:
+          type: string
+          format: date-time
+          description: |
+            Timestamp of the block containing this transaction, as recorded by
+            the chain. For chains with variable block times, this may differ from
+            wall-clock time by a few seconds. ISO 8601 UTC.
+        confirmation_depth:
+          type: integer
+          minimum: 0
+          description: |
+            Number of blocks confirmed on top of the block containing this
+            transaction at the time of reporting. Zero for a mempool-pending
+            transaction. Increases with each subsequent block.
+
+            Treasury systems should use `finality_status = FINAL` as the
+            actionable signal; `confirmation_depth` provides the supporting
+            evidence for audit.
+          example: 6
+        finality_status:
+          $ref: '#/components/schemas/FinalityStatus'
+        confirmation_depth_at_finality:
+          type: integer
+          description: |
+            Confirmation depth at which `finality_status` transitioned to `FINAL`.
+            Provides an immutable record of the chain state at the point finality
+            was determined. Chain-specific thresholds:
+            - Bitcoin: 6
+            - EVM (Ethereum Mainnet): 64 (2 epochs of 32 blocks)
+            - Solana: Tower BFT (typically 1 after ~400ms)
+            - XRPL: 1 (ledger close is final)
+            Present only when `finality_status = FINAL`.
+        finality_achieved_at:
+          type: string
+          format: date-time
+          description: |
+            Wall-clock timestamp at which `finality_status` transitioned to `FINAL`.
+            Present only when `finality_status = FINAL`. Used by treasury systems
+            to timestamp the booked entry.
+        chain_reorg_flag:
+          type: boolean
+          default: false
+          description: |
+            Set to `true` if this transaction was affected by a chain reorganisation
+            after initial reporting. If `true`, the VASP must resend a corrected
+            notification with updated `block_number`, `block_hash`,
+            `transaction_hash` (if changed), and `finality_status`.
+            A reorg that removes a previously `FINAL` transaction is operationally
+            exceptional; implementers should escalate such events immediately.
+        gas_detail:
+          $ref: '#/components/schemas/GasDetail'
+          description: |
+            Chain-native gas fee breakdown. See `GasDetail` definition and the
+            two-layer charges model described there.
+        instruction_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Reference to the originating instruction in the pacs.crypto Blockchain
+            Payment Instruction API. Links this reported entry to the full instruction
+            record, including party data, remittance information, and quote details.
+            Enables end-to-end audit trail from instruction → on-chain transaction → report.
+        travel_rule_record_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Reference to the associated Travel Rule record in the pacs.crypto
+            Travel Rule API. Present when the underlying transfer was subject to
+            FATF Travel Rule requirements. Completes the audit chain:
+            instruction → Travel Rule record → on-chain transaction → report.
+        counterparty_wallet:
+          $ref: '#/components/schemas/WalletAddress'
+          description: |
+            Wallet address of the counterparty to this transaction. For credits,
+            this is the sender's wallet; for debits, the recipient's wallet.
+            Provided for reconciliation and wallet screening purposes.
+            The VASP reports this address as observed on-chain; it does not
+            constitute a verified identity claim.
+        credential_attestation:
+          $ref: '#/components/schemas/CredentialAttestation'
+          description: |
+            Optional reference to an on-chain EAS (Ethereum Attestation Service)
+            compliance attestation associated with this transaction. Relevant for
+            regulated tokenised asset transfers — for example, ERC-3643 security
+            tokens where transfer eligibility is enforced via on-chain compliance
+            proofs. Populating this field creates a verifiable link between the
+            off-chain reporting record and the on-chain credential, completing
+            the audit trail for regulated token transfers.
+
+            This field is optional and has no effect on transfers that do not
+            involve regulated token standards. For standard stablecoin and
+            native token transfers, omit.
+
+            See the Ecosystem section of the pacs.crypto README for the
+            relationship between pacs.crypto, EAS, ERC-3643, and the EEA
+            Shibui project.
+
+    BlockchainEntry:
+      type: object
+      description: |
+        A single transaction entry within a wallet report, statement, or notification.
+        Analogous to `ReportEntry12` (camt.052/053) and `NotificationEntry4` (camt.054),
+        extended with `BlockchainTransactionDetail`.
+
+        Each entry represents one debit or credit to the wallet. Multi-leg bridge
+        transfers may appear as multiple entries (one per leg) or as a single entry
+        with bridge detail in `BlockchainTransactionDetail`, per the bilateral
+        reporting agreement.
+
+        **Entry status and finality:**
+        `entry_status` follows the ISO 20022 `EntryStatus1Code` convention.
+        `blockchain_detail/finality_status` provides the finer-grained finality view.
+        When `entry_status = BOOK`, `blockchain_detail/finality_status` must be `FINAL`.
+        When `entry_status = PDNG`, `finality_status` is `PENDING` or `PROBABILISTIC`.
+      required: [entry_reference, credit_debit_indicator, entry_status, booking_date, token, token_amount]
+      properties:
+        entry_reference:
+          type: string
+          maxLength: 35
+          description: |
+            Unique reference for this entry, assigned by the account servicer (VASP).
+            Follows `ReportEntry12/entry_reference`. Stable across report and
+            notification redeliveries for the same on-chain event.
+        credit_debit_indicator:
+          type: string
+          enum: [CRDT, DBIT]
+          description: |
+            Whether this entry is a credit (`CRDT`) or debit (`DBIT`) to the
+            reported wallet. Follows `CreditDebitCode` from ISO 20022.
+        reversal_indicator:
+          type: boolean
+          default: false
+          description: |
+            Set to `true` if this entry reverses a previously reported entry.
+            Follows `ReportEntry12/reversal_indicator`. For chain reorg-induced
+            reversals, `blockchain_detail/chain_reorg_flag` is also set to `true`.
+        entry_status:
+          $ref: '#/components/schemas/EntryStatus'
+        booking_date:
+          type: string
+          format: date-time
+          description: |
+            Date and time at which the entry was booked (for `BOOK` entries) or
+            recorded as pending (for `PDNG` entries). For blockchain entries,
+            `BOOK` booking date corresponds to `blockchain_detail/finality_achieved_at`.
+            Follows `DateAndDateTime2Choice` from ISO 20022.
+        value_date:
+          type: string
+          format: date
+          description: |
+            Value date — the date from which the entry affects the available balance.
+            For blockchain: the date of block inclusion (`block_timestamp` date).
+            Follows `DateAndDateTime2Choice/date` from ISO 20022.
+        token:
+          $ref: '#/components/schemas/TokenIdentification'
+          description: Token transferred in this entry.
+        token_amount:
+          $ref: '#/components/schemas/TokenAmount'
+          description: |
+            Amount transferred, in token units. This is the amount credited or
+            debited to the wallet, net of any transfer mechanism overhead but
+            before gas fee deduction (gas fees are reported separately in
+            `blockchain_detail/gas_detail`).
+        instructed_amount:
+          type: object
+          description: |
+            Fiat or instructed-currency equivalent amount, as originally instructed.
+            Present when the instruction was denominated in fiat (onramp/offramp).
+            Follows `ActiveOrHistoricCurrencyAndAmount` from ISO 20022.
+          properties:
+            amount:
+              type: string
+              maxLength: 19
+            currency:
+              type: string
+              pattern: '^[A-Z]{3}$'
+        charges_information:
+          $ref: '#/components/schemas/ChargesInformation'
+          description: |
+            Fiat-equivalent gas fee charged for this transaction, as an ISO 20022
+            charges line. Derived from `blockchain_detail/gas_detail/fiat_equivalent`.
+            See `ChargesInformation` definition for the two-layer charges model.
+        remittance_information:
+          $ref: '#/components/schemas/RemittanceInformation'
+          description: |
+            Structured remittance information associated with this entry.
+            Follows `RemittanceInformation26` from pacs.008.001.14, consistent
+            with the Instruction API. Carries invoice references and document
+            details through to the beneficiary's ERP system.
+        blockchain_detail:
+          $ref: '#/components/schemas/BlockchainTransactionDetail'
+          description: |
+            On-chain transaction data for this entry. Present for all entries
+            backed by an on-chain transaction. Absent for synthetic entries
+            (e.g. fee adjustments, VASP internal transfers not yet broadcast).
+
+    # ── REMITTANCE INFORMATION ────────────────────────────────────────────────
+
+    RemittanceInformation:
+      type: object
+      description: |
+        Structured and unstructured remittance information. Follows
+        `RemittanceInformation26` from pacs.008.001.14. Consistent with the
+        pacs.crypto Travel Rule API and Instruction API.
+
+        Carries invoice-level reconciliation data from the instructing party
+        through the on-chain transfer to the beneficiary's ERP system.
+        Solving structured remittance data loss at the crypto conversion point
+        is a core design goal of the pacs.crypto family.
+      properties:
+        unstructured:
+          type: string
+          maxLength: 140
+          description: |
+            Free-text remittance information (Max140Text). Use for simple payment
+            references where structured data is not required.
+        structured:
+          type: object
+          description: |
+            Structured remittance detail. Use for invoice-level reconciliation.
+          properties:
+            creditor_reference_information:
+              type: object
+              description: Creditor's own reference, e.g. invoice number.
+              properties:
+                type:
+                  type: object
+                  properties:
+                    code_or_proprietary:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                          maxLength: 4
+                          description: |
+                            Document type code. Common values: `SCOR` (structured
+                            creditor reference), `RADM` (remittance advice).
+                reference:
+                  type: string
+                  maxLength: 35
+                  description: Invoice number or creditor reference value.
+            referred_document_information:
+              type: array
+              maxItems: 10
+              items:
+                type: object
+                properties:
+                  type:
+                    type: object
+                    properties:
+                      code_or_proprietary:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            description: |
+                              Document type. Common values: `CINV` (commercial invoice),
+                              `PUOR` (purchase order), `CREN` (credit note).
+                  number:
+                    type: string
+                    maxLength: 35
+                    description: Document number (invoice number, PO number, etc.).
+                  related_date:
+                    type: object
+                    properties:
+                      type:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                      date:
+                        type: string
+                        format: date
+
+    # ── REPORT / STATEMENT / NOTIFICATION HEADERS ─────────────────────────────
+
+    GroupHeader:
+      type: object
+      description: |
+        Common message header for all camt.crypto reporting messages. Follows
+        `GroupHeader116` from camt.052/053/054, carrying the message identification,
+        creation timestamp, and identifying the message recipient.
+
+        Consistent field names and semantics across intraday, statement, and
+        notification messages allow a single parsing layer at the receiving system.
+      required: [message_identification, creation_date_time, recipient]
+      properties:
+        message_identification:
+          type: string
+          maxLength: 35
+          description: |
+            Unique identifier for this message, assigned by the sending VASP.
+            Follows `GroupHeader116/message_identification`. Should be unique
+            per VASP per 24-hour period; UUID recommended.
+        creation_date_time:
+          type: string
+          format: date-time
+          description: |
+            Date and time at which the message was created. ISO 8601 UTC.
+            Follows `GroupHeader116/creation_date_time`.
+        message_recipient:
+          $ref: '#/components/schemas/PartyIdentification'
+          description: |
+            The party to whom this message is addressed. Follows
+            `GroupHeader116/message_recipient`. For bank-VASP reporting,
+            this is the bank or corporate treasury receiving the report.
+        additional_information:
+          type: string
+          maxLength: 500
+          description: |
+            Free-text additional information about the message. Use for
+            operational notes, redelivery flags, or bilateral context.
+            Follows `GroupHeader116/additional_information`.
+
+    ReportingPeriod:
+      type: object
+      description: |
+        Reporting period for intraday and statement messages. Follows
+        `DateTimePeriod1` from ISO 20022.
+      required: [from_date_time, to_date_time]
+      properties:
+        from_date_time:
+          type: string
+          format: date-time
+          description: Start of the reporting period (inclusive). ISO 8601 UTC.
+        to_date_time:
+          type: string
+          format: date-time
+          description: End of the reporting period (inclusive). ISO 8601 UTC.
+
+    # ── QUERY (camt.060 ANALOGUE) ─────────────────────────────────────────────
+
+    ReportQuery:
+      type: object
+      description: |
+        Account reporting query. Analogue of camt.060 `AccountReportingRequest`.
+        Sent by a bank or treasury to request a report, statement, or notification
+        subscription from a VASP.
+
+        **Query types:**
+        - `BALANCE` — current balance(s) for the wallet; returns `WalletBalance` array
+        - `INTRADAY` — intraday entries for the period; returns camt.052 analogue
+        - `STATEMENT` — end-of-period statement; returns camt.053 analogue
+        - `NOTIFICATION_SUBSCRIBE` — subscribe to event-driven notifications for new
+          entries; VASP delivers camt.054 notifications to the provided callback URL
+        - `NOTIFICATION_UNSUBSCRIBE` — cancel an active subscription
+
+        For `BALANCE` and `INTRADAY`, the response is synchronous.
+        For `STATEMENT`, the response may be asynchronous — the VASP acknowledges the
+        request and delivers the statement via the callback URL.
+        For `NOTIFICATION_SUBSCRIBE` / `NOTIFICATION_UNSUBSCRIBE`, the response is
+        a subscription confirmation or cancellation acknowledgement.
+      required: [query_identification, query_type, account]
+      properties:
+        query_identification:
+          type: string
+          maxLength: 35
+          description: |
+            Unique reference for this query, assigned by the requesting party.
+            Follows `camt.060/ReportingRequest5/identification`. Returned in the
+            response for correlation.
+        query_type:
+          type: string
+          enum: [BALANCE, INTRADAY, STATEMENT, NOTIFICATION_SUBSCRIBE, NOTIFICATION_UNSUBSCRIBE]
+          description: Type of report or action requested.
+        account:
+          $ref: '#/components/schemas/WalletAccount'
+          description: |
+            Wallet account for which the report is requested. At minimum,
+            `identification/proxy/identification` (wallet address) and
+            `type/proprietary` (chain DLI) must be provided to uniquely
+            identify the account.
+        token_filter:
+          type: array
+          items:
+            $ref: '#/components/schemas/TokenIdentification'
+          description: |
+            Filter results to specific tokens. If omitted, all tokens held in the
+            wallet are included. Useful for treasury systems monitoring a specific
+            stablecoin position.
+        reporting_period:
+          $ref: '#/components/schemas/ReportingPeriod'
+          description: |
+            Period for `INTRADAY` and `STATEMENT` queries. If omitted for `INTRADAY`,
+            the VASP returns the current intraday period. If omitted for `STATEMENT`,
+            the VASP returns the most recently closed statement period.
+        entry_status_filter:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntryStatus'
+          description: |
+            Filter entries by status. For example, `[BOOK]` to retrieve only
+            finalised entries; `[PDNG, BOOK]` to include pending entries.
+            If omitted, all statuses are returned.
+        callback_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: |
+            Callback URL for asynchronous delivery of `STATEMENT` responses
+            and for `NOTIFICATION_SUBSCRIBE` event delivery. The VASP POSTs
+            the relevant message schema to this URL. Authentication and retry
+            behaviour follow the pattern established in the pacs.crypto
+            Travel Rule API callback endpoint.
+        subscription_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            For `NOTIFICATION_UNSUBSCRIBE`: the `subscription_id` returned
+            when the subscription was created. Required for unsubscribe requests.
+
+    # ── NOTIFICATION SPECIFIC ─────────────────────────────────────────────────
+
+    NotificationType:
+      type: string
+      enum: [ENTRY_PENDING, ENTRY_FINAL, ENTRY_REVERSED, BALANCE_UPDATE]
+      description: |
+        Type of event triggering a camt.054 analogue notification.
+
+        | Value | Trigger | EntryStatus | FinalityStatus |
+        |---|---|---|---|
+        | `ENTRY_PENDING` | Transaction broadcast; included in a block | `PDNG` | `PENDING` or `PROBABILISTIC` |
+        | `ENTRY_FINAL` | Transaction reached finality threshold | `BOOK` | `FINAL` |
+        | `ENTRY_REVERSED` | Previously reported entry reversed (e.g. chain reorg) | `PDNG` or omitted | `PENDING` |
+        | `BALANCE_UPDATE` | Balance snapshot following entry booking | n/a | n/a |
+
+        For each on-chain transaction, the VASP sends two notifications:
+        1. `ENTRY_PENDING` — at broadcast / initial confirmation, for real-time
+           monitoring and early reconciliation flagging.
+        2. `ENTRY_FINAL` — at finality, which triggers the `BOOK` entry and is the
+           signal for treasury to record the settled transaction.
+
+        `ENTRY_REVERSED` is exceptional and must be treated as operationally urgent
+        by the recipient. `BALANCE_UPDATE` is optional and provided per bilateral
+        agreement for balance-driven monitoring (e.g. for liquidity management).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DESIGN NOTES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# The following design decisions are documented here for community review:
+#
+# 1. CAMT.025 NOT USED AS A SEPARATE MESSAGE TYPE
+#    camt.025 (Receipt) is used in RTGS/LVPS infrastructure to acknowledge receipt
+#    of a payment instruction by the settlement system — semantically, an
+#    infrastructure-layer acknowledgement, not a customer-facing notification.
+#    In the blockchain context, there is no equivalent infrastructure gatekeeper:
+#    the chain IS the settlement layer. The finality confirmation role of camt.025
+#    is therefore absorbed into the camt.054 analogue (notification): the same
+#    BlockchainNotification message, with entry_status = BOOK and
+#    finality_status = FINAL, serves as the settlement finality confirmation.
+#    The OriginalMessageReference linkage (camt.025's key feature) is preserved
+#    via instruction_id and travel_rule_record_id in BlockchainTransactionDetail.
+#
+# 2. TWO-NOTIFICATION PATTERN FOR FINALITY
+#    ENTRY_PENDING + ENTRY_FINAL notifications are sent as separate messages
+#    rather than as a single updatable notification, for two reasons:
+#    (a) event-driven architectures expect immutable events, not mutable state objects;
+#    (b) the two notifications serve different consumers — ENTRY_PENDING for
+#    operational monitoring; ENTRY_FINAL for treasury booking. A single updated
+#    message would require all consumers to re-evaluate the full payload on each update.
+#
+# 3. CONFIRMATION_DEPTH + FINALITY_STATUS BOTH CARRIED
+#    confirmation_depth serves chain/operations engineers auditing the on-chain evidence.
+#    finality_status serves treasury systems making booking decisions.
+#    They serve different audiences and should not be collapsed into one field.
+#    confirmation_depth_at_finality provides the immutable record of the evidence
+#    at the point finality was declared, for audit completeness.
+#
+# 4. MULTI-TOKEN WALLET MODEL / CASHACCOUNT43 ALIGNMENT
+#    The account is modelled as CashAccount43, using identification/proxy/identification
+#    for the wallet address (proxy/type/code = EWAL) and type/proprietary for the chain
+#    (DLID/<dli>). This preserves maximum ISO 20022 alignment — no new top-level fields
+#    are introduced on the account structure. Token positions are reported as separate
+#    WalletBalance lines under the same account, consistent with how CashBalance8 is
+#    used in camt.052/053/054. A token-per-account model would require artificial
+#    account proliferation for multi-asset wallets and would deviate from CashAccount43.
+#
+# 5. FIAT VALUATION SOURCE BY LEI
+#    The LEI of the valuation source provides an auditable, machine-resolvable
+#    reference to the price data provider. This is deliberately not a URL or a
+#    proprietary code — LEI is the ISO 17442 standard for entity identification
+#    and is consistent with the rest of the pacs.crypto family.
+
+    # ── RESPONSE SCHEMAS ──────────────────────────────────────────────────────
+
+    IntradayReport:
+      type: object
+      description: |
+        Intraday wallet report. Analogue of ISO 20022 camt.052
+        `BankToCustomerAccountReport`. Contains balance snapshot and all
+        entries (pending and booked) for the requested intraday period.
+      required: [group_header, report]
+      properties:
+        group_header:
+          $ref: '#/components/schemas/GroupHeader'
+        report:
+          type: object
+          description: |
+            Report body. Follows `AccountReport38` from camt.052.001.14,
+            extended with `balances` (per-token `WalletBalance` array) and
+            `entries` (`BlockchainEntry` array) in place of the conventional
+            `CashBalance8` and `ReportEntry12` arrays.
+          required: [identification, creation_date_time, account]
+          properties:
+            identification:
+              type: string
+              maxLength: 35
+              description: |
+                Unique identification for this report, assigned by the VASP.
+                Follows `AccountReport38/identification`. Stable across
+                redeliveries for the same account and period.
+            electronic_sequence_number:
+              type: integer
+              description: |
+                Sequential number incremented for each report sent to this
+                recipient. Follows `AccountReport38/electronic_sequence_number`.
+                Enables gap detection by the receiving system.
+            creation_date_time:
+              type: string
+              format: date-time
+              description: Date and time at which this report was created.
+            from_to_date:
+              $ref: '#/components/schemas/ReportingPeriod'
+              description: Period covered by this report.
+            copy_duplicate_indicator:
+              type: string
+              enum: [COPY, DUPL, CODU]
+              description: |
+                Indicates whether this is a copy (`COPY`), duplicate (`DUPL`),
+                or duplicate of a copy (`CODU`). Absent for original reports.
+                Follows `CopyDuplicate1Code` from ISO 20022.
+            account:
+              $ref: '#/components/schemas/WalletAccount'
+            balances:
+              type: array
+              description: |
+                Per-token balance lines for the wallet at the report time.
+                Follows `CashBalance8` array from camt.052. At minimum,
+                `OPBD` (opening booked) and `ITBD` (current intraday booked)
+                are provided per token held. `XPCD` (expected) is provided
+                when pending entries exist.
+              items:
+                $ref: '#/components/schemas/WalletBalance'
+            total_entries:
+              type: integer
+              description: Total number of entries in this report (all statuses).
+            total_credit_entries:
+              type: integer
+              description: Number of credit entries (`CRDT`) in this report.
+            total_debit_entries:
+              type: integer
+              description: Number of debit entries (`DBIT`) in this report.
+            next_cursor:
+              type: string
+              nullable: true
+              description: |
+                Cursor for the next page of entries. Null when this is the
+                last (or only) page.
+            entries:
+              type: array
+              description: Paginated array of blockchain entries for the period.
+              items:
+                $ref: '#/components/schemas/BlockchainEntry'
+
+    WalletStatement:
+      type: object
+      description: |
+        End-of-period wallet statement. Analogue of ISO 20022 camt.053
+        `BankToCustomerStatement`. Contains opening and closing balances
+        and all booked entries for the closed period.
+
+        Only entries with `entry_status = BOOK` (i.e. `finality_status = FINAL`)
+        appear in the statement. Pending entries are excluded — use the intraday
+        report for mixed-status views.
+      required: [group_header, statement]
+      properties:
+        group_header:
+          $ref: '#/components/schemas/GroupHeader'
+        statement:
+          type: object
+          description: |
+            Statement body. Follows `AccountStatement13` from camt.053.001.14.
+          required: [identification, creation_date_time, account, from_to_date]
+          properties:
+            identification:
+              type: string
+              maxLength: 35
+              description: |
+                Unique identification for this statement, assigned by the VASP.
+                Stable and reusable for re-requests of the same period.
+            electronic_sequence_number:
+              type: integer
+              description: |
+                Sequential number per recipient. Follows
+                `AccountStatement13/electronic_sequence_number`.
+            legal_sequence_number:
+              type: integer
+              description: |
+                Legal sequential number, if required by the jurisdiction.
+                Follows `AccountStatement13/legal_sequence_number`.
+            creation_date_time:
+              type: string
+              format: date-time
+            from_to_date:
+              $ref: '#/components/schemas/ReportingPeriod'
+              description: Closed period covered by this statement.
+            copy_duplicate_indicator:
+              type: string
+              enum: [COPY, DUPL, CODU]
+              description: |
+                Indicates copy, duplicate, or duplicate-of-copy status.
+                `DUPL` is set when a corrected statement is issued following
+                a chain reorganisation affecting a previously booked entry.
+            account:
+              $ref: '#/components/schemas/WalletAccount'
+            balances:
+              type: array
+              description: |
+                Opening and closing balance lines per token. At minimum,
+                `OPBD` (opening booked) and `CLBD` (closing booked) per token.
+              items:
+                $ref: '#/components/schemas/WalletBalance'
+            total_entries:
+              type: integer
+            total_credit_entries:
+              type: integer
+            total_debit_entries:
+              type: integer
+            next_cursor:
+              type: string
+              nullable: true
+            entries:
+              type: array
+              description: |
+                Paginated array of booked blockchain entries for the period,
+                ordered by `booking_date` ascending (conventional for statements).
+              items:
+                $ref: '#/components/schemas/BlockchainEntry'
+
+    BlockchainNotification:
+      type: object
+      description: |
+        Blockchain debit/credit notification. Analogue of ISO 20022 camt.054
+        `BankToCustomerDebitCreditNotification`. Delivered by the VASP to the
+        bank's `callback_url` (push) and retrievable via
+        `GET /report/notification/{notificationId}` (pull).
+
+        Each on-chain transaction generates two notifications:
+        1. `ENTRY_PENDING` — at broadcast or initial confirmation.
+        2. `ENTRY_FINAL` — at finality threshold.
+
+        Both carry the same `BlockchainEntry` schema, distinguished by
+        `notification_type`, `entry/entry_status`, and
+        `entry/blockchain_detail/finality_status`. The `ENTRY_FINAL`
+        notification is the signal for treasury systems to book the entry.
+
+        This notification absorbs the role of a camt.025 analogue: the
+        `ENTRY_FINAL` notification, with `entry_status = BOOK` and
+        `finality_status = FINAL`, is the settlement finality confirmation.
+        The linkage fields `instruction_id` and `travel_rule_record_id` in
+        `blockchain_detail` provide the OriginalMessageReference equivalent.
+      required: [group_header, notification_id, notification_type, account, entry]
+      properties:
+        group_header:
+          $ref: '#/components/schemas/GroupHeader'
+        notification_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            VASP-assigned UUID for this notification. Stable and unique per
+            notification event. The `ENTRY_PENDING` and `ENTRY_FINAL`
+            notifications for the same transaction have different `notification_id`
+            values — they are distinct events.
+        notification_type:
+          $ref: '#/components/schemas/NotificationType'
+        account:
+          $ref: '#/components/schemas/WalletAccount'
+          description: The wallet account to which this notification relates.
+        entry:
+          $ref: '#/components/schemas/BlockchainEntry'
+          description: The transaction entry for which this notification is issued.
+
+    QueryResponse:
+      type: object
+      description: |
+        Response wrapper for `POST /report/query`. The populated field
+        depends on the `query_type` in the request.
+      properties:
+        query_identification:
+          type: string
+          description: Echo of the request `query_identification`.
+        query_type:
+          type: string
+          enum: [BALANCE, INTRADAY, STATEMENT, NOTIFICATION_SUBSCRIBE, NOTIFICATION_UNSUBSCRIBE]
+        balances:
+          type: array
+          description: Populated for `BALANCE` queries.
+          items:
+            $ref: '#/components/schemas/WalletBalance'
+        intraday_report:
+          $ref: '#/components/schemas/IntradayReport'
+          description: Populated for `INTRADAY` queries.
+        statement:
+          $ref: '#/components/schemas/WalletStatement'
+          description: Populated for synchronous `STATEMENT` queries.
+        subscription_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Populated for `NOTIFICATION_SUBSCRIBE`. Reference this ID in a
+            subsequent `NOTIFICATION_UNSUBSCRIBE` request to cancel.
+        subscription_status:
+          type: string
+          enum: [ACTIVE, CANCELLED]
+          description: |
+            Populated for `NOTIFICATION_SUBSCRIBE` and `NOTIFICATION_UNSUBSCRIBE`.
+
+    EntrySearchResponse:
+      type: object
+      description: Paginated search response for `GET /report/search`.
+      required: [total_matched, page_size, generated_at, entries]
+      properties:
+        total_matched:
+          type: integer
+          description: Total number of entries matching the query filters.
+        page_size:
+          type: integer
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page. Null on the last page.
+        query_period:
+          $ref: '#/components/schemas/ReportingPeriod'
+        generated_at:
+          type: string
+          format: date-time
+        entries:
+          type: array
+          description: |
+            Summary records for matching entries. Each item is a condensed
+            view of `BlockchainEntry` for list display. Full entry detail
+            is available via the intraday or statement endpoints for the
+            relevant period, or by `notification_id` via the notification
+            endpoint.
+          items:
+            type: object
+            description: Entry summary record.
+            properties:
+              entry_reference:
+                type: string
+                maxLength: 35
+              credit_debit_indicator:
+                type: string
+                enum: [CRDT, DBIT]
+              entry_status:
+                $ref: '#/components/schemas/EntryStatus'
+              booking_date:
+                type: string
+                format: date-time
+              token_dti:
+                type: string
+                description: DTI of the token, if registered.
+              token_symbol:
+                type: string
+              token_amount:
+                type: string
+                description: Token amount as decimal string.
+              finality_status:
+                $ref: '#/components/schemas/FinalityStatus'
+              transaction_hash:
+                type: string
+              instruction_id:
+                $ref: '#/components/schemas/UUIDv4'
+              travel_rule_record_id:
+                $ref: '#/components/schemas/UUIDv4'
+
+    ReportStatsResponse:
+      type: object
+      description: Aggregate statistics response for `GET /report/stats`.
+      required: [wallet_address, chain_dli, period, generated_at, totals]
+      properties:
+        wallet_address:
+          $ref: '#/components/schemas/WalletAddress'
+        chain_dli:
+          $ref: '#/components/schemas/DLIIdentifier'
+        period:
+          $ref: '#/components/schemas/ReportingPeriod'
+        generated_at:
+          type: string
+          format: date-time
+        totals:
+          type: array
+          description: |
+            Top-level totals per token. One entry per distinct token held
+            in the wallet. Amounts are not summed across tokens.
+          items:
+            $ref: '#/components/schemas/TokenStatsEntry'
+        breakdown:
+          type: array
+          description: |
+            Present when `group_by` was specified. One entry per distinct
+            value of the grouping dimension, each with per-token totals.
+          items:
+            type: object
+            properties:
+              dimension_value:
+                type: string
+                description: |
+                  The distinct value of the `group_by` dimension for this
+                  breakdown entry (e.g. `BOOK`, `FINAL`, `CRDT`, `2025-04-22`,
+                  a wallet address, or a token symbol).
+              totals:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TokenStatsEntry'
+
+    TokenStatsEntry:
+      type: object
+      description: Aggregate statistics for a single token within a stats response.
+      properties:
+        token_dti:
+          $ref: '#/components/schemas/DTIIdentifier'
+        token_symbol:
+          type: string
+          maxLength: 20
+        total_entries:
+          type: integer
+        total_credit_entries:
+          type: integer
+        total_debit_entries:
+          type: integer
+        total_credit_amount:
+          type: string
+          maxLength: 37
+          description: Sum of all credit entry amounts for this token, as decimal string.
+        total_debit_amount:
+          type: string
+          maxLength: 37
+          description: Sum of all debit entry amounts for this token, as decimal string.
+        net_amount:
+          type: string
+          maxLength: 37
+          description: Net amount (credits minus debits) for this token, as decimal string.
+        net_credit_debit_indicator:
+          type: string
+          enum: [CRDT, DBIT]
+          description: Whether the net position is credit or debit.
+        fiat_equivalent_total:
+          type: object
+          description: |
+            Optional fiat-equivalent of the net position. Same LEI-identified
+            valuation source convention as `WalletBalance/fiat_valuation`.
+          properties:
+            amount:
+              type: string
+              maxLength: 19
+            currency:
+              type: string
+              pattern: '^[A-Z]{3}$'
+            valuation_time:
+              type: string
+              format: date-time
+            valuation_source:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 140
+                lei:
+                  $ref: '#/components/schemas/LEIIdentifier'
+
+    CredentialAttestation:
+      type: object
+      description: |
+        Reference to an on-chain EAS (Ethereum Attestation Service) compliance
+        attestation. Used to link a pacs.crypto API record to an on-chain
+        credential for regulated tokenised asset transfers.
+
+        EAS is a two-contract system (SchemaRegistry + EAS) deployed on 15+ EVM
+        chains, enabling any institution to publish signed compliance conclusions
+        as on-chain or off-chain attestations. In the ERC-3643 / Shibui framework
+        (EEA), three standard schemas are defined: Investor Eligibility, Issuer
+        Authorization, and Wallet-Identity Link. GLEIF vLEI and ISO 20022 are
+        cited as inputs to these schemas, making EAS attestations a natural
+        complement to the LEI-based identity model used throughout pacs.crypto.
+
+        **Fields:**
+        - `schema_uid` — the EAS SchemaRegistry UID identifying the attestation
+          schema (e.g. the Shibui Investor Eligibility schema). 32-byte hex.
+        - `attestation_uid` — the UID of the specific attestation issued for
+          this transaction or wallet. 32-byte hex. Resolvable via
+          https://attest.org or equivalent EAS explorer on the attesting chain.
+        - `attester` — wallet address of the institution that issued the
+          attestation (the trusted attester / KYC provider / compliance team).
+        - `chain_dli` — chain on which the attestation is published. Required
+          for unambiguous resolution; EAS is deployed on multiple chains.
+        - `expiry_date_time` — attestation expiry, if set. ISO 8601 UTC.
+          Present when the attestation has a defined validity window.
+
+        **Usage note:** This field is a reference only — it carries the chain
+        coordinates needed to look up and verify the attestation independently.
+        Parties should verify the attestation on-chain against the relevant
+        ERC-3643 token's trusted attester registry (`addTrustedAttester()`)
+        before relying on it for compliance purposes. Presence of this field
+        in a pacs.crypto record does not constitute a compliance clearance by
+        the VASP or reporting party.
+      required: [schema_uid, attestation_uid, attester, chain_dli]
+      properties:
+        schema_uid:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: |
+            EAS SchemaRegistry UID — 32-byte hex identifying the attestation
+            schema. Prefix `0x` followed by 64 hex characters.
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        attestation_uid:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: |
+            UID of the specific EAS attestation. 32-byte hex. Resolvable via
+            the EAS explorer (https://attest.org) on the chain specified in
+            `chain_dli`.
+          example: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        attester:
+          $ref: '#/components/schemas/WalletAddress'
+          description: |
+            Wallet address of the institution that issued the attestation.
+            The trusted attester — typically the KYC provider, compliance team,
+            or regulated institution that performed the underlying verification.
+            Cross-reference against the ERC-3643 token's trusted attester
+            registry for enforcement validation.
+        chain_dli:
+          $ref: '#/components/schemas/DLIIdentifier'
+          description: |
+            Chain on which this attestation is published. EAS is deployed on
+            15+ EVM chains; the DLI is required to locate the attestation
+            unambiguously. Use the same DLI convention as elsewhere in
+            pacs.crypto (bare 9-character value; no DLID/ prefix).
+        expiry_date_time:
+          type: string
+          format: date-time
+          description: |
+            Attestation expiry timestamp. Present when the attestation was
+            issued with a validity window (EAS `expirationTime` field > 0).
+            Parties must treat an expired attestation as invalid regardless
+            of whether the underlying token transfer has already settled.
+
+    ApiError:
+      type: object
+      description: Standard error response body.
+      required: [error_code, message]
+      properties:
+        error_code:
+          type: string
+          maxLength: 50
+          description: Machine-readable error code.
+          example: "INVALID_WALLET_ADDRESS"
+        message:
+          type: string
+          maxLength: 500
+          description: Human-readable error description.
+        field:
+          type: string
+          description: Field path that caused the error, if applicable.
+          example: "account.identification.proxy.identification"
+        request_id:
+          type: string
+          description: Request correlation ID for support tracing.
+
+  responses:
+    BadRequest:
+      description: Invalid request — missing required field, malformed value, or invalid parameter combination.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error_code: "MISSING_REQUIRED_FIELD"
+            message: "wallet_address is required"
+            field: "wallet_address"
+
+    Unauthorized:
+      description: Authentication failed or token expired.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error_code: "UNAUTHORIZED"
+            message: "Bearer token is missing or invalid"
+
+    NotFound:
+      description: The requested account, notification, or resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            error_code: "ACCOUNT_NOT_FOUND"
+            message: "No account found for the provided wallet_address and chain_dli"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer token authentication. Token obtained via bilateral agreement
+        with the VASP. mTLS is recommended as the transport security layer
+        for production deployments — refer to the Deployment Ecosystem section
+        in the API description for PKI guidance.
+
+security:
+  - BearerAuth: []

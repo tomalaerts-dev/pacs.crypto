@@ -1,0 +1,1700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Blockchain Account Reporting API v1 – pacs.crypto</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#21262d;
+      --border:#30363d;--border-hi:#388bfd;
+      --text:#e6edf3;--muted:#7d8590;--dim:#484f58;
+      --blue:#388bfd;--blue-bg:rgba(56,139,253,.12);
+      --green:#3fb950;--green-bg:rgba(63,185,80,.1);
+      --amber:#d29922;--amber-bg:rgba(210,153,34,.1);
+      --red:#f85149;--purple:#bc8cff;--cyan:#79c0ff;--teal:#39d353;
+      --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+
+    header{background:var(--surface);border-bottom:1px solid var(--border);height:52px;
+      display:flex;align-items:center;gap:10px;padding:0 20px;position:sticky;top:0;z-index:99}
+    .logo{width:28px;height:28px;background:linear-gradient(135deg,#1f6feb,#79c0ff);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;
+      font-family:var(--mono);font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+    header h1{font-size:13px;font-weight:500;white-space:nowrap}
+    .hbadge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;border:1px solid;white-space:nowrap}
+    .hb-purple{color:var(--purple);background:rgba(188,140,255,.08);border-color:rgba(188,140,255,.25)}
+    .hb-cyan{color:var(--cyan);background:rgba(121,192,255,.07);border-color:rgba(121,192,255,.2)}
+    .hb-amber{color:var(--amber);background:var(--amber-bg);border-color:rgba(210,153,34,.25)}
+    .hb-green{color:var(--green);background:var(--green-bg);border-color:rgba(63,185,80,.25)}
+    .hb-ver{color:var(--muted);background:var(--surface3);border-color:var(--border)}
+    .hspace{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+    .app{display:grid;grid-template-columns:320px 1fr 1fr;height:calc(100vh - 52px);overflow:hidden}
+
+    aside{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .sb-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+    .sb-tab{flex:1;padding:9px 4px;font-family:var(--mono);font-size:10px;font-weight:700;
+      background:transparent;border:none;color:var(--dim);cursor:pointer;
+      border-bottom:2px solid transparent;transition:all .15s;text-align:center}
+    .sb-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+    .sb-pane{display:none;flex:1;overflow-y:auto;padding:14px}
+    .sb-pane.active{display:block}
+
+    .sb-title{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--dim);
+      text-transform:uppercase;letter-spacing:.12em;margin-bottom:9px}
+    .mtabs{display:flex;gap:3px;margin-bottom:10px;flex-wrap:wrap}
+    .mtab{flex:1;padding:5px 3px;font-family:var(--mono);font-size:9.5px;font-weight:700;
+      border:1px solid var(--border);border-radius:4px;background:transparent;
+      color:var(--muted);cursor:pointer;text-align:center;transition:all .15s;min-width:40px}
+    .mtab.ap{background:var(--green-bg);border-color:rgba(63,185,80,.4);color:var(--green)}
+    .mtab.ag{background:var(--blue-bg);border-color:rgba(56,139,253,.4);color:var(--blue)}
+    .mtab.apu{background:rgba(188,140,255,.1);border-color:rgba(188,140,255,.3);color:var(--purple)}
+    .mtab.acy{background:rgba(121,192,255,.1);border-color:rgba(121,192,255,.3);color:var(--cyan)}
+    .ep{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;padding:7px 9px;margin-bottom:11px;word-break:break-all}
+    .mpill{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-right:4px}
+    .pp{background:rgba(63,185,80,.18);color:var(--green)}
+    .gp{background:rgba(56,139,253,.15);color:var(--blue)}
+    .pu{background:rgba(188,140,255,.18);color:var(--purple)}
+    .cy{background:rgba(121,192,255,.15);color:var(--cyan)}
+
+    select,input[type="text"],input[type="datetime-local"]{
+      width:100%;background:var(--surface3);border:1px solid var(--border);
+      border-radius:5px;color:var(--text);font-family:var(--sans);font-size:12px;
+      padding:7px 9px;cursor:pointer;outline:none;appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%237d8590' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 10px center;padding-right:26px}
+    input[type="text"],input[type="datetime-local"]{background-image:none;padding-right:9px;cursor:text;font-family:var(--mono);font-size:11px}
+    select:focus,input:focus{border-color:var(--border-hi)}
+
+    .si{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface3);
+      border:1px solid var(--border);border-radius:5px;padding:8px 10px;margin:9px 0 11px;line-height:1.5}
+
+    .fsec{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--cyan);
+      text-transform:uppercase;letter-spacing:.1em;margin:14px 0 8px;
+      padding-top:10px;border-top:1px solid var(--border)}
+    .fsec:first-of-type{border-top:none;padding-top:0;margin-top:6px}
+    .fg{margin-bottom:8px}
+    .fl{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-bottom:3px;
+      display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .ft{font-size:8px;color:var(--dim);background:var(--surface3);padding:1px 5px;border-radius:3px}
+    .freq{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px}
+    .freq{color:var(--amber);background:var(--amber-bg);border:1px solid rgba(210,153,34,.3)}
+    .fopt{color:var(--dim);background:var(--surface3);border:1px solid var(--border)}
+
+    .callout{background:rgba(121,192,255,.05);border:1px solid rgba(121,192,255,.2);
+      border-radius:5px;padding:9px 11px;font-size:11px;line-height:1.5;color:var(--muted)}
+    .callout code{font-family:var(--mono);font-size:10px;color:var(--cyan);
+      background:rgba(121,192,255,.08);padding:1px 4px;border-radius:3px}
+
+    .sbtn{width:100%;padding:10px;margin-top:10px;font-family:var(--mono);font-size:11px;
+      font-weight:700;border:none;border-radius:5px;color:#fff;cursor:pointer;
+      letter-spacing:.04em;transition:all .15s}
+    .sbtn.sp{background:linear-gradient(135deg,#2ea043,#3fb950)}
+    .sbtn.sg{background:linear-gradient(135deg,#1f6feb,#388bfd)}
+    .sbtn.sr{background:linear-gradient(135deg,#da3633,#f85149)}
+    .sbtn.sc{background:linear-gradient(135deg,#1f6feb,#79c0ff)}
+    .sbtn:hover{filter:brightness(1.1)}
+
+    /* Main panes */
+    .pane{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .pane:last-child{border-right:none}
+    .ph{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2);
+      display:flex;align-items:center;gap:8px;flex-shrink:0;min-height:38px}
+    .pt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.1em}
+    .pm{font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:auto}
+    .pb{flex:1;overflow-y:auto;padding:14px}
+
+    /* Request JSON preview */
+    #req-json{font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--text)}
+    #req-json pre{white-space:pre-wrap;word-break:break-word}
+    .j-key{color:var(--cyan)}.j-str{color:var(--green)}.j-num{color:var(--amber)}.j-bool{color:var(--purple)}.j-null{color:var(--dim)}
+
+    .sbadge{display:inline-block;font-family:var(--mono);font-size:9px;font-weight:700;
+      padding:2px 7px;border-radius:3px}
+    .s200{background:rgba(63,185,80,.15);color:var(--green)}
+    .s201{background:rgba(121,192,255,.15);color:var(--cyan)}
+    .s202{background:rgba(210,153,34,.15);color:var(--amber)}
+    .rt{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden;margin-bottom:10px}
+    .ch{padding:9px 13px;background:var(--surface2);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:7px}
+    .ct{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--muted);
+      text-transform:uppercase;letter-spacing:.08em}
+    .cb{padding:12px}
+    .dr{display:grid;grid-template-columns:170px 1fr;gap:6px;padding:4px 0;
+      border-bottom:1px solid var(--border);align-items:start}
+    .dr:last-child{border-bottom:none}
+    .dk{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .dv{font-family:var(--mono);font-size:11px;color:var(--text);word-break:break-all}
+    .dv.hi{color:var(--cyan)}.dv.ok{color:var(--green)}.dv.wa{color:var(--amber)}.dv.er{color:var(--red)}
+    .dv.addr{color:var(--purple);font-size:9.5px}
+
+    /* Balance / entry / statement specifics */
+    .bgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}
+    .bbox{background:var(--surface3);border:1px solid var(--border);border-radius:5px;padding:10px 12px}
+    .btok{font-family:var(--mono);font-size:9px;color:var(--cyan);
+      text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+    .bamt{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);margin-bottom:2px}
+    .bfiat{font-family:var(--mono);font-size:10px;color:var(--muted)}
+    .blbl{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:4px;text-transform:uppercase;letter-spacing:.07em}
+    .btype{display:inline-block;font-family:var(--mono);font-size:8px;font-weight:700;
+      padding:2px 6px;border-radius:10px;background:var(--surface);color:var(--cyan);
+      border:1px solid rgba(121,192,255,.3);margin-right:4px}
+
+    /* Entry rows */
+    .entrow{background:var(--surface3);border:1px solid var(--border);border-radius:5px;
+      padding:9px 11px;margin-bottom:7px}
+    .etop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap}
+    .eref{font-family:var(--mono);font-size:9px;color:var(--dim)}
+    .eamt{font-family:var(--mono);font-size:13px;font-weight:600}
+    .ecrdt{color:var(--green)}
+    .edbit{color:var(--amber)}
+    .emeta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:5px}
+    .etxhash{font-family:var(--mono);font-size:9px;color:var(--purple);
+      background:rgba(188,140,255,.06);padding:2px 6px;border-radius:3px}
+    .echainref{font-family:var(--mono);font-size:8.5px;color:var(--dim);background:var(--surface);
+      border:1px solid var(--border);padding:1px 6px;border-radius:3px}
+
+    .status-pill{font-family:var(--mono);font-size:8px;font-weight:700;padding:2px 7px;border-radius:10px;display:inline-block}
+    .st-book{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .st-pdng{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .st-info{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(56,139,253,.3)}
+    .st-rvsd{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+    .st-final{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .st-prob{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(210,153,34,.3)}
+    .st-pend{background:var(--surface3);color:var(--dim);border:1px solid var(--border)}
+
+    /* Finality bar */
+    .fin-bar-wrap{background:var(--surface3);border-radius:4px;height:6px;margin:4px 0}
+    .fin-bar{height:6px;border-radius:4px;transition:width .6s ease}
+    .fin-final{background:var(--green)}.fin-prob{background:var(--amber)}
+
+    /* Gas two-layer grid */
+    .gas-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:6px}
+
+    /* Account pill */
+    .account-pill{display:flex;align-items:center;gap:10px;background:var(--surface3);
+      border:1px solid var(--border);border-radius:6px;padding:9px 12px;margin-bottom:10px}
+    .ap-ico{font-size:18px;flex-shrink:0}
+    .ap-body{flex:1;min-width:0}
+    .ap-addr{font-family:var(--mono);font-size:10px;color:var(--purple);word-break:break-all}
+    .ap-meta{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px}
+    .ap-name{font-size:12px;font-weight:500;color:var(--text)}
+
+    /* Chart placeholder for stats */
+    .stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:8px}
+    .stat-box{background:var(--surface3);border:1px solid var(--border);
+      border-radius:5px;padding:9px;text-align:center}
+    .stat-amt{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text)}
+    .stat-lbl{font-family:var(--mono);font-size:8px;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.07em}
+
+    .bar{display:flex;align-items:center;gap:8px;padding:4px 0}
+    .bar-lbl{width:90px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+    .bar-wrap{flex:1;background:var(--surface3);height:14px;border-radius:3px;position:relative;overflow:hidden}
+    .bar-fill{height:100%;display:flex;align-items:center;padding:0 6px;
+      font-family:var(--mono);font-size:9px;color:#fff;font-weight:700;
+      background:linear-gradient(90deg,#1f6feb,#388bfd);border-radius:3px}
+    .bar-val{font-family:var(--mono);font-size:10px;color:var(--text);width:110px;text-align:right}
+
+    .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:10px;color:var(--dim);padding:40px;text-align:center}
+    .ei{font-size:36px;opacity:.4}.et{font-size:15px;font-style:italic;color:var(--muted)}
+    .es{font-size:11px;line-height:1.6;max-width:240px}
+    .ldots{display:flex;gap:4px;align-items:center}
+    .ldots span{width:6px;height:6px;border-radius:50%;background:var(--blue);animation:blink 1.2s infinite}
+    .ldots span:nth-child(2){animation-delay:.2s}.ldots span:nth-child(3){animation-delay:.4s}
+    @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+    @keyframes fi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .ani{animation:fi .22s ease forwards}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+    .callout-green{background:rgba(63,185,80,.04);border:1px solid rgba(63,185,80,.25);border-radius:5px;padding:10px 12px}
+    .callout-amber{background:var(--amber-bg);border:1px solid rgba(210,153,34,.25);border-radius:5px;padding:10px 12px}
+    .callout-red{background:rgba(248,81,73,.05);border:1px solid rgba(248,81,73,.25);border-radius:5px;padding:10px 12px}
+    .callout-purple{background:rgba(188,140,255,.05);border:1px solid rgba(188,140,255,.25);border-radius:5px;padding:10px 12px}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">AR</div>
+  <h1>Blockchain Account Reporting API v1</h1>
+  <span class="hbadge hb-ver">v1.0</span>
+  <div class="hspace">
+    <span class="hbadge hb-purple">camt.060 · 052 · 053 · 054</span>
+    <span class="hbadge hb-cyan">CashAccount43 · EWAL · DLI</span>
+    <span class="hbadge hb-amber">Two-notification finality</span>
+    <span class="hbadge hb-green">Query · Report · Notify · Search · Stats</span>
+  </div>
+</header>
+
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside>
+  <div class="sb-tabs">
+    <button class="sb-tab active" onclick="switchTab('config')">⚙ Config</button>
+    <button class="sb-tab" onclick="switchTab('account')">💼 Account</button>
+    <button class="sb-tab" onclick="switchTab('filters')">🔍 Filters</button>
+  </div>
+
+  <!-- CONFIG TAB -->
+  <div class="sb-pane active" id="tab-config">
+    <div class="callout" style="margin-bottom:12px">
+      <strong style="color:var(--cyan)">camt aligned:</strong>
+      VASP reports blockchain wallet positions to the bank in camt.052/053/054 style.
+      Wallet as <code>CashAccount43</code> with <code>proxy/EWAL</code> and chain in
+      <code>type/proprietary</code>.
+    </div>
+
+    <div class="sb-title">Method &amp; Endpoint</div>
+    <div class="mtabs">
+      <button class="mtab ap" id="tab-query" onclick="setMethod('QUERY')">QUERY</button>
+      <button class="mtab" id="tab-intra" onclick="setMethod('INTRADAY')">INTRA</button>
+      <button class="mtab" id="tab-stmt" onclick="setMethod('STATEMENT')">STMT</button>
+      <button class="mtab" id="tab-notif" onclick="setMethod('NOTIFICATION')">NOTIF</button>
+      <button class="mtab" id="tab-search" onclick="setMethod('SEARCH')">SEARCH</button>
+      <button class="mtab" id="tab-stats" onclick="setMethod('STATS')">STATS</button>
+    </div>
+    <div class="ep" id="ep-display">
+      <span class="mpill pp" id="mp">POST</span>/v1/report/query
+    </div>
+
+    <div class="sb-title" style="margin-top:4px">Load Scenario</div>
+    <select id="scen" onchange="loadScenario(this.value)">
+      <option value="">— select a scenario —</option>
+      <option value="balance">💰 QUERY — Balance of USDC wallet (camt.060 BALANCE)</option>
+      <option value="intraday">📊 INTRADAY — Multi-token wallet, mid-day snapshot (camt.052)</option>
+      <option value="statement">📜 STATEMENT — End-of-day, 21 April 2026 (camt.053)</option>
+      <option value="notif_pending">⚡ NOTIFICATION — ENTRY_PENDING at broadcast (camt.054)</option>
+      <option value="notif_final">✅ NOTIFICATION — ENTRY_FINAL at finality (camt.054 + camt.025 role)</option>
+      <option value="notif_reversed">🔄 NOTIFICATION — ENTRY_REVERSED (chain reorg, exceptional)</option>
+      <option value="subscribe">📡 QUERY — NOTIFICATION_SUBSCRIBE (webhook registration)</option>
+      <option value="search">🔍 SEARCH — Entries linked to instruction_id (audit trail)</option>
+      <option value="stats">📈 STATS — Aggregate volumes grouped by token</option>
+    </select>
+    <div class="si" id="si">Select a scenario or fill in the fields across all tabs.</div>
+
+    <div class="fsec">Account (Wallet)</div>
+    <div class="fg">
+      <div class="fl">Wallet Address <span class="ft">proxy/identification</span> <span class="freq">MANDATORY</span></div>
+      <input type="text" id="f-wallet" placeholder="0x..."/>
+    </div>
+    <div class="fg">
+      <div class="fl">Chain (DLI) <span class="ft">type/proprietary</span> <span class="freq">MANDATORY</span></div>
+      <select id="f-chain">
+        <option value="">— select chain —</option>
+        <option value="X9J9XDMTD">Ethereum Mainnet (DLID/X9J9XDMTD)</option>
+        <option value="4H95J0R2X">Bitcoin Mainnet (DLID/4H95J0R2X)</option>
+        <option value="ZXTQFTM5G">Solana Mainnet (DLID/ZXTQFTM5G)</option>
+        <option value="N3P9VQ6R1">XRPL Mainnet (DLID/N3P9VQ6R1)</option>
+        <option value="T9B3X8H2K">Polygon Mainnet (DLID/T9B3X8H2K)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Account Name <span class="ft">CashAccount43/name</span> <span class="fopt freq">optional</span></div>
+      <input type="text" id="f-name" placeholder="Treasury USDC Wallet"/>
+    </div>
+
+    <div class="fsec">Period</div>
+    <div class="fg">
+      <div class="fl">From <span class="ft">ISO 8601 UTC</span></div>
+      <input type="text" id="f-from" placeholder="2026-04-22T00:00:00Z"/>
+    </div>
+    <div class="fg">
+      <div class="fl">To <span class="ft">ISO 8601 UTC</span></div>
+      <input type="text" id="f-to" placeholder="2026-04-22T23:59:59Z"/>
+    </div>
+
+    <div class="fsec">Token Filter <span class="fopt freq">optional</span></div>
+    <div class="fg">
+      <div class="fl">Token DTI <span class="ft">ISO 24165-1</span></div>
+      <input type="text" id="f-tokdti" placeholder="T9B3X8H2K"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Token Symbol</div>
+      <input type="text" id="f-toksym" placeholder="USDC"/>
+    </div>
+
+    <div class="fsec">Notification Subscription</div>
+    <div class="fg">
+      <div class="fl">Callback URL <span class="ft">for NOTIFICATION_SUBSCRIBE</span></div>
+      <input type="text" id="f-callback" placeholder="https://bank.example.com/webhooks/..."/>
+    </div>
+
+    <button class="sbtn sp" id="sbtn" onclick="sendRequest()">
+      <span id="slbl">▶ Send Query</span>
+    </button>
+  </div>
+
+  <!-- ACCOUNT TAB -->
+  <div class="sb-pane" id="tab-account">
+    <div class="callout" style="margin-bottom:12px">
+      <strong style="color:var(--cyan)">CashAccount43 mapping:</strong><br/>
+      <code>identification/proxy/type/code</code> = <code>EWAL</code> (electronic wallet)<br/>
+      <code>identification/proxy/identification</code> = wallet address<br/>
+      <code>type/proprietary</code> = <code>DLID/&lt;9-char-DLI&gt;</code>
+    </div>
+
+    <div class="fsec">Account Owner</div>
+    <div class="fg">
+      <div class="fl">Name</div>
+      <input type="text" id="f-oname" placeholder="Acme Treasury Holdings GmbH"/>
+    </div>
+    <div class="fg">
+      <div class="fl">LEI</div>
+      <input type="text" id="f-olei" placeholder="529900T8BM49AURSDO55"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Country</div>
+      <input type="text" id="f-octry" placeholder="DE"/>
+    </div>
+
+    <div class="fsec">Account Servicer (VASP)</div>
+    <div class="fg">
+      <div class="fl">Name</div>
+      <input type="text" id="f-sname" placeholder="Bitvavo B.V."/>
+    </div>
+    <div class="fg">
+      <div class="fl">LEI</div>
+      <input type="text" id="f-slei" placeholder="7245007VX57GR4IUVZ79"/>
+    </div>
+
+    <div class="fsec">Custody</div>
+    <div class="fg">
+      <div class="fl">Account Type</div>
+      <select id="f-custtype">
+        <option value="CUST/FULL">Full custody (VASP holds keys)</option>
+        <option value="CUST/DELEG">Delegated signing</option>
+        <option value="CUST/MULTI">Multi-sig</option>
+        <option value="">(implicit in bilateral agreement)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- FILTERS TAB -->
+  <div class="sb-pane" id="tab-filters">
+    <div class="callout" style="margin-bottom:12px">
+      Filter parameters for SEARCH, STATS, and report queries. Empty fields are sent as omitted.
+    </div>
+
+    <div class="fsec">Entry Status / Finality</div>
+    <div class="fg">
+      <div class="fl">Entry Status <span class="ft">EntryStatus</span></div>
+      <select id="f-entrystatus">
+        <option value="">any</option>
+        <option value="BOOK">BOOK (booked)</option>
+        <option value="PDNG">PDNG (pending)</option>
+        <option value="INFO">INFO (informational)</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Finality Status</div>
+      <select id="f-finstatus">
+        <option value="">any</option>
+        <option value="FINAL">FINAL</option>
+        <option value="PROBABILISTIC">PROBABILISTIC</option>
+        <option value="PENDING">PENDING</option>
+      </select>
+    </div>
+    <div class="fg">
+      <div class="fl">Direction</div>
+      <select id="f-cdi">
+        <option value="">both</option>
+        <option value="CRDT">Credit only</option>
+        <option value="DBIT">Debit only</option>
+      </select>
+    </div>
+
+    <div class="fsec">Cross-Spec Linkage</div>
+    <div class="fg">
+      <div class="fl">instruction_id <span class="ft">Spec 2 link</span></div>
+      <input type="text" id="f-instid" placeholder="550e8400-..."/>
+    </div>
+    <div class="fg">
+      <div class="fl">travel_rule_record_id <span class="ft">Spec 1 link</span></div>
+      <input type="text" id="f-trid" placeholder="660f9511-..."/>
+    </div>
+    <div class="fg">
+      <div class="fl">transaction_hash</div>
+      <input type="text" id="f-txhash" placeholder="0x..."/>
+    </div>
+    <div class="fg">
+      <div class="fl">Counterparty Wallet</div>
+      <input type="text" id="f-cwallet" placeholder="0x..."/>
+    </div>
+
+    <div class="fsec">Amount Bounds</div>
+    <div class="fg">
+      <div class="fl">Minimum amount</div>
+      <input type="text" id="f-amin" placeholder="10000.00"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Maximum amount</div>
+      <input type="text" id="f-amax" placeholder="500000.00"/>
+    </div>
+
+    <div class="fsec">Stats Grouping</div>
+    <div class="fg">
+      <div class="fl">Group by</div>
+      <select id="f-groupby">
+        <option value="">no grouping</option>
+        <option value="entry_status">entry_status</option>
+        <option value="finality_status">finality_status</option>
+        <option value="credit_debit">credit_debit</option>
+        <option value="token">token</option>
+        <option value="day">day</option>
+        <option value="counterparty_wallet">counterparty_wallet</option>
+      </select>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══ REQUEST PREVIEW PANE ═══ -->
+<section class="pane">
+  <div class="ph">
+    <span class="pt">Request Preview</span>
+    <span class="pm" id="req-meta">—</span>
+  </div>
+  <div class="pb">
+    <div id="req-json">
+      <div class="empty">
+        <div class="ei">📋</div>
+        <div class="et">Select a scenario or fill in the fields</div>
+        <div class="es">The request body (or query parameters) will appear here. Choose a method tab and a scenario to get started.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ RESPONSE PANE ═══ -->
+<section class="pane">
+  <div class="ph" id="rh">
+    <span class="pt">Response</span>
+  </div>
+  <div class="pb" id="rbody">
+    <div class="empty">
+      <div class="ei">📥</div>
+      <div class="et">No response yet</div>
+      <div class="es">Select a scenario and click the send button to see the simulated response.</div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+let method = 'QUERY';
+const g = id => document.getElementById(id)?.value || '';
+const s = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+
+function switchTab(tab) {
+  document.querySelectorAll('.sb-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sb-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab)?.classList.add('active');
+  event?.target?.classList.add('active');
+}
+
+// ── METHOD SWITCHING ─────────────────────────────────────────────────────────
+function setMethod(m) {
+  method = m;
+  const conf = {
+    QUERY:        { verb:'POST',   ep:'/v1/report/query',                     tab:'query', pill:'pp',  btn:'sp', label:'▶ Send Query' },
+    INTRADAY:     { verb:'GET',    ep:'/v1/report/intraday',                  tab:'intra', pill:'gp',  btn:'sg', label:'▶ Get Intraday Report' },
+    STATEMENT:    { verb:'GET',    ep:'/v1/report/statement',                 tab:'stmt',  pill:'gp',  btn:'sg', label:'▶ Get Statement' },
+    NOTIFICATION: { verb:'GET',    ep:'/v1/report/notification/{id}',         tab:'notif', pill:'cy',  btn:'sc', label:'▶ Retrieve Notification' },
+    SEARCH:       { verb:'GET',    ep:'/v1/report/search',                    tab:'search',pill:'gp',  btn:'sg', label:'▶ Search Entries' },
+    STATS:        { verb:'GET',    ep:'/v1/report/stats',                     tab:'stats', pill:'gp',  btn:'sg', label:'▶ Get Stats' }
+  }[m];
+
+  ['query','intra','stmt','notif','search','stats'].forEach(x => {
+    const btn = document.getElementById('tab-' + x);
+    if (!btn) return;
+    const active = x === conf.tab;
+    btn.className = 'mtab' + (active
+      ? (x === 'query' ? ' ap'
+        : (x === 'notif' ? ' acy' : ' ag'))
+      : '');
+  });
+
+  document.getElementById('ep-display').innerHTML =
+    `<span class="mpill ${conf.pill}" id="mp">${conf.verb}</span>${conf.ep}`;
+
+  const btnEl = document.getElementById('sbtn');
+  btnEl.className = 'sbtn ' + conf.btn;
+  document.getElementById('slbl').textContent = conf.label;
+}
+
+// ── SCENARIOS ────────────────────────────────────────────────────────────────
+const SCENARIOS = {
+  balance: {
+    method: 'QUERY',
+    info: '<strong>QUERY — BALANCE</strong><br/>Bank queries current USDC balance on an Ethereum wallet held at Bitvavo. Analogue of camt.060 <code style="font-family:var(--mono);font-size:9px">AccountReportingRequest</code> with <code style="font-family:var(--mono);font-size:9px">query_type=BALANCE</code>. Response is synchronous — returns current WalletBalance array with fiat valuation.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury USDC Wallet — Ethereum',
+         from:'', to:'', tokdti:'T9B3X8H2K', toksym:'USDC', callback:'',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'CUST/FULL',
+         entrystatus:'', finstatus:'', cdi:'',
+         instid:'', trid:'', txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  intraday: {
+    method: 'INTRADAY',
+    info: '<strong>INTRADAY — camt.052 analogue</strong><br/>Bank retrieves intraday wallet report for today (midnight UTC → now). Response includes opening/current balances per token and all entries (booked + pending). Good for monitoring during the business day.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury Multi-Token Wallet',
+         from:'2026-04-23T00:00:00Z', to:'2026-04-23T12:00:00Z',
+         tokdti:'', toksym:'', callback:'',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'CUST/FULL',
+         entrystatus:'', finstatus:'', cdi:'',
+         instid:'', trid:'', txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  statement: {
+    method: 'STATEMENT',
+    info: '<strong>STATEMENT — camt.053 analogue</strong><br/>End-of-day wallet statement for 21 April 2026 (closed period). Definitive record with <code style="font-family:var(--mono);font-size:9px">BOOK</code> entries only (finality achieved). Used for reconciliation. Pending entries excluded.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury USDC Wallet — Ethereum',
+         from:'2026-04-21', to:'2026-04-21',
+         tokdti:'T9B3X8H2K', toksym:'USDC', callback:'',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'CUST/FULL',
+         entrystatus:'BOOK', finstatus:'FINAL', cdi:'',
+         instid:'', trid:'', txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  notif_pending: {
+    method: 'NOTIFICATION',
+    info: '<strong>NOTIFICATION — ENTRY_PENDING (camt.054)</strong><br/>First of two notifications for an on-chain transfer. Transaction broadcast and just included in a block — <code style="font-family:var(--mono);font-size:9px">entry_status=PDNG</code>, <code style="font-family:var(--mono);font-size:9px">finality_status=PROBABILISTIC</code>. Treasury systems use this for early operational monitoring only; do not book against this notification.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury USDC Wallet — Ethereum',
+         from:'', to:'', tokdti:'', toksym:'', callback:'',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'CUST/FULL',
+         entrystatus:'', finstatus:'', cdi:'',
+         instid:'', trid:'', txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  notif_final: {
+    method: 'NOTIFICATION',
+    info: '<strong>NOTIFICATION — ENTRY_FINAL (camt.054 + camt.025 role)</strong><br/>Second notification for the same transaction. Finality achieved — <code style="font-family:var(--mono);font-size:9px">entry_status=BOOK</code>, <code style="font-family:var(--mono);font-size:9px">finality_status=FINAL</code>. This is the settlement finality confirmation — absorbing the camt.025 role — and the signal for treasury to book the entry. Carries linkage back to the originating instruction and Travel Rule record.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury USDC Wallet — Ethereum',
+         from:'', to:'', tokdti:'', toksym:'', callback:'',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'CUST/FULL',
+         entrystatus:'', finstatus:'', cdi:'',
+         instid:'550e8400-e29b-41d4-a716-446655440000',
+         trid:'660f9511-f30c-42e5-b827-557766551111',
+         txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  notif_reversed: {
+    method: 'NOTIFICATION',
+    info: '<strong>NOTIFICATION — ENTRY_REVERSED (chain reorg, exceptional)</strong><br/>A chain reorganisation removed a previously-final transaction. VASP issues a reversal notification with <code style="font-family:var(--mono);font-size:9px">reversal_indicator=true</code> and <code style="font-family:var(--mono);font-size:9px">chain_reorg_flag=true</code>. Operationally urgent — the previously-booked entry must be reversed and the corrected transaction re-reported when it settles.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury USDC Wallet — Ethereum',
+         from:'', to:'', tokdti:'', toksym:'', callback:'',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'CUST/FULL',
+         entrystatus:'', finstatus:'', cdi:'',
+         instid:'', trid:'', txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  subscribe: {
+    method: 'QUERY',
+    info: '<strong>QUERY — NOTIFICATION_SUBSCRIBE</strong><br/>Bank registers a webhook URL to receive camt.054-style notifications for this wallet. After subscribing, the VASP POSTs a <code style="font-family:var(--mono);font-size:9px">BlockchainNotification</code> to the callback URL for each qualifying event (ENTRY_PENDING + ENTRY_FINAL per transaction). Response returns a <code style="font-family:var(--mono);font-size:9px">subscription_id</code>.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury USDC Wallet — Ethereum',
+         from:'', to:'', tokdti:'', toksym:'',
+         callback:'https://acme-treasury.example.com/webhooks/blockchain-notifications',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'CUST/FULL',
+         entrystatus:'', finstatus:'', cdi:'',
+         instid:'', trid:'', txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  search: {
+    method: 'SEARCH',
+    info: '<strong>SEARCH — Entries linked to instruction_id</strong><br/>Cross-period search by <code style="font-family:var(--mono);font-size:9px">instruction_id</code> — retrieves all entries across all reports linked to a specific instruction from the pacs.crypto Instruction API. Completes the audit trail: instruction → Travel Rule record → on-chain tx → report entry.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury USDC Wallet — Ethereum',
+         from:'2026-04-01T00:00:00Z', to:'2026-04-30T23:59:59Z',
+         tokdti:'', toksym:'', callback:'',
+         oname:'', olei:'', octry:'',
+         sname:'', slei:'',
+         custtype:'',
+         entrystatus:'', finstatus:'FINAL', cdi:'',
+         instid:'550e8400-e29b-41d4-a716-446655440000',
+         trid:'', txhash:'', cwallet:'', amin:'', amax:'', groupby:'' }
+  },
+  stats: {
+    method: 'STATS',
+    info: '<strong>STATS — Aggregate volumes grouped by token</strong><br/>30-day volume breakdown for a multi-token wallet, grouped by <code style="font-family:var(--mono);font-size:9px">token</code>. Per-token totals (cannot sum across different tokens without exchange rate). Optional fiat equivalent per token using LEI-identified valuation source.',
+    f: { wallet:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', chain:'X9J9XDMTD',
+         name:'Treasury Multi-Token Wallet',
+         from:'2026-03-23T00:00:00Z', to:'2026-04-23T23:59:59Z',
+         tokdti:'', toksym:'', callback:'',
+         oname:'Acme Treasury Holdings GmbH', olei:'529900T8BM49AURSDO55', octry:'DE',
+         sname:'Bitvavo B.V.', slei:'7245007VX57GR4IUVZ79',
+         custtype:'',
+         entrystatus:'BOOK', finstatus:'', cdi:'',
+         instid:'', trid:'', txhash:'', cwallet:'', amin:'', amax:'',
+         groupby:'token' }
+  }
+};
+
+function loadScenario(key) {
+  if (!key) return;
+  const sc = SCENARIOS[key];
+  if (!sc) return;
+  setMethod(sc.method);
+  document.getElementById('si').innerHTML = sc.info;
+  if (sc.f) Object.entries(sc.f).forEach(([k,v]) => s('f-'+k, v));
+  updatePreview();
+}
+
+// ── BUILD REQUEST ────────────────────────────────────────────────────────────
+function buildReq() {
+  const scenKey = document.getElementById('scen').value;
+
+  // Wallet account shape (used in QUERY body; for GET it is conveyed via query params)
+  const walletAddr = g('f-wallet') || '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+  const chainDli = g('f-chain') || 'X9J9XDMTD';
+  const typeProp = g('f-custtype') ? `DLID/${chainDli} ${g('f-custtype')}` : `DLID/${chainDli}`;
+
+  const account = {
+    identification: { proxy: { type: { code: 'EWAL' }, identification: walletAddr } },
+    type: { proprietary: typeProp },
+    name: g('f-name') || undefined,
+    owner: (g('f-oname') || g('f-olei')) ? {
+      name: g('f-oname') || undefined,
+      lei: g('f-olei') || undefined,
+      country: g('f-octry') || undefined
+    } : undefined,
+    servicer: (g('f-sname') || g('f-slei')) ? {
+      name: g('f-sname') || undefined,
+      lei: g('f-slei') || undefined
+    } : undefined
+  };
+
+  if (method === 'QUERY') {
+    const isSubscribe = scenKey === 'subscribe';
+    return {
+      _type: 'QUERY',
+      _verb: 'POST',
+      _ep: '/v1/report/query',
+      body: {
+        query_identification: isSubscribe ? 'QRY-20260423-SUB-001' : 'QRY-20260423-BAL-001',
+        query_type: isSubscribe ? 'NOTIFICATION_SUBSCRIBE' : 'BALANCE',
+        account,
+        token_filter: (g('f-tokdti') || g('f-toksym')) ? [{
+          token_dti: g('f-tokdti') || undefined,
+          token_symbol: g('f-toksym') || undefined
+        }] : undefined,
+        callback_url: g('f-callback') || undefined
+      }
+    };
+  }
+  if (method === 'INTRADAY') {
+    return {
+      _type: 'INTRADAY',
+      _verb: 'GET',
+      _ep: '/v1/report/intraday',
+      params: {
+        wallet_address: walletAddr,
+        chain_dli: chainDli,
+        from_date_time: g('f-from') || undefined,
+        to_date_time: g('f-to') || undefined,
+        token_dti: g('f-tokdti') || undefined,
+        entry_status: g('f-entrystatus') || undefined,
+        credit_debit_indicator: g('f-cdi') || undefined
+      }
+    };
+  }
+  if (method === 'STATEMENT') {
+    return {
+      _type: 'STATEMENT',
+      _verb: 'GET',
+      _ep: '/v1/report/statement',
+      params: {
+        wallet_address: walletAddr,
+        chain_dli: chainDli,
+        from_date: g('f-from') || undefined,
+        to_date: g('f-to') || undefined,
+        token_dti: g('f-tokdti') || undefined
+      }
+    };
+  }
+  if (method === 'NOTIFICATION') {
+    const nid = scenKey === 'notif_pending' ? '770a9622-b41d-42e5-c838-558877662111'
+              : scenKey === 'notif_final'   ? '770a9622-b41d-42e5-c838-558877662222'
+              : scenKey === 'notif_reversed'? '770a9622-b41d-42e5-c838-558877662333'
+              : '770a9622-b41d-42e5-c838-558877662222';
+    return {
+      _type: 'NOTIFICATION',
+      _verb: 'GET',
+      _ep: `/v1/report/notification/${nid}`,
+      params: { notification_id: nid }
+    };
+  }
+  if (method === 'SEARCH') {
+    return {
+      _type: 'SEARCH',
+      _verb: 'GET',
+      _ep: '/v1/report/search',
+      params: {
+        wallet_address: walletAddr,
+        chain_dli: chainDli,
+        from_date_time: g('f-from') || undefined,
+        to_date_time: g('f-to') || undefined,
+        token_dti: g('f-tokdti') || undefined,
+        entry_status: g('f-entrystatus') || undefined,
+        finality_status: g('f-finstatus') || undefined,
+        credit_debit_indicator: g('f-cdi') || undefined,
+        amount_min: g('f-amin') || undefined,
+        amount_max: g('f-amax') || undefined,
+        counterparty_wallet: g('f-cwallet') || undefined,
+        instruction_id: g('f-instid') || undefined,
+        travel_rule_record_id: g('f-trid') || undefined,
+        transaction_hash: g('f-txhash') || undefined
+      }
+    };
+  }
+  if (method === 'STATS') {
+    return {
+      _type: 'STATS',
+      _verb: 'GET',
+      _ep: '/v1/report/stats',
+      params: {
+        wallet_address: walletAddr,
+        chain_dli: chainDli,
+        from_date_time: g('f-from') || undefined,
+        to_date_time: g('f-to') || undefined,
+        token_dti: g('f-tokdti') || undefined,
+        entry_status: g('f-entrystatus') || undefined,
+        credit_debit_indicator: g('f-cdi') || undefined,
+        group_by: g('f-groupby') || undefined
+      }
+    };
+  }
+  return { _type:'UNKNOWN' };
+}
+
+function updatePreview() {
+  const req = buildReq();
+  let display;
+  if (req.body) {
+    const clean = JSON.parse(JSON.stringify(req.body));
+    display = JSON.stringify(clean, null, 2);
+    document.getElementById('req-meta').textContent =
+      `${req._verb} ${req._ep} · ${new TextEncoder().encode(display).length} bytes · application/json`;
+  } else {
+    const params = Object.entries(req.params || {}).filter(([,v]) => v !== undefined && v !== '');
+    if (params.length === 0) {
+      document.getElementById('req-json').innerHTML =
+        `<div class="empty"><div class="ei">📋</div><div class="et">No query parameters yet</div><div class="es">Fill the fields in the sidebar.</div></div>`;
+      document.getElementById('req-meta').textContent = `${req._verb} ${req._ep}`;
+      return;
+    }
+    const urlDisplay = `${req._ep}?\n  ` + params.map(([k,v]) => `${k}=${v}`).join('\n  &');
+    document.getElementById('req-json').innerHTML = `<pre style="color:var(--muted)">${escapeHtml(urlDisplay)}</pre>`;
+    document.getElementById('req-meta').textContent =
+      `${req._verb} · ${params.length} query param${params.length === 1 ? '' : 's'}`;
+    return;
+  }
+  document.getElementById('req-json').innerHTML = `<pre>${highlight(display)}</pre>`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      if (/^"/.test(m)) return /:$/.test(m) ? `<span class="j-key">${m}</span>` : `<span class="j-str">${m}</span>`;
+      if (/true|false/.test(m)) return `<span class="j-bool">${m}</span>`;
+      if (/null/.test(m)) return `<span class="j-null">${m}</span>`;
+      return `<span class="j-num">${m}</span>`;
+    });
+}
+
+// ── SEND REQUEST ─────────────────────────────────────────────────────────────
+function sendRequest() {
+  updatePreview();
+  const req = buildReq();
+  document.getElementById('rh').innerHTML = `<div class="ldots"><span></span><span></span><span></span></div>`;
+  document.getElementById('rbody').innerHTML = `<div class="empty"><div class="ldots"><span></span><span></span><span></span></div><div class="et">Processing…</div></div>`;
+  setTimeout(() => renderResponse(req), 620 + Math.random() * 400);
+}
+
+// Listen to field changes to update preview live
+document.addEventListener('input', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') updatePreview();
+});
+document.addEventListener('change', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') updatePreview();
+});
+
+// ── RENDER RESPONSE ──────────────────────────────────────────────────────────
+function renderResponse(req) {
+  const now = new Date().toISOString();
+  const elapsed = Math.floor(80 + Math.random() * 180);
+  const scenKey = document.getElementById('scen').value;
+
+  const walletAddr = req.body?.account?.identification?.proxy?.identification
+                  || req.params?.wallet_address
+                  || '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+  const chainDli = req.params?.chain_dli
+                || (req.body?.account?.type?.proprietary || '').replace(/DLID\//,'').split(' ')[0]
+                || 'X9J9XDMTD';
+
+  // Account pill — used at the top of most responses
+  const accountPill = `
+    <div class="account-pill">
+      <span class="ap-ico">💼</span>
+      <div class="ap-body">
+        <div class="ap-name">${req.body?.account?.name || 'Treasury Wallet'}</div>
+        <div class="ap-addr">${walletAddr}</div>
+        <div class="ap-meta">DLID/${chainDli} · EWAL proxy · Servicer: Bitvavo B.V.</div>
+      </div>
+    </div>`;
+
+  const setHeader = (status, ep, bytes) => {
+    document.getElementById('rh').innerHTML =
+      `<span class="sbadge s${status}">${status} OK</span>
+       <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${req._verb} ${ep}</span>
+       <span class="rt">${elapsed}ms${bytes?' · '+bytes+' bytes':''}</span>`;
+  };
+
+  // ── BALANCE QUERY ─────────────────────────────────────────────────────────
+  if (scenKey === 'balance') {
+    setHeader(201, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(63,185,80,.25)">
+      <div class="ch" style="background:rgba(63,185,80,.04)">
+        <span>💰</span><span class="ct" style="color:var(--green)">WalletBalance — ITBD (Current Intraday Booked)</span>
+      </div>
+      <div class="cb">
+        <div class="bgrid">
+          <div class="bbox">
+            <div class="btok">USDC · DTI T9B3X8H2K</div>
+            <div class="bamt">1,250,000.00<span style="font-size:10px;color:var(--muted);margin-left:4px">USDC</span></div>
+            <div class="bfiat">≈ $1,250,000.00 USD</div>
+            <div class="blbl"><span class="btype">ITBD</span>CashBalance8</div>
+          </div>
+          <div class="bbox">
+            <div class="btok">OPBD</div>
+            <div class="bamt" style="color:var(--muted)">1,000,000.00</div>
+            <div class="bfiat">Opening at 00:00 UTC</div>
+            <div class="blbl">Start of period</div>
+          </div>
+        </div>
+        <div class="dr"><div class="dk">credit_debit_indicator</div>
+          <div class="dv ok">CRDT</div></div>
+        <div class="dr"><div class="dk">date_time</div>
+          <div class="dv">${now}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>💱</span><span class="ct">Fiat Valuation — optional, indicative</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">amount</div><div class="dv">1,250,000.00 USD</div></div>
+        <div class="dr"><div class="dk">exchange_rate</div><div class="dv">1.00 (peg)</div></div>
+        <div class="dr"><div class="dk">valuation_time</div><div class="dv">${now}</div></div>
+        <div class="dr"><div class="dk">valuation_source</div>
+          <div class="dv">Bitvavo internal pricing</div></div>
+        <div class="dr"><div class="dk">valuation_source/lei</div>
+          <div class="dv hi">7245007VX57GR4IUVZ79</div></div>
+        <div style="font-size:10px;color:var(--dim);margin-top:8px;line-height:1.5">
+          Valuation source identified by LEI for auditable cross-reference (GLEIF). Treasury systems
+          treat fiat values as indicative unless the bilateral service agreement specifies otherwise.
+        </div>
+      </div>
+    </div>
+    <div class="card callout-green">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">camt.060 BALANCE query.</strong>
+        Returned synchronously. For a multi-token wallet, the response would carry one
+        <code style="font-family:var(--mono);font-size:10px">WalletBalance</code> entry per token held.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── INTRADAY REPORT ───────────────────────────────────────────────────────
+  if (scenKey === 'intraday') {
+    setHeader(200, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.04)">
+        <span>📊</span><span class="ct" style="color:var(--blue)">IntradayReport — camt.052 analogue</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">message_identification</div>
+          <div class="dv hi">INTRA-20260423-001</div></div>
+        <div class="dr"><div class="dk">electronic_sequence_number</div>
+          <div class="dv">142</div></div>
+        <div class="dr"><div class="dk">period</div>
+          <div class="dv">2026-04-23T00:00:00Z → 2026-04-23T12:00:00Z</div></div>
+        <div class="dr"><div class="dk">total_entries</div>
+          <div class="dv"><span class="ecrdt">2 credits</span> · <span class="edbit">1 debit</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>💰</span><span class="ct">Balances — per token</span></div>
+      <div class="cb">
+        <div class="bgrid">
+          <div class="bbox">
+            <div class="btok">USDC · DTI T9B3X8H2K</div>
+            <div class="bamt">1,250,000.00</div>
+            <div class="bfiat">≈ $1,250,000 USD</div>
+            <div class="blbl"><span class="btype">ITBD</span>Intraday booked</div>
+          </div>
+          <div class="bbox">
+            <div class="btok">ETH · DTI XB0MQJ1K5</div>
+            <div class="bamt">487.241830000000000000</div>
+            <div class="bfiat">≈ $1,263,020 USD</div>
+            <div class="blbl"><span class="btype">ITBD</span>Intraday booked</div>
+          </div>
+        </div>
+        <div class="bgrid">
+          <div class="bbox" style="background:var(--surface)">
+            <div class="btok" style="color:var(--dim)">USDC — OPBD</div>
+            <div class="bamt" style="color:var(--muted);font-size:13px">1,000,000.00</div>
+            <div class="blbl">Opening at 00:00 UTC</div>
+          </div>
+          <div class="bbox" style="background:var(--surface)">
+            <div class="btok" style="color:var(--dim)">ETH — OPBD</div>
+            <div class="bamt" style="color:var(--muted);font-size:13px">487.200000000000000000</div>
+            <div class="blbl">Opening at 00:00 UTC</div>
+          </div>
+        </div>
+        <div class="bgrid">
+          <div class="bbox" style="background:var(--amber-bg);border-color:rgba(210,153,34,.3)">
+            <div class="btok" style="color:var(--amber)">USDC — XPCD</div>
+            <div class="bamt" style="font-size:13px">1,295,000.00</div>
+            <div class="blbl">Expected (incl. pending)</div>
+          </div>
+          <div class="bbox" style="background:var(--surface)"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📋</span><span class="ct">Entries — 3 rows</span></div>
+      <div class="cb">
+
+        <div class="entrow" style="border-color:rgba(63,185,80,.3)">
+          <div class="etop">
+            <span class="eref">ENT-20260423-014</span>
+            <span class="eamt ecrdt">+ 250,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">09:14 UTC</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">depth 64/64</span>
+          </div>
+          <div style="margin-top:5px"><span class="etxhash">0x5c504ed4…b22060</span></div>
+          <div style="margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--dim)">
+            instruction_id <span style="color:var(--cyan)">550e8400…440000</span> · trr_id <span style="color:var(--cyan)">660f9511…551111</span>
+          </div>
+        </div>
+
+        <div class="entrow" style="border-color:rgba(210,153,34,.3)">
+          <div class="etop">
+            <span class="eref">ENT-20260423-015</span>
+            <span class="eamt ecrdt">+ 45,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-pdng">PDNG</span>
+            <span class="status-pill st-prob">PROBABILISTIC</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">11:47 UTC</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">depth 3/64</span>
+          </div>
+          <div class="fin-bar-wrap"><div class="fin-bar fin-prob" style="width:4.7%"></div></div>
+          <div style="margin-top:4px"><span class="etxhash">0x8e9f1b3c…a4d2</span></div>
+        </div>
+
+        <div class="entrow">
+          <div class="etop">
+            <span class="eref">ENT-20260423-013</span>
+            <span class="eamt edbit">− 80,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">08:02 UTC</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">depth 142/64</span>
+          </div>
+          <div style="margin-top:5px"><span class="etxhash">0x7a2b9c8d…5e7f</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card callout-green">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">camt.052 intraday.</strong>
+        Three balance types present: <code style="font-family:var(--mono);font-size:10px">OPBD</code> (opening),
+        <code style="font-family:var(--mono);font-size:10px">ITBD</code> (current),
+        <code style="font-family:var(--mono);font-size:10px">XPCD</code> (expected — includes pending entry).
+        Pending USDC credit at depth 3/64 not yet booked; will trigger a second camt.054 notification at finality.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── STATEMENT ─────────────────────────────────────────────────────────────
+  if (scenKey === 'statement') {
+    setHeader(200, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.04)">
+        <span>📜</span><span class="ct" style="color:var(--blue)">WalletStatement — camt.053 analogue</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">message_identification</div>
+          <div class="dv hi">STMT-20260421-001</div></div>
+        <div class="dr"><div class="dk">electronic_sequence_number</div>
+          <div class="dv">88</div></div>
+        <div class="dr"><div class="dk">legal_sequence_number</div>
+          <div class="dv">88</div></div>
+        <div class="dr"><div class="dk">period</div>
+          <div class="dv">2026-04-21 (closed)</div></div>
+        <div class="dr"><div class="dk">copy_duplicate_indicator</div>
+          <div class="dv" style="color:var(--dim)">— (original)</div></div>
+        <div class="dr"><div class="dk">total_entries</div>
+          <div class="dv"><span class="ecrdt">5 credits</span> · <span class="edbit">3 debits</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>💰</span><span class="ct">Opening / Closing Balances — USDC</span></div>
+      <div class="cb">
+        <div class="bgrid">
+          <div class="bbox">
+            <div class="btok">OPBD — Opening Booked</div>
+            <div class="bamt">935,000.00<span style="font-size:10px;color:var(--muted);margin-left:4px">USDC</span></div>
+            <div class="blbl">At 21 Apr 2026 00:00 UTC</div>
+          </div>
+          <div class="bbox" style="border-color:rgba(63,185,80,.3)">
+            <div class="btok" style="color:var(--green)">CLBD — Closing Booked</div>
+            <div class="bamt" style="color:var(--green)">1,065,000.00<span style="font-size:10px;color:var(--muted);margin-left:4px">USDC</span></div>
+            <div class="blbl">At 21 Apr 2026 23:59 UTC</div>
+          </div>
+        </div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;padding:6px 0">
+          Net change: <span style="color:var(--green);font-weight:700">+ 130,000.00 USDC</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📋</span><span class="ct">Booked Entries — chronological (BOOK only)</span></div>
+      <div class="cb">
+
+        <div class="entrow">
+          <div class="etop"><span class="eref">ENT-20260421-001</span><span class="eamt ecrdt">+ 120,000.00 USDC</span></div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">07:02 UTC</span>
+          </div>
+        </div>
+
+        <div class="entrow">
+          <div class="etop"><span class="eref">ENT-20260421-002</span><span class="eamt edbit">− 40,000.00 USDC</span></div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">09:14 UTC</span>
+          </div>
+        </div>
+
+        <div class="entrow">
+          <div class="etop"><span class="eref">ENT-20260421-003</span><span class="eamt ecrdt">+ 95,000.00 USDC</span></div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">11:33 UTC</span>
+          </div>
+        </div>
+
+        <div class="entrow">
+          <div class="etop"><span class="eref">ENT-20260421-004</span><span class="eamt edbit">− 75,000.00 USDC</span></div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">14:17 UTC</span>
+          </div>
+        </div>
+
+        <div class="entrow">
+          <div class="etop"><span class="eref">ENT-20260421-005</span><span class="eamt ecrdt">+ 250,000.00 USDC</span></div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">15:45 UTC</span>
+          </div>
+          <div style="margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--dim)">
+            instruction_id <span style="color:var(--cyan)">7f3a2b1c…5b6c</span>
+          </div>
+        </div>
+
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim);text-align:center;padding:6px 0">
+          + 3 more entries — showing 5 of 8 · <span style="color:var(--blue)">next_cursor: eyJlIjoiRU5UL…</span>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card callout-green">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">camt.053 statement.</strong>
+        Definitive reconciliation record — <code style="font-family:var(--mono);font-size:10px">BOOK</code> entries only,
+        <code style="font-family:var(--mono);font-size:10px">FinalityStatus = FINAL</code>.
+        In the rare event of a chain reorganisation affecting a booked entry, the VASP issues
+        a corrected statement with <code style="font-family:var(--mono);font-size:10px">copy_duplicate_indicator = DUPL</code>.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // (Continued in next script append for notif, search, stats, subscribe)
+  renderResponse2(req, scenKey, now, elapsed, accountPill, setHeader);
+}
+
+// ── RENDER RESPONSE (part 2) — notifications, subscribe, search, stats ───────
+function renderResponse2(req, scenKey, now, elapsed, accountPill, setHeader) {
+
+  // ── NOTIFICATION PENDING ──────────────────────────────────────────────────
+  if (scenKey === 'notif_pending') {
+    setHeader(200, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(210,153,34,.3)">
+      <div class="ch" style="background:rgba(210,153,34,.04)">
+        <span>⚡</span><span class="ct" style="color:var(--amber)">BlockchainNotification — ENTRY_PENDING (1 of 2)</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_id</div>
+          <div class="dv hi">770a9622-b41d-42e5-c838-558877662111</div></div>
+        <div class="dr"><div class="dk">notification_type</div>
+          <div class="dv wa" style="font-weight:700">ENTRY_PENDING</div></div>
+        <div class="dr"><div class="dk">message_identification</div>
+          <div class="dv">NOTIF-20260423-0041</div></div>
+        <div class="dr"><div class="dk">creation_date_time</div>
+          <div class="dv">${now}</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📋</span><span class="ct">Entry — still in flight</span></div>
+      <div class="cb">
+        <div class="entrow" style="border-color:rgba(210,153,34,.3)">
+          <div class="etop">
+            <span class="eref">ENT-20260423-015</span>
+            <span class="eamt ecrdt">+ 45,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-pdng">PDNG</span>
+            <span class="status-pill st-prob">PROBABILISTIC</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">entry_status · finality_status</span>
+          </div>
+        </div>
+        <div class="dr"><div class="dk">credit_debit_indicator</div>
+          <div class="dv ok">CRDT</div></div>
+        <div class="dr"><div class="dk">booking_date</div>
+          <div class="dv">${now}</div></div>
+        <div class="dr"><div class="dk">transaction_hash</div>
+          <div class="dv addr">0x8e9f1b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0a4d2</div></div>
+        <div class="dr"><div class="dk">block_number</div>
+          <div class="dv">22104508</div></div>
+        <div class="dr"><div class="dk">confirmation_depth</div>
+          <div class="dv wa">3</div></div>
+        <div class="dr"><div class="dk">finality_status</div>
+          <div class="dv wa">PROBABILISTIC</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📏</span><span class="ct">Progress to Finality</span></div>
+      <div class="cb">
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--dim);margin-bottom:4px">
+          <span>confirmation_depth</span><span>3 / 64 required</span>
+        </div>
+        <div class="fin-bar-wrap"><div class="fin-bar fin-prob" style="width:4.7%"></div></div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:4px">
+          Ethereum checkpoint finality at 2 epochs (~13 min). Bank should <strong style="color:var(--amber)">not book</strong>
+          against this notification — wait for the ENTRY_FINAL notification.
+        </div>
+      </div>
+    </div>
+
+    <div class="card callout-amber">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--amber)">First of two notifications.</strong>
+        At broadcast / initial inclusion. Used for operational monitoring and early reconciliation flagging.
+        The second notification — <code style="font-family:var(--mono);font-size:10px">ENTRY_FINAL</code> — will
+        trigger booking in treasury systems once chain finality is reached.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── NOTIFICATION FINAL (absorbs camt.025 role) ────────────────────────────
+  if (scenKey === 'notif_final') {
+    setHeader(200, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(63,185,80,.25)">
+      <div class="ch" style="background:rgba(63,185,80,.04)">
+        <span>✅</span><span class="ct" style="color:var(--green)">BlockchainNotification — ENTRY_FINAL (2 of 2)</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_id</div>
+          <div class="dv hi">770a9622-b41d-42e5-c838-558877662222</div></div>
+        <div class="dr"><div class="dk">notification_type</div>
+          <div class="dv ok" style="font-weight:700">ENTRY_FINAL</div></div>
+        <div class="dr"><div class="dk">creation_date_time</div>
+          <div class="dv">${now}</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📋</span><span class="ct">Entry — booked, final</span></div>
+      <div class="cb">
+        <div class="entrow" style="border-color:rgba(63,185,80,.3)">
+          <div class="etop">
+            <span class="eref">ENT-20260423-014</span>
+            <span class="eamt ecrdt">+ 250,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">entry_status · finality_status</span>
+          </div>
+        </div>
+        <div class="dr"><div class="dk">credit_debit_indicator</div>
+          <div class="dv ok">CRDT</div></div>
+        <div class="dr"><div class="dk">booking_date</div>
+          <div class="dv">2026-04-23T09:27:00Z</div></div>
+        <div class="dr"><div class="dk">transaction_hash</div>
+          <div class="dv addr">0x5c504ed432cb51138bcf09aa5e8a410dd4a1e204ef84bfed1be16dfba1b22060</div></div>
+        <div class="dr"><div class="dk">block_number</div>
+          <div class="dv">22104440</div></div>
+        <div class="dr"><div class="dk">confirmation_depth</div>
+          <div class="dv ok">64</div></div>
+        <div class="dr"><div class="dk">confirmation_depth_at_finality</div>
+          <div class="dv ok">64 <span style="color:var(--dim);font-size:9px">(2 epochs)</span></div></div>
+        <div class="dr"><div class="dk">finality_status</div>
+          <div class="dv ok" style="font-weight:700">FINAL</div></div>
+        <div class="dr"><div class="dk">finality_achieved_at</div>
+          <div class="dv ok">2026-04-23T09:27:00Z</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>⛽</span><span class="ct">Gas Detail — two-layer charges</span></div>
+      <div class="cb">
+        <div class="gas-grid">
+          <div class="bbox">
+            <div class="btok">gas_detail — chain-native</div>
+            <div class="bamt" style="font-size:12px">0.000841200000000000 ETH</div>
+            <div class="blbl">gas_used 63,000 × 13.33 gwei</div>
+          </div>
+          <div class="bbox">
+            <div class="btok">charges_information — ISO 20022</div>
+            <div class="bamt" style="font-size:12px">$2.18 USD</div>
+            <div class="blbl">ChargesInformation22 · DEBT</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--dim);margin-top:8px;line-height:1.5">
+          <code style="font-family:var(--mono);font-size:9px">gas_detail</code> is authoritative for the on-chain cost.
+          <code style="font-family:var(--mono);font-size:9px">charges_information</code> is the ISO 20022 representation
+          derived from it, so treasury systems process the cost as a standard charge line without parsing blockchain-specific fields.
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(188,140,255,.3)">
+      <div class="ch" style="background:rgba(188,140,255,.04)"><span>🔗</span><span class="ct" style="color:var(--purple)">Cross-Spec Audit Chain</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">instruction_id <span style="color:var(--dim);font-size:8px">Spec 2</span></div>
+          <div class="dv hi">550e8400-e29b-41d4-a716-446655440000</div></div>
+        <div class="dr"><div class="dk">travel_rule_record_id <span style="color:var(--dim);font-size:8px">Spec 1</span></div>
+          <div class="dv hi">660f9511-f30c-42e5-b827-557766551111</div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+          End-to-end traceability: <strong style="color:var(--text)">Instruction</strong> (pacs.008) →
+          <strong style="color:var(--text)">Travel Rule record</strong> (pacs.008) →
+          <strong style="color:var(--text)">on-chain tx</strong> →
+          <strong style="color:var(--green)">this report entry</strong> (camt.054).
+        </div>
+      </div>
+    </div>
+
+    <div class="card callout-green">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">camt.054 + camt.025 role.</strong>
+        In traditional payments, camt.025 (Receipt) would confirm settlement finality separately.
+        In blockchain, the chain <em>is</em> the settlement layer — there is no infrastructure gatekeeper.
+        This notification (<code style="font-family:var(--mono);font-size:10px">entry_status = BOOK</code>,
+        <code style="font-family:var(--mono);font-size:10px">finality_status = FINAL</code>)
+        <strong>is</strong> the settlement finality confirmation. The linkage fields provide the
+        camt.025 <code style="font-family:var(--mono);font-size:10px">OriginalMessageReference</code> equivalent.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── NOTIFICATION REVERSED (chain reorg) ───────────────────────────────────
+  if (scenKey === 'notif_reversed') {
+    setHeader(200, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(248,81,73,.3)">
+      <div class="ch" style="background:rgba(248,81,73,.04)">
+        <span>🔄</span><span class="ct" style="color:var(--red)">BlockchainNotification — ENTRY_REVERSED</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_id</div>
+          <div class="dv hi">770a9622-b41d-42e5-c838-558877662333</div></div>
+        <div class="dr"><div class="dk">notification_type</div>
+          <div class="dv er" style="font-weight:700">ENTRY_REVERSED</div></div>
+        <div class="dr"><div class="dk">creation_date_time</div>
+          <div class="dv">${now}</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📋</span><span class="ct">Reversed Entry — previously booked</span></div>
+      <div class="cb">
+        <div class="entrow" style="border-color:rgba(248,81,73,.3);background:rgba(248,81,73,.04)">
+          <div class="etop">
+            <span class="eref">ENT-20260423-012 <span style="color:var(--dim);font-size:8px">(reversed)</span></span>
+            <span class="eamt" style="color:var(--red);text-decoration:line-through">+ 180,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-rvsd">REVERSED</span>
+            <span class="status-pill st-pend">PENDING</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--red);font-weight:700">reversal_indicator=true</span>
+          </div>
+        </div>
+        <div class="dr"><div class="dk">credit_debit_indicator</div>
+          <div class="dv wa">CRDT <span style="color:var(--dim);font-size:9px">(original)</span></div></div>
+        <div class="dr"><div class="dk">reversal_indicator</div>
+          <div class="dv er" style="font-weight:700">true</div></div>
+        <div class="dr"><div class="dk">original_transaction_hash</div>
+          <div class="dv addr">0x3b2c1d4e5f6a9b0c…7f8a9b</div></div>
+        <div class="dr"><div class="dk">original_block_number</div>
+          <div class="dv">22104188 <span style="color:var(--dim);font-size:9px">(orphaned)</span></div></div>
+        <div class="dr"><div class="dk">chain_reorg_flag</div>
+          <div class="dv er" style="font-weight:700">true</div></div>
+        <div class="dr"><div class="dk">finality_status</div>
+          <div class="dv wa">PENDING <span style="color:var(--dim);font-size:9px">(awaiting re-inclusion)</span></div></div>
+      </div>
+    </div>
+
+    <div class="card callout-red">
+      <div class="ch"><span>⚠️</span><span class="ct" style="color:var(--red)">Operationally Urgent</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        A chain reorganisation removed the block containing the original transaction (depth 12 at initial finality).
+        The block was orphaned after a competing chain was accepted by the network. Treasury systems must
+        <strong style="color:var(--red)">reverse the previously-booked entry</strong>. When the transaction
+        is re-included in a canonical block and reaches finality again, a fresh
+        <code style="font-family:var(--mono);font-size:10px">ENTRY_FINAL</code> notification will be issued
+        with the new <code style="font-family:var(--mono);font-size:10px">transaction_hash</code>
+        and <code style="font-family:var(--mono);font-size:10px">block_number</code>.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--text)">Why this is rare but important:</strong>
+        Ethereum post-merge checkpoint finality at 2 epochs (~13 min) makes post-final reorgs extraordinarily unlikely
+        — a reorg of a checkpoint-final transaction implies a coordinated attack on the consensus layer.
+        For Bitcoin, ≥6-confirmation reversal is economically implausible but not mathematically impossible.
+        The chain_reorg_flag is a safety mechanism the spec insists on having, even where it should almost never fire.
+        When it does, the statement for the affected period will be re-issued with
+        <code style="font-family:var(--mono);font-size:10px">copy_duplicate_indicator = DUPL</code>.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── NOTIFICATION SUBSCRIBE ────────────────────────────────────────────────
+  if (scenKey === 'subscribe') {
+    setHeader(201, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(63,185,80,.25)">
+      <div class="ch" style="background:rgba(63,185,80,.04)">
+        <span>📡</span><span class="ct" style="color:var(--green)">Notification Subscription — Active</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">query_identification</div>
+          <div class="dv hi">QRY-20260423-SUB-001</div></div>
+        <div class="dr"><div class="dk">query_type</div>
+          <div class="dv">NOTIFICATION_SUBSCRIBE</div></div>
+        <div class="dr"><div class="dk">subscription_id</div>
+          <div class="dv ok" style="font-weight:700">a1b2c3d4-5678-4abc-9def-fedcba987654</div></div>
+        <div class="dr"><div class="dk">subscription_status</div>
+          <div class="dv ok">ACTIVE</div></div>
+        <div class="dr"><div class="dk">callback_url</div>
+          <div class="dv" style="color:var(--cyan)">https://acme-treasury.example.com/webhooks/blockchain-notifications</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📨</span><span class="ct">Delivery Pattern — two notifications per transaction</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.7">
+        For each on-chain transaction affecting this wallet, the VASP will POST:<br/>
+        <strong style="color:var(--amber)">1.</strong>
+        <code style="font-family:var(--mono);font-size:10px;color:var(--amber)">ENTRY_PENDING</code> at broadcast / initial inclusion
+        — for operational monitoring only.<br/>
+        <strong style="color:var(--green)">2.</strong>
+        <code style="font-family:var(--mono);font-size:10px;color:var(--green)">ENTRY_FINAL</code> at finality threshold
+        — the signal to book the entry in treasury systems.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>🔁</span><span class="ct">Retry & Gap-fill</span></div>
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        Bank acknowledges each delivery with HTTP 200. VASP retries with exponential backoff on non-200 or timeout
+        (recommended: 3 attempts over 15 min). If delivery fails after retries, the notification is marked
+        <code style="font-family:var(--mono);font-size:10px">DELIVERY_FAILED</code> and retrievable via
+        <code style="font-family:var(--mono);font-size:10px">GET /report/notification/{id}</code> for gap-fill.
+      </div>
+    </div>
+
+    <div class="card callout-purple">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--purple)">Unsubscribe:</strong> Send another
+        <code style="font-family:var(--mono);font-size:10px">POST /report/query</code> with
+        <code style="font-family:var(--mono);font-size:10px">query_type=NOTIFICATION_UNSUBSCRIBE</code>
+        and the <code style="font-family:var(--mono);font-size:10px">subscription_id</code>.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── SEARCH ────────────────────────────────────────────────────────────────
+  if (scenKey === 'search') {
+    setHeader(200, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.04)">
+        <span>🔍</span><span class="ct" style="color:var(--blue)">EntrySearchResponse — 3 matches</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">total_matched</div>
+          <div class="dv hi">3</div></div>
+        <div class="dr"><div class="dk">query_period</div>
+          <div class="dv">2026-04-01 → 2026-04-30</div></div>
+        <div class="dr"><div class="dk">filters</div>
+          <div class="dv"><span style="color:var(--cyan)">instruction_id</span> · <span style="color:var(--green)">finality_status=FINAL</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📋</span><span class="ct">Matching Entries — linked to instruction 550e8400…440000</span></div>
+      <div class="cb">
+
+        <div class="entrow">
+          <div class="etop">
+            <span class="eref">ENT-20260423-014</span>
+            <span class="eamt ecrdt">+ 250,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-04-23 09:27</span>
+          </div>
+          <div style="margin-top:5px"><span class="etxhash">0x5c504ed4…b22060</span></div>
+          <div style="margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--dim)">
+            instruction_id <span style="color:var(--cyan)">550e8400…440000</span>
+            · trr_id <span style="color:var(--cyan)">660f9511…551111</span>
+          </div>
+        </div>
+
+        <div class="entrow" style="border-color:rgba(248,81,73,.25)">
+          <div class="etop">
+            <span class="eref">ENT-20260423-012 <span style="color:var(--dim);font-size:8px">(reversed)</span></span>
+            <span class="eamt" style="color:var(--red);text-decoration:line-through">+ 180,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-rvsd">REVERSED</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">reorg at 09:18 UTC</span>
+          </div>
+          <div style="margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--dim)">
+            instruction_id <span style="color:var(--cyan)">550e8400…440000</span>
+          </div>
+        </div>
+
+        <div class="entrow" style="border-color:rgba(63,185,80,.3)">
+          <div class="etop">
+            <span class="eref">ENT-20260423-018 <span style="color:var(--dim);font-size:8px">(re-issue)</span></span>
+            <span class="eamt ecrdt">+ 180,000.00 USDC</span>
+          </div>
+          <div class="emeta">
+            <span class="status-pill st-book">BOOK</span>
+            <span class="status-pill st-final">FINAL</span>
+            <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">2026-04-23 09:54</span>
+          </div>
+          <div style="margin-top:5px"><span class="etxhash">0x9f8e7d6c…b3a4e2</span></div>
+          <div style="margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--dim)">
+            instruction_id <span style="color:var(--cyan)">550e8400…440000</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card callout-green">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">Cross-period audit trail.</strong>
+        Unlike intraday/statement which return entries for a specific account and period, SEARCH is optimised
+        for cross-period lookup — here, everything linked to a specific instruction. The three entries together tell
+        the full story: original credit, reversed by reorg, re-issued and final. This pattern is what the
+        <code style="font-family:var(--mono);font-size:10px">instruction_id</code> linkage enables.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // ── STATS ─────────────────────────────────────────────────────────────────
+  if (scenKey === 'stats') {
+    setHeader(200, req._ep);
+    document.getElementById('rbody').innerHTML = `
+    <div class="ani">
+    ${accountPill}
+    <div class="card" style="border-color:rgba(56,139,253,.25)">
+      <div class="ch" style="background:rgba(56,139,253,.04)">
+        <span>📈</span><span class="ct" style="color:var(--blue)">ReportStatsResponse — 30 days</span>
+      </div>
+      <div class="cb">
+        <div class="dr"><div class="dk">period</div>
+          <div class="dv">2026-03-23 → 2026-04-23</div></div>
+        <div class="dr"><div class="dk">group_by</div>
+          <div class="dv hi">token</div></div>
+        <div class="dr"><div class="dk">generated_at</div>
+          <div class="dv">${now}</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>💰</span><span class="ct">Top-level totals — per token</span></div>
+      <div class="cb">
+
+        <div class="bbox" style="margin-bottom:8px">
+          <div class="btok">USDC · DTI T9B3X8H2K</div>
+          <div class="stat-grid" style="margin-top:8px">
+            <div class="stat-box"><div class="stat-amt ecrdt">5,875,000</div><div class="stat-lbl">Credits · 18</div></div>
+            <div class="stat-box"><div class="stat-amt edbit">2,310,000</div><div class="stat-lbl">Debits · 9</div></div>
+            <div class="stat-box" style="border-color:rgba(63,185,80,.3)">
+              <div class="stat-amt" style="color:var(--green)">+ 3,565,000</div><div class="stat-lbl">Net · CRDT</div></div>
+          </div>
+          <div style="margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--muted);text-align:right">
+            fiat_equivalent_total: $3,565,000 USD · valuation_source LEI 7245007VX57GR4IUVZ79
+          </div>
+        </div>
+
+        <div class="bbox">
+          <div class="btok">ETH · DTI XB0MQJ1K5</div>
+          <div class="stat-grid" style="margin-top:8px">
+            <div class="stat-box"><div class="stat-amt ecrdt">142.83</div><div class="stat-lbl">Credits · 6</div></div>
+            <div class="stat-box"><div class="stat-amt edbit">98.41</div><div class="stat-lbl">Debits · 4</div></div>
+            <div class="stat-box" style="border-color:rgba(63,185,80,.3)">
+              <div class="stat-amt" style="color:var(--green)">+ 44.42</div><div class="stat-lbl">Net · CRDT</div></div>
+          </div>
+          <div style="margin-top:6px;font-family:var(--mono);font-size:9px;color:var(--muted);text-align:right">
+            fiat_equivalent_total: $115,092 USD · valuation_source LEI 7245007VX57GR4IUVZ79
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><span>📊</span><span class="ct">Volume distribution (credit amounts)</span></div>
+      <div class="cb">
+        <div class="bar">
+          <div class="bar-lbl">USDC</div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:86%">$5,875k</div></div>
+          <div class="bar-val" style="color:var(--green)">72%</div>
+        </div>
+        <div class="bar">
+          <div class="bar-lbl">ETH</div>
+          <div class="bar-wrap"><div class="bar-fill" style="width:28%;background:linear-gradient(90deg,#b07d10,#d29922)">$371k</div></div>
+          <div class="bar-val" style="color:var(--amber)">5%</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--dim);text-align:center;margin-top:8px">
+          Percentages computed over USD fiat_equivalent (indicative).
+          Token amounts are <strong>not summed across tokens</strong> — each total is per-token only.
+        </div>
+      </div>
+    </div>
+
+    <div class="card callout-green">
+      <div class="cb" style="font-size:11px;color:var(--muted);line-height:1.6">
+        <strong style="color:var(--green)">Aggregate reporting.</strong>
+        Unlike fiat, token amounts cannot be summed across different tokens without an exchange rate.
+        Stats are therefore always grouped by token. An optional
+        <code style="font-family:var(--mono);font-size:10px">fiat_equivalent_total</code> is provided
+        when the VASP can supply a consistent valuation, with LEI-identified source for auditability.
+      </div>
+    </div>
+    </div>`;
+    return;
+  }
+
+  // Default fallback
+  setHeader(200, req._ep || '/v1/report');
+  document.getElementById('rbody').innerHTML = `<div class="empty"><div class="et">No scenario selected</div></div>`;
+}
+
+// ── INITIAL STATE ────────────────────────────────────────────────────────────
+setMethod('QUERY');
+updatePreview();
+
+</script>
+</body>
+</html>

@@ -63,6 +63,16 @@ info:
     cannot execute within the slippage tolerance, the instruction is rejected with
     status `SLIPPAGE_EXCEEDED` rather than executed at an unexpected rate.
 
+    ## Note on DTI and DLI example values
+
+    Example DTI values (e.g. `T9B3X8H2K`, `X9J9XDMTD`) used throughout this
+    specification are illustrative and may not correspond to live entries in the
+    DTIF registry (https://dtif.org). ISO 24165-2 DLI is an emerging companion
+    standard to ISO 24165-1 DTI; until DLIs are broadly registered, implementers
+    may use the native-token DTI of a chain as a proxy chain identifier
+    (e.g. DTI `XB0MQJ1K5` for Ether → Ethereum Mainnet). Implementers must verify
+    actual DTI and DLI values against the DTIF registry at integration time.
+
     ## Pre-execution quote
 
     Before committing an instruction, the instructing party may request a quote via
@@ -90,6 +100,35 @@ info:
     chain-specific finality semantics vary: Ethereum post-merge achieves economic
     finality at ~13 minutes independent of confirmation count; Bitcoin convention is
     6 confirmations; Solana achieves finality in approximately 400ms.
+
+    ## Dual-layer status — pacs.002 alignment
+
+    The `InstructionStatusResponse` carries two parallel status views. The
+    `iso_status` field uses ISO 20022 pacs.002 `TransactionIndividualStatus1Code`
+    values (`ACSP`, `ACSC`, `ACCC`, `ACWC`, `PDNG`, `RJCT`, `CANC`, `ACTC`),
+    suitable for direct ingestion by bank treasury systems already processing
+    pacs.002 messages. The `blockchain_status` field carries the granular
+    pacs.crypto `InstructionStatus` enum (`PENDING`, `BROADCAST`, `CONFIRMING`,
+    `FINAL`, `SLIPPAGE_EXCEEDED`, `CHAIN_REORG`, etc.) for operations teams
+    needing blockchain-specific detail. Both are always populated and the
+    mapping between them is deterministic and documented on `ISOTransactionStatus`.
+
+    Rejection and change reasons use `ISOStatusReasonCode`, which reuses the
+    standard ISO `ExternalStatusReason1Code` vocabulary (`AC01`, `AM04`, `CUST`,
+    `NARR`, etc.) augmented with pacs.crypto proprietary blockchain-specific
+    extensions (`SLIPPAGE_EXCEEDED`, `GAS_PRICE_EXCEEDED`, `CHAIN_REORG`,
+    `ATTESTATION_INVALID`, etc.).
+
+    `POST /instruction/{instructionId}/status-request` is the pacs.028
+    `FIToFIPaymentStatusRequest` analogue, used to proactively request a fresh
+    status evaluation when an expected update has not arrived. The response
+    is the same `InstructionStatusResponse` schema.
+
+    Instruction cancellation via `DELETE /instruction/{instructionId}` follows
+    camt.056 / camt.029 semantics — the request body carries
+    `CancellationReasonCode` (camt.056 `ExternalCancellationReason1Code`) and
+    the response carries `cancellation_resolution_status` with camt.029 values
+    (`ACCR`, `RJCR`, `PDCR`).
 
     ## Sanctions compliance
 
@@ -354,18 +393,30 @@ paths:
     delete:
       tags: [Instruction]
       operationId: cancelInstruction
-      summary: Cancel a pending instruction
+      summary: Cancel a pending instruction (camt.056 analogue)
       description: |
-        Attempts to cancel an instruction that has not yet been broadcast to the
-        chain. Cancellation is only possible in status `PENDING` or `QUOTED`.
+        Attempts to cancel an instruction that has not yet been broadcast to
+        the chain. Cancellation is only possible in status `PENDING` or `QUOTED`.
         Once the transaction is in the mempool (`BROADCAST`) or confirmed
-        (`CONFIRMING` / `FINAL`), cancellation is not possible and the VASP will
-        return `409 CANCELLATION_TOO_LATE`.
+        (`CONFIRMING` / `FINAL`), cancellation is not possible; the response is
+        `CancellationResponse` with `cancellation_resolution_status = RJCR`
+        (and HTTP 200 — the cancellation request itself succeeded, even though
+        the cancellation could not be effected).
 
-        **Note:** In delegated signing mode, if the instructing party has already
-        signed and submitted the signed transaction, the VASP cannot prevent broadcast
-        even if it has not yet relayed the transaction. The instructing party should
-        not sign until ready to proceed.
+        Analogue of ISO 20022 camt.056 `FIToFIPaymentCancellationRequest`.
+        The response follows camt.029 `ResolutionOfInvestigation` semantics,
+        carrying `ACCR` (accepted), `RJCR` (rejected), or `PDCR` (pending).
+
+        **Request body is optional:** a DELETE with no body cancels the
+        instruction with an implicit `CUST` (RequestedByCustomer) reason.
+        For regulated contexts, disputed instructions, or audit-sensitive
+        cancellations, provide a `CancellationRequest` body with an explicit
+        reason code.
+
+        **Note:** In delegated signing mode, if the instructing party has
+        already signed and submitted the signed transaction, the VASP cannot
+        prevent broadcast even if it has not yet relayed the transaction. The
+        instructing party should not sign until ready to proceed.
       parameters:
         - name: instructionId
           in: path
@@ -373,24 +424,108 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRequest'
+            examples:
+              customer_requested:
+                summary: Customer-requested cancellation
+                value:
+                  reason_code: CUST
+                  reason_text: Customer retracted the instruction after reviewing quote
+              duplicate:
+                summary: Duplicate instruction
+                value:
+                  reason_code: DUPL
+                  reason_text: Duplicate of instruction 550e8400-e29b-41d4-a716-446655440000
       responses:
         '200':
-          description: Instruction cancelled
+          description: |
+            Cancellation request processed. Inspect `cancellation_resolution_status`
+            in the response body — `ACCR` means the instruction is cancelled;
+            `RJCR` means cancellation was not possible (instruction proceeds).
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CancellationResponse'
-        '409':
-          description: Cancellation not possible — instruction already broadcast or confirmed
+              examples:
+                accepted:
+                  summary: Cancellation accepted
+                  value:
+                    instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
+                    cancellation_resolution_status: ACCR
+                    status: CANCELLED
+                    cancellation_reason_code: CUST
+                    cancellation_reason_text: Customer retracted the instruction after reviewing quote
+                    cancelled_at: "2026-04-23T14:32:00Z"
+                rejected_too_late:
+                  summary: Cancellation rejected — already broadcast
+                  value:
+                    instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
+                    cancellation_resolution_status: RJCR
+                    status: BROADCAST
+                    cancellation_reason_code: CUST
+                    rejection_reason: Transaction broadcast to chain 400ms before cancellation request arrived
+                    cancelled_at: "2026-04-23T14:32:00Z"
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /instruction/{instructionId}/status-request:
+    post:
+      tags: [Status]
+      operationId: requestInstructionStatus
+      summary: Request a fresh status for an instruction (pacs.028 analogue)
+      description: |
+        Proactively requests the current status of an instruction. Analogue of
+        ISO 20022 pacs.028 `FIToFIPaymentStatusRequest`.
+
+        Used when the instructing party wishes to query the current status —
+        typically when an expected status update has not arrived within a
+        reasonable time (e.g. after `broadcast_at + 2 hours` for an EVM
+        instruction without a FINAL status).
+
+        By default, the VASP re-queries the chain for confirmation depth and
+        finality before responding. Set `refresh_from_chain = false` for
+        low-cost polling from cached state.
+
+        **Response:** `InstructionStatusResponse` — identical schema as
+        `GET /instruction/{instructionId}`, carrying both `iso_status`
+        (pacs.002-aligned) and `blockchain_status` fields in the dual-layer
+        status model, plus the `status_history` of transitions.
+
+        **When to use this vs `GET`:** The GET endpoint returns the current
+        cached status, cheap and suitable for frequent polling. The status
+        request endpoint explicitly re-evaluates on-chain state, more expensive
+        but authoritative. Treasury systems that only need the latest cached
+        status should use GET; operations teams troubleshooting a delayed
+        instruction should use the status request.
+      parameters:
+        - name: instructionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentStatusRequest'
+            example:
+              request_id: 98765432-1234-4abc-9def-123456789abc
+              request_reason: No status update received since broadcast_at + 3h
+              refresh_from_chain: true
+      responses:
+        '200':
+          description: Current instruction status with dual-layer status fields and full history
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error_code: CANCELLATION_TOO_LATE
-                message: Transaction already in mempool — cannot cancel
-                instruction_id: 7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c
-                status: BROADCAST
+                $ref: '#/components/schemas/InstructionStatusResponse'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -571,6 +706,267 @@ components:
         - EXPIRED
         - SLIPPAGE_EXCEEDED
         - RAMP_FAILED
+
+    ISOTransactionStatus:
+      type: string
+      description: |
+        ISO 20022 pacs.002 `TransactionIndividualStatus1Code` (TxSts) analogue.
+        Primary status code for bank-side ISO-aligned consumers — the code a
+        bank treasury system can feed into its existing pacs.002 processing
+        pipeline without transformation.
+
+        Dual-layer design: this field carries the standardised ISO status; the
+        `blockchain_status` field (InstructionStatus) carries the blockchain-
+        granular lifecycle detail. The mapping between the two is deterministic
+        and documented below.
+
+        | ISO code | pacs.002 meaning | Blockchain mapping |
+        |---|---|---|
+        | `ACTC` | AcceptedTechnicalValidation — syntactically / semantically valid | Internal validation only; typically not surfaced as a terminal status |
+        | `ACSP` | AcceptedSettlementInProcess — accepted, settlement under way | `BROADCAST`, `CONFIRMING` |
+        | `ACSC` | AcceptedSettlementCompleted — settlement completed | `FINAL` |
+        | `ACCC` | AcceptedSettlementCompletedCreditorAccount — settlement confirmed at creditor account | Use where the VASP has confirmed credit to the creditor wallet beyond on-chain finality (e.g. custodial sub-account credited) |
+        | `ACWC` | AcceptedWithChange — accepted but with change to original terms | Post-slippage entries where executed amount differs from instructed amount within tolerance |
+        | `PDNG` | Pending — under process | `PENDING`, `QUOTED` |
+        | `RJCT` | Rejected — not processed | `FAILED`, `EXPIRED`, `CANCELLED`, `SLIPPAGE_EXCEEDED`, `RAMP_FAILED` |
+        | `CANC` | Cancelled | Use when the instruction is explicitly cancelled by the instructing party (vs expired or failed) |
+
+        Implementers may use `ACSC` for most FINAL entries and `ACCC` only when
+        creditor-account-level crediting is an additional distinguishable event
+        in the VASP operation.
+      enum:
+        - ACTC
+        - ACSP
+        - ACSC
+        - ACCC
+        - ACWC
+        - PDNG
+        - RJCT
+        - CANC
+
+    ISOStatusReasonCode:
+      type: string
+      description: |
+        ISO 20022 `ExternalStatusReason1Code` analogue with pacs.crypto
+        blockchain-specific extensions. Populated alongside `iso_status` when
+        `iso_status` is `RJCT`, `ACWC`, or `CANC`.
+
+        **Standard ISO codes reused from `ExternalStatusReason1Code`:**
+
+        | Code | Meaning |
+        |---|---|
+        | `AC01` | IncorrectAccountNumber — destination wallet address is invalid or unresolvable |
+        | `AC03` | InvalidCreditorAccountNumber — creditor wallet format invalid for the specified chain |
+        | `AC04` | ClosedAccountNumber — destination wallet is on a deprecated or frozen chain contract |
+        | `AG01` | TransactionForbidden — instruction prohibited by policy or bilateral agreement |
+        | `AM04` | InsufficientFunds — insufficient token balance at debtor wallet |
+        | `AM05` | Duplication — duplicate `end_to_end_identification` received |
+        | `BE01` | InconsistentWithEndCustomer — party identification data inconsistent with KYC record |
+        | `CUST` | RequestedByCustomer — cancellation or change requested by the instructing customer |
+        | `NARR` | Narrative — reason provided in `iso_status_reason_text` |
+
+        **Blockchain-specific proprietary extensions (pacs.crypto namespace):**
+
+        | Code | Meaning |
+        |---|---|
+        | `SLIPPAGE_EXCEEDED` | DEX slippage exceeded `maximum_slippage_rate` tolerance |
+        | `GAS_PRICE_EXCEEDED` | Gas price at execution time exceeded policy cap |
+        | `CHAIN_REORG` | Chain reorganisation invalidated a previously final transaction |
+        | `RAMP_FAILED` | On/off-ramp leg execution failed |
+        | `BRIDGE_FAILED` | Bridge protocol execution failed |
+        | `NONCE_CONFLICT` | Allocated nonce was consumed by another transaction (delegated signing) |
+        | `INSUFFICIENT_ONCHAIN_BALANCE` | Debtor wallet balance insufficient at broadcast time |
+        | `EXPIRY_EXCEEDED` | Instruction exceeded `expiry_date_time` without execution |
+        | `ATTESTATION_INVALID` | `credential_attestation` failed verification against ERC-3643 trusted attester registry |
+        | `ATTESTATION_EXPIRED` | `credential_attestation` has passed its `expiry_date_time` |
+      example: "SLIPPAGE_EXCEEDED"
+
+    ISOStatusOriginator:
+      type: object
+      description: |
+        Identifies the agent that issued the status. Follows pacs.002
+        `StatusOriginator` concept. Useful when multiple parties in the
+        execution chain contribute status (VASP, crypto agent, bridge provider).
+      properties:
+        name:
+          type: string
+          maxLength: 140
+        lei:
+          $ref: '#/components/schemas/LEIIdentifier'
+        bic:
+          $ref: '#/components/schemas/BICIdentifier'
+        role:
+          type: string
+          enum: [VASP, CRYPTO_AGENT, BRIDGE_PROVIDER, RAMP_PROVIDER, CUSTODIAN, OTHER]
+          description: Functional role of the status originator in the execution chain.
+
+    StatusHistoryEntry:
+      type: object
+      description: |
+        A single status transition in the instruction lifecycle. The sequence
+        of entries forms a log of all status changes, enabling audit and
+        reconciliation. Mirrors the practice of chaining multiple pacs.002
+        status reports for a single payment.
+      required: [iso_status, blockchain_status, changed_at]
+      properties:
+        iso_status:
+          $ref: '#/components/schemas/ISOTransactionStatus'
+        blockchain_status:
+          $ref: '#/components/schemas/InstructionStatus'
+        iso_status_reason_code:
+          $ref: '#/components/schemas/ISOStatusReasonCode'
+        iso_status_reason_text:
+          type: string
+          maxLength: 500
+          description: Human-readable elaboration of the reason code.
+        status_originator:
+          $ref: '#/components/schemas/ISOStatusOriginator'
+        changed_at:
+          type: string
+          format: date-time
+          description: Timestamp of the status transition.
+        transaction_hash:
+          type: string
+          maxLength: 200
+          description: |
+            On-chain transaction hash, if relevant to this status transition
+            (populated on `BROADCAST`, `CONFIRMING`, `FINAL`).
+        confirmation_depth:
+          type: integer
+          description: Confirmation depth at the time of this entry, if applicable.
+
+    CancellationReasonCode:
+      type: string
+      description: |
+        Cancellation reason code. Follows ISO 20022 `ExternalCancellationReason1Code`
+        for alignment with camt.056 `PaymentCancellationRequest` semantics.
+
+        | Code | Meaning |
+        |---|---|
+        | `CUST` | RequestedByCustomer — cancellation initiated at customer request |
+        | `DUPL` | Duplicate payment — instruction was a duplicate of another |
+        | `AM09` | WrongAmount — incorrect amount was instructed |
+        | `TECH` | Technical problem — technical issue prevented processing |
+        | `FRAD` | Fraudulent origin — suspected fraud |
+        | `UPAY` | UndueAmount — amount not due |
+        | `AC03` | InvalidCreditorAccountNumber — creditor wallet format invalid |
+        | `AGNT` | IncorrectAgent — wrong VASP/agent specified |
+        | `CURR` | IncorrectCurrency — wrong currency/token |
+        | `NARR` | Narrative — reason provided in `reason_text` |
+      enum:
+        - CUST
+        - DUPL
+        - AM09
+        - TECH
+        - FRAD
+        - UPAY
+        - AC03
+        - AGNT
+        - CURR
+        - NARR
+      example: "CUST"
+
+    CancellationRequest:
+      type: object
+      description: |
+        Structured cancellation request body. Follows camt.056
+        `FIToFIPaymentCancellationRequest` semantics.
+
+        The DELETE endpoint accepts this body optionally — a DELETE with no
+        body cancels the instruction with an implicit `CUST` reason. When
+        reason codes matter for audit (regulated contexts, disputed instructions,
+        etc.), populate the body.
+      properties:
+        reason_code:
+          $ref: '#/components/schemas/CancellationReasonCode'
+        reason_text:
+          type: string
+          maxLength: 500
+          description: |
+            Human-readable cancellation reason. Required when `reason_code = NARR`;
+            optional elaboration for any other code.
+        originator:
+          $ref: '#/components/schemas/ISOStatusOriginator'
+          description: |
+            Party initiating the cancellation. Follows camt.056
+            `Assigner` concept. Populate when the cancellation is issued
+            on behalf of a different entity than the original instructing party.
+
+    PaymentStatusRequest:
+      type: object
+      description: |
+        Request body for `POST /instruction/{instructionId}/status-request`.
+        Analogue of ISO 20022 pacs.028 `FIToFIPaymentStatusRequest`.
+
+        Used when the instructing party wishes to proactively query the current
+        status of an instruction — typically when an expected status update has
+        not arrived within a reasonable time. The VASP responds with the same
+        `InstructionStatusResponse` schema returned by `GET /instruction/{instructionId}`,
+        reflecting a freshly evaluated on-chain state where relevant.
+
+        In traditional payments, pacs.028 is answered by pacs.002. Here, the
+        `InstructionStatusResponse` carries both the pacs.002-aligned
+        `iso_status` and the blockchain-granular `status`, so a single response
+        serves both consumers.
+      properties:
+        request_id:
+          $ref: '#/components/schemas/UUIDv4'
+          description: |
+            Unique identifier for this status request, assigned by the
+            requesting party. Echoed in the response for correlation.
+        request_reason:
+          type: string
+          maxLength: 500
+          description: |
+            Optional free-text reason for the status request. Useful in
+            operational troubleshooting (e.g. "no status received since broadcast_at + 2h").
+        refresh_from_chain:
+          type: boolean
+          default: true
+          description: |
+            If `true` (default), the VASP re-queries the chain for current
+            confirmation depth and finality state before responding. If
+            `false`, the VASP returns the last cached status. Set `false`
+            for low-cost polling where the chain query is unnecessary.
+
+    CredentialAttestation:
+      type: object
+      description: |
+        Reference to an on-chain EAS (Ethereum Attestation Service) compliance
+        attestation. Links an instruction to an on-chain identity or compliance
+        proof for regulated tokenised asset transfers (e.g. ERC-3643 tokens).
+
+        This field is a reference only — parties must verify the attestation
+        on-chain against the relevant ERC-3643 token trusted attester registry.
+        Presence in an instruction record does not constitute a compliance
+        clearance. Omit for standard stablecoin and native token transfers.
+        See the pacs.crypto README Ecosystem section for full context.
+      required: [schema_uid, attestation_uid, attester, chain_dli]
+      properties:
+        schema_uid:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: EAS SchemaRegistry UID — 32-byte hex identifying the attestation schema.
+        attestation_uid:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: UID of the specific EAS attestation. Resolvable via https://attest.org.
+        attester:
+          type: string
+          maxLength: 130
+          description: |
+            Wallet address of the institution that issued the attestation.
+            Cross-reference against the ERC-3643 token trusted attester registry.
+        chain_dli:
+          type: string
+          pattern: '^[A-Z0-9]{9}$'
+          description: |
+            ISO 24165-2 DLI of the chain on which the attestation is published.
+            Bare 9-character value; no DLID/ prefix.
+        expiry_date_time:
+          type: string
+          format: date-time
+          description: Attestation expiry if set. An expired attestation must be treated as invalid.
 
     FinalityStatus:
       type: string
@@ -820,6 +1216,24 @@ components:
         **Token issuer:** `token_issuer` provides the name and LEI/BIC of the issuing
         entity (e.g. Circle Internet Financial for USDC, Tether Ltd for USDT).
         Important for regulated stablecoins under MiCA and equivalent frameworks.
+
+        **Compatibility note — Travel Rule API field names:**
+        The Travel Rule API (Spec 1) uses a slightly different TokenIdentification
+        field naming, reflecting its earlier iteration: `dti` (instead of `token_dti`),
+        `contract_chain_id` / `ticker_chain_id` (instead of a single `chain_dli`),
+        and `ticker` (instead of `token_symbol`). The semantics are identical; only
+        the field names differ. The Instruction API and Account Reporting API use
+        the harmonised naming introduced here. A single-line mapping is sufficient
+        for implementers carrying token identification across the two APIs:
+
+        | Instruction / Reporting | Travel Rule |
+        |---|---|
+        | `token_dti` | `dti` |
+        | `chain_dli` | `contract_chain_id` or `ticker_chain_id` |
+        | `token_symbol` | `ticker` |
+
+        The Travel Rule API may be aligned to the harmonised convention in a
+        future major version.
       properties:
         token_dti:
           type: string
@@ -926,7 +1340,9 @@ components:
           properties:
             amount:
               type: string
-              maxLength: 30
+              maxLength: 37
+              pattern: '^\d{1,18}(\.\d{1,18})?$'
+              description: Native token amount as decimal string (up to 18 decimal places).
             currency:
               type: string
               maxLength: 20
@@ -1351,12 +1767,19 @@ components:
             instructing agent and the VASP. Follows `ActiveCurrencyAndAmount`.
             Where `currency` = XXX (no ISO 4217 code), this is a crypto-denominated
             instruction and `instructed_amount` carries the fiat equivalent.
+
+            **Precision:** maxLength extended to 36 (18 integer + 18 fractional
+            digits) to accommodate full-precision 18-decimal tokens such as ETH.
+            Expressed as a decimal string to avoid IEEE 754 floating-point loss.
           required: [amount, currency]
           properties:
             amount:
               type: string
-              maxLength: 30
-              description: Settlement amount. For tokens, may carry up to 18 decimal places.
+              maxLength: 37
+              pattern: '^\d{1,18}(\.\d{1,18})?$'
+              description: |
+                Settlement amount as decimal string. Up to 18 integer and 18
+                fractional digits for full-precision token amounts.
             currency:
               type: string
               maxLength: 10
@@ -1369,10 +1792,12 @@ components:
             Follows `ActiveOrHistoricCurrencyAndAmount` from pacs.008.001.14.
             Use when currency differs from `interbank_settlement_amount` (e.g. fiat
             equivalent of a crypto instruction, or onramp source amount).
+            Precision extended to 36 digits — see interbank_settlement_amount for rationale.
           properties:
             amount:
               type: string
-              maxLength: 30
+              maxLength: 37
+              pattern: '^\d{1,18}(\.\d{1,18})?$'
             currency:
               type: string
               pattern: '^[A-Z]{3}$'
@@ -1582,6 +2007,22 @@ components:
         blockchain_instruction:
           $ref: '#/components/schemas/BlockchainInstruction'
 
+        # ── ON-CHAIN CREDENTIAL ATTESTATION (EXTENSION) ──────────────────────
+        credential_attestation:
+          $ref: '#/components/schemas/CredentialAttestation'
+          description: |
+            Optional reference to an EAS on-chain compliance attestation
+            submitted with this instruction. Relevant for ERC-3643 regulated
+            token transfers where smart-contract-enforced transfer eligibility
+            requires a verifiable identity proof on-chain.
+
+            Populating this field on submission allows the VASP to verify the
+            attestation pre-execution against the relevant ERC-3643 token
+            trusted attester registry. The same attestation reference is
+            echoed in the InstructionStatusResponse for audit completeness.
+            Omit for standard stablecoin and native token transfers.
+            See the pacs.crypto README Ecosystem section.
+
     # ── RESPONSE SCHEMAS ──────────────────────────────────────────────────────
 
     InstructionResponse:
@@ -1699,12 +2140,18 @@ components:
           $ref: '#/components/schemas/FinalityStatus'
         actual_amount_transferred:
           type: string
-          maxLength: 30
-          description: Actual token amount transferred on-chain (post-slippage / post-ramp).
+          maxLength: 37
+          pattern: '^\d{1,18}(\.\d{1,18})?$'
+          description: |
+            Actual token amount transferred on-chain (post-slippage / post-ramp).
+            Up to 18 integer and 18 fractional digits for full-precision tokens.
         actual_gas_cost_native:
           type: string
-          maxLength: 30
-          description: Actual gas cost in native token.
+          maxLength: 37
+          pattern: '^\d{1,18}(\.\d{1,18})?$'
+          description: |
+            Actual gas cost in native token units. Up to 18 fractional digits
+            for chains like Ethereum where gas is denominated in ETH (18 decimals).
         actual_gas_cost_fiat:
           type: object
           properties:
@@ -1721,7 +2168,20 @@ components:
 
     InstructionStatusResponse:
       type: object
-      description: Full instruction status response including on-chain settlement data.
+      description: |
+        Full instruction status response including on-chain settlement data
+        and ISO 20022 pacs.002-aligned status fields.
+
+        **Dual-layer status:** This response carries two parallel status views:
+        - `iso_status` + `iso_status_reason_code` — pacs.002 `TxSts` and
+          `StsRsnInf` analogue, for ISO 20022 consumers (bank treasury systems,
+          pacs.002 processing pipelines)
+        - `blockchain_status` — the pacs.crypto `InstructionStatus` enum, for
+          operational consumers requiring blockchain-granular lifecycle detail
+
+        Both are always populated and the mapping between them is deterministic
+        (see `ISOTransactionStatus` description). The response is the answer
+        to both `GET /instruction/{instructionId}` and `POST /instruction/{instructionId}/status-request`.
       properties:
         instruction_id:
           $ref: '#/components/schemas/UUIDv4'
@@ -1729,10 +2189,54 @@ components:
           $ref: '#/components/schemas/UUIDv4'
         status:
           $ref: '#/components/schemas/InstructionStatus'
+          description: |
+            Blockchain-granular status (pacs.crypto extension). Alias for
+            `blockchain_status`; retained for backwards compatibility.
+            New consumers should read `blockchain_status` explicitly.
+        blockchain_status:
+          $ref: '#/components/schemas/InstructionStatus'
+          description: |
+            Blockchain-granular lifecycle status. Always populated. Same
+            value as `status`. Preferred field for new consumers.
+        iso_status:
+          $ref: '#/components/schemas/ISOTransactionStatus'
+          description: |
+            pacs.002-aligned status code. Always populated. Primary field for
+            ISO 20022 consumers.
+        iso_status_reason_code:
+          $ref: '#/components/schemas/ISOStatusReasonCode'
+          description: |
+            pacs.002 reason code. Populated when `iso_status` is `RJCT`,
+            `ACWC`, or `CANC`; may be populated alongside `PDNG` where
+            relevant (e.g. `CHAIN_REORG` re-pending).
+        iso_status_reason_text:
+          type: string
+          maxLength: 500
+          description: |
+            Human-readable elaboration of the reason code. Required when
+            `iso_status_reason_code = NARR`.
+        status_originator:
+          $ref: '#/components/schemas/ISOStatusOriginator'
+          description: |
+            Party that issued the current status. Useful when execution is
+            chained (VASP → crypto agent → bridge provider) and different
+            parties contribute status updates.
+        status_history:
+          type: array
+          description: |
+            Ordered log of status transitions since instruction submission.
+            Oldest-first. Each entry captures one status change with its
+            originator, reason, and on-chain references where applicable.
+            Enables complete audit reconstruction without polling-history aggregation.
+          items:
+            $ref: '#/components/schemas/StatusHistoryEntry'
         failure_reason:
           type: string
           maxLength: 500
-          description: Human-readable failure reason for FAILED, SLIPPAGE_EXCEEDED, RAMP_FAILED, EXPIRED statuses.
+          description: |
+            Legacy free-text failure reason. Retained for backwards
+            compatibility. New consumers should use `iso_status_reason_code`
+            and `iso_status_reason_text`.
         payment_identification:
           $ref: '#/components/schemas/PaymentIdentification'
         debtor:
@@ -1752,6 +2256,12 @@ components:
           $ref: '#/components/schemas/OnChainSettlement'
         travel_rule_record_id:
           $ref: '#/components/schemas/UUIDv4'
+        credential_attestation:
+          $ref: '#/components/schemas/CredentialAttestation'
+          description: |
+            Optional reference to an EAS on-chain compliance attestation
+            associated with this instruction. Relevant for ERC-3643 regulated
+            token transfers. See the pacs.crypto README Ecosystem section.
         created_at:
           type: string
           format: date-time
@@ -1799,15 +2309,58 @@ components:
 
     CancellationResponse:
       type: object
+      description: |
+        Response to a cancellation request. Analogue of ISO 20022 camt.029
+        `ResolutionOfInvestigation` — reports the outcome of the camt.056
+        cancellation request.
+
+        **Resolution statuses** follow camt.029 `CancellationStatusReason4`
+        semantics:
+        - `ACCR` — CancellationAccepted: the cancellation was accepted and the
+          instruction will not be executed
+        - `RJCR` — CancellationRejected: the cancellation was not possible
+          (e.g. already broadcast to chain); the instruction proceeds
+        - `PDCR` — CancellationPending: cancellation is under evaluation
+          (rare for blockchain — use when a delegated-signing transaction may
+          or may not still be prevented from broadcast)
       properties:
         instruction_id:
           $ref: '#/components/schemas/UUIDv4'
+        cancellation_resolution_status:
+          type: string
+          enum: [ACCR, RJCR, PDCR]
+          description: |
+            camt.029 resolution status code. `ACCR` means cancellation was
+            accepted; `RJCR` means it was rejected; `PDCR` means pending.
         status:
           type: string
-          enum: [CANCELLED]
+          enum: [CANCELLED, BROADCAST, CONFIRMING, FINAL, FAILED]
+          description: |
+            Current blockchain status of the instruction after the cancellation
+            attempt. When `cancellation_resolution_status = ACCR`, this will
+            be `CANCELLED`. When `RJCR`, this reflects why the cancellation
+            failed (typically `BROADCAST` or later).
+        cancellation_reason_code:
+          $ref: '#/components/schemas/CancellationReasonCode'
+          description: |
+            Echoes the reason code from the cancellation request, for audit.
+        cancellation_reason_text:
+          type: string
+          maxLength: 500
+          description: |
+            Echoes the reason text from the cancellation request.
+        rejection_reason:
+          type: string
+          maxLength: 500
+          description: |
+            Populated when `cancellation_resolution_status = RJCR`.
+            Explains why the cancellation could not be processed
+            (e.g. "transaction already in mempool at cancellation time +500ms").
         cancelled_at:
           type: string
           format: date-time
+          description: |
+            Timestamp of cancellation acceptance or rejection decision.
 
     InstructionSummary:
       type: object

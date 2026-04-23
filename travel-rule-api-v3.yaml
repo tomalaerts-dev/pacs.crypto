@@ -410,6 +410,17 @@ info:
     - Native / non-stablecoin tokens → use ISO 4217 `XXX` (no currency) and express
       the native token quantity as the numeric amount value.
 
+    ## Note on DTI and DLI Example Values
+
+    Example DTI and chain-id values used throughout this specification (e.g.
+    `X9J9XDMTD`, `T9B3X8H2K`, `ETH-1`) are illustrative and may not correspond
+    to live entries in the DTIF registry (https://dtif.org). ISO 24165-2 DLI
+    is an emerging companion standard to ISO 24165-1 DTI; until DLIs are broadly
+    registered, implementers may use the native-token DTI of a chain as a proxy
+    chain identifier (e.g. DTI `XB0MQJ1K5` for Ether → Ethereum Mainnet).
+    Implementers must verify actual DTI and DLI values against the DTIF registry
+    at integration time.
+
     ## Multi-Chain / Bridge Transfers
 
     When a transfer crosses chains via a bridge protocol (e.g. Stargate, LayerZero,
@@ -1107,6 +1118,26 @@ paths:
         requiring enhanced due diligence, or identification data that needs
         manual verification). The sending VASP should expect a follow-up callback.
 
+        ## Callback timing — important
+
+        The receiving VASP should complete the data quality callback before its
+        own independent sanctions screening of the incoming funds. These are two
+        separate processes: the callback reports on the quality and completeness
+        of the Travel Rule data received; sanctions screening is a parallel
+        regulatory obligation that runs independently and may continue after the
+        callback is sent. Entangling the two — for example, by withholding the
+        callback until sanctions screening is complete — risks conflating a data
+        quality signal with a compliance decision, which creates both regulatory
+        and operational risk for both parties.
+
+        **If a sanctions hit is identified during or after callback processing,**
+        the receiving VASP should freeze the funds and report to the competent
+        authority under its own jurisdictional obligations, as it would for any
+        sanctions finding. It must not amend an earlier-sent `ACCEPTED` callback
+        to `REJECTED`, and must not use the callback channel to signal the hit.
+        The data quality record and the sanctions finding are separate compliance
+        artefacts with separate audit trails and separate reporting paths.
+
         ## Sanctions obligations — important
 
         The callback must not be used to communicate any sanctions-related finding.
@@ -1670,6 +1701,18 @@ components:
           # per-leg information for multi-chain/bridge transfers. See
           # BlockchainSettlement schema for full documentation.
 
+        # ── ON-CHAIN CREDENTIAL ATTESTATION (EXTENSION) ──────────────────────
+        credential_attestation:
+          $ref: '#/components/schemas/CredentialAttestation'
+          # [EXTENSION — not in pacs.008] Optional reference to an EAS
+          # (Ethereum Attestation Service) on-chain compliance attestation.
+          # Relevant for regulated tokenised asset transfers using ERC-3643
+          # or equivalent smart-contract-enforced compliance frameworks, where
+          # a portable on-chain identity proof complements the off-chain Travel
+          # Rule record. Omit for standard stablecoin and native token transfers.
+          # See the pacs.crypto README Ecosystem section for the relationship
+          # between pacs.crypto, EAS, ERC-3643, and the EEA Shibui project.
+
   # ════════════════════════════════════════════════════════════════════════════
   # pacs.008.001.14 COMPONENTS
   # ════════════════════════════════════════════════════════════════════════════
@@ -1948,6 +1991,14 @@ components:
           (officially: "transactions where the currency is unknown or not applicable").
           Express the native token quantity as the numeric amount value.
           Fiat equivalent may be captured in instructed_amount.
+
+        **Precision note:** The maxLength is extended to 36 digits (from the ISO 20022
+        standard of 19) to accommodate full-precision token amounts. ETH and most
+        ERC-20 tokens carry 18 decimal places (1 ETH = 10^18 Wei), requiring up to
+        18 integer digits + 18 fractional digits for lossless representation. Amounts
+        are expressed as decimal strings to avoid IEEE 754 floating-point precision loss.
+        Fiat amounts will in practice use far fewer digits; the extended limit applies
+        to native token amounts expressed using XXX currency code.
       required: [currency, amount]
       properties:
         currency:
@@ -1958,9 +2009,13 @@ components:
           example: "EUR"
         amount:
           type: string
-          maxLength: 19
-          pattern: '^0*(([0-9]{0,13}\.[0-9]{1,5})|([0-9]{0,14}\.[0-9]{1,4})|([0-9]{0,15}\.[0-9]{1,3})|([0-9]{0,16}\.[0-9]{1,2})|([0-9]{0,17}\.[0-9]{1,1})|([0-9]{0,18}\.)|0*|([0-9]{0,18}))$'
-          description: Decimal amount string (up to 18 integer digits, up to 5 decimal places)
+          maxLength: 37
+          pattern: '^\d{1,18}(\.\d{1,18})?$'
+          description: |
+            Decimal amount string. Up to 18 integer digits and 18 fractional digits
+            (36 total), accommodating full-precision 18-decimal token amounts.
+            For fiat and stablecoin amounts, standard precision (e.g. 2 decimal places)
+            applies in practice.
           example: "50000.00"
 
     ActiveOrHistoricCurrencyAndAmount:
@@ -1968,6 +2023,7 @@ components:
       description: |
         Amount in an active or historic currency.
         Source: pacs.008.001.14 ActiveOrHistoricCurrencyAndAmount.
+        Precision extended to 36 digits — see ActiveCurrencyAndAmount for rationale.
       required: [currency, amount]
       properties:
         currency:
@@ -1976,8 +2032,11 @@ components:
           example: "EUR"
         amount:
           type: string
-          maxLength: 19
-          pattern: '^0*(([0-9]{0,13}\.[0-9]{1,5})|([0-9]{0,14}\.[0-9]{1,4})|([0-9]{0,15}\.[0-9]{1,3})|([0-9]{0,16}\.[0-9]{1,2})|([0-9]{0,17}\.[0-9]{1,1})|([0-9]{0,18}\.)|0*|([0-9]{0,18}))$'
+          maxLength: 37
+          pattern: '^\d{1,18}(\.\d{1,18})?$'
+          description: |
+            Decimal amount string. Up to 18 integer digits and 18 fractional digits
+            (36 total). See ActiveCurrencyAndAmount for full precision rationale.
           example: "50000.00"
 
     ChargeBearerType1Code:
@@ -3448,9 +3507,14 @@ components:
           example: "DTID/X9J9XDMTD"
         token_amount:
           type: string
-          description: Token quantity on this leg (decimal string). May be less
-            than the origination amount due to bridge fees.
-          example: "14.73812400"
+          maxLength: 37
+          pattern: '^\d{1,18}(\.\d{1,18})?$'
+          description: |
+            Token quantity on this leg as a decimal string. Up to 18 integer digits
+            and 18 fractional digits (36 total) to accommodate full-precision
+            18-decimal tokens. May be less than the origination amount due to
+            bridge fees.
+          example: "14.738124000000000000"
         token_currency:
           type: string
           pattern: '^[A-Z]{3}$'
@@ -3483,6 +3547,59 @@ components:
           format: uri
           description: Direct URL to this transaction in a block explorer
           example: "https://etherscan.io/tx/0xa3f8d2c1b4e7f6a9d0c3b2e1f4a7d8c9b0e3f2a1"
+
+    CredentialAttestation:
+      type: object
+      description: |
+        Reference to an on-chain EAS (Ethereum Attestation Service) compliance
+        attestation. Links a Travel Rule record to an on-chain identity or
+        compliance proof for regulated tokenised asset transfers.
+
+        EAS is deployed on 15+ EVM chains and enables institutions to publish
+        signed compliance conclusions as on-chain attestations. In the ERC-3643
+        / Shibui framework (EEA), standard schemas cover Investor Eligibility,
+        Issuer Authorization, and Wallet-Identity Link. GLEIF vLEI and ISO 20022
+        are cited as inputs, making EAS attestations a natural complement to the
+        LEI-based identity model used throughout pacs.crypto.
+
+        This field is a reference only. Parties must verify the attestation
+        on-chain against the relevant ERC-3643 token trusted attester registry.
+        Presence in a Travel Rule record does not constitute a compliance
+        clearance by the sending VASP.
+      required: [schema_uid, attestation_uid, attester, chain_dli]
+      properties:
+        schema_uid:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: |
+            EAS SchemaRegistry UID — 32-byte hex identifying the attestation schema.
+          example: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        attestation_uid:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{64}$'
+          description: |
+            UID of the specific EAS attestation. Resolvable via https://attest.org
+            on the chain specified in chain_dli.
+          example: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        attester:
+          type: string
+          maxLength: 130
+          description: |
+            Wallet address of the institution that issued the attestation —
+            typically the KYC provider or compliance team. Cross-reference
+            against the ERC-3643 token trusted attester registry.
+        chain_dli:
+          type: string
+          pattern: '^[A-Z0-9]{9}$'
+          description: |
+            ISO 24165-2 DLI of the chain on which the attestation is published.
+            Bare 9-character value; no DLID/ prefix.
+        expiry_date_time:
+          type: string
+          format: date-time
+          description: |
+            Attestation expiry, if set (EAS expirationTime > 0). ISO 8601 UTC.
+            An expired attestation must be treated as invalid.
 
     BlockchainTxStatus:
       type: string
