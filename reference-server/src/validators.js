@@ -46,6 +46,8 @@ const WEBHOOK_EVENT_TYPES = new Set([
   'execution_status.updated',
   'finality_receipt.updated',
   'reporting_notification.created',
+  'investigation_case.updated',
+  'return_case.updated',
 ]);
 
 const TRAVEL_RULE_SUBMISSION_TIMINGS = new Set([
@@ -111,6 +113,59 @@ const INSTRUCTION_STATUSES = new Set([
   'EXPIRED',
   'SLIPPAGE_EXCEEDED',
   'RAMP_FAILED',
+]);
+
+const INVESTIGATION_CASE_TYPES = new Set([
+  'STATUS_QUERY',
+  'BENEFICIARY_CREDIT_QUERY',
+  'TRAVEL_RULE_DISPUTE',
+  'RETURN_REQUEST',
+  'SETTLEMENT_DISCREPANCY',
+]);
+
+const INVESTIGATION_CASE_STATUSES = new Set([
+  'OPEN',
+  'IN_PROGRESS',
+  'WAITING_COUNTERPARTY',
+  'RESOLVED',
+  'CLOSED',
+]);
+
+const INVESTIGATION_PRIORITIES = new Set([
+  'LOW',
+  'NORMAL',
+  'HIGH',
+  'URGENT',
+]);
+
+const INVESTIGATION_RESOLUTION_TYPES = new Set([
+  'INFORMATION_PROVIDED',
+  'NO_ISSUE_FOUND',
+  'RETURN_INITIATED',
+  'MANUAL_REMEDIATION',
+  'REJECTED',
+]);
+
+const RETURN_CASE_TYPES = new Set([
+  'CUSTOMER_REFUND',
+  'BENEFICIARY_REJECTED',
+  'DUPLICATE_PAYMENT',
+  'SETTLEMENT_CORRECTION',
+  'COMPLIANCE_REMEDIATION',
+]);
+
+const RETURN_METHODS = new Set([
+  'ON_CHAIN_COMPENSATING_TRANSFER',
+  'OFF_CHAIN_REFUND',
+  'MANUAL_FIAT_REMEDIATION',
+]);
+
+const RETURN_CASE_STATUSES = new Set([
+  'PROPOSED',
+  'APPROVED',
+  'SETTLED',
+  'DECLINED',
+  'CANCELLED',
 ]);
 
 const STATS_DIRECTIONS = new Set([
@@ -286,6 +341,27 @@ function validateCursorField(errors, value, field) {
   }
 }
 
+function validateBooleanField(errors, value, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (typeof value !== 'boolean') {
+    pushError(errors, field, `${field} must be a boolean.`);
+  }
+}
+
+function validateBooleanQueryField(errors, value, field) {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+  if (!['true', 'false', '1', '0', 'yes', 'no', 'on', 'off'].includes(normalized)) {
+    pushError(errors, field, `${field} must be a boolean value.`);
+  }
+}
+
 function validateDateRange(errors, fromValue, toValue, fromField, toField) {
   if (!isIsoDateTime(fromValue) || !isIsoDateTime(toValue)) {
     return;
@@ -373,6 +449,34 @@ function validateWalletAccount(errors, value, field) {
     value.proxy?.identification,
     `${field}.proxy.identification`,
     `${field}.proxy.identification is required.`,
+  );
+}
+
+function validateNamedReference(errors, value, field, { required = false } = {}) {
+  if (value === undefined || value === null) {
+    if (required) {
+      pushError(errors, field, `${field} is required and must be an object.`);
+    }
+    return;
+  }
+
+  validateRequiredField(
+    errors,
+    isObject(value),
+    field,
+    `${field} must be an object.`,
+  );
+  if (!isObject(value)) {
+    return;
+  }
+
+  validateTextField(errors, value.name, `${field}.name`, `${field}.name is required.`);
+  validatePatternField(
+    errors,
+    value.lei,
+    LEI_PATTERN,
+    `${field}.lei`,
+    `${field}.lei must be a valid LEI.`,
   );
 }
 
@@ -968,5 +1072,271 @@ export function validateWebhookDispatchRequest(body) {
     );
   }
 
+  return errors;
+}
+
+export function validateInvestigationCaseSubmission(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateTextField(errors, body.case_type, 'case_type', 'case_type is required.');
+  validateEnumField(errors, body.case_type, INVESTIGATION_CASE_TYPES, 'case_type', 'case_type');
+  validateEnumField(errors, body.priority, INVESTIGATION_PRIORITIES, 'priority', 'priority');
+  validateBooleanField(
+    errors,
+    body.requires_counterparty_action,
+    'requires_counterparty_action',
+  );
+  validateUuidField(errors, body.related_instruction_id, 'related_instruction_id');
+  validateUuidField(errors, body.related_uetr, 'related_uetr');
+  validateRequiredField(
+    errors,
+    hasText(body.related_instruction_id) || hasText(body.related_uetr),
+    'related_instruction_id',
+    'related_instruction_id or related_uetr is required.',
+  );
+  validateTextField(errors, body.reason_code, 'reason_code', 'reason_code is required.');
+  validateTextField(errors, body.narrative, 'narrative', 'narrative is required.');
+  validateNamedReference(errors, body.opened_by, 'opened_by');
+  validateNamedReference(errors, body.counterparty, 'counterparty');
+  validateUuidField(errors, body.linked_return_case_id, 'linked_return_case_id');
+
+  return errors;
+}
+
+export function validateInvestigationCaseUpdate(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateEnumField(
+    errors,
+    body.case_status,
+    INVESTIGATION_CASE_STATUSES,
+    'case_status',
+    'case_status',
+  );
+  validateEnumField(errors, body.priority, INVESTIGATION_PRIORITIES, 'priority', 'priority');
+  validateBooleanField(
+    errors,
+    body.requires_counterparty_action,
+    'requires_counterparty_action',
+  );
+  validateEnumField(
+    errors,
+    body.resolution_type,
+    INVESTIGATION_RESOLUTION_TYPES,
+    'resolution_type',
+    'resolution_type',
+  );
+  validateUuidField(errors, body.linked_return_case_id, 'linked_return_case_id');
+  validateNamedReference(errors, body.counterparty, 'counterparty');
+  if (body.narrative !== undefined) {
+    validateTextField(errors, body.narrative, 'narrative', 'narrative must be a non-empty string.');
+  }
+  if (body.resolution_summary !== undefined) {
+    validateTextField(
+      errors,
+      body.resolution_summary,
+      'resolution_summary',
+      'resolution_summary must be a non-empty string.',
+    );
+  }
+  if (
+    body.case_status &&
+    ['RESOLVED', 'CLOSED'].includes(body.case_status) &&
+    !hasText(body.resolution_summary)
+  ) {
+    pushError(
+      errors,
+      'resolution_summary',
+      'resolution_summary is required when case_status is RESOLVED or CLOSED.',
+    );
+  }
+
+  return errors;
+}
+
+export function validateInvestigationCaseSearchQuery(query) {
+  const errors = [];
+  validateUuidField(errors, query.related_instruction_id, 'related_instruction_id');
+  validateUuidField(errors, query.related_uetr, 'related_uetr');
+  validateEnumListField(
+    errors,
+    query.case_type,
+    INVESTIGATION_CASE_TYPES,
+    'case_type',
+    'case_type',
+  );
+  validateEnumListField(
+    errors,
+    query.case_status,
+    INVESTIGATION_CASE_STATUSES,
+    'case_status',
+    'case_status',
+  );
+  validateEnumListField(
+    errors,
+    query.priority,
+    INVESTIGATION_PRIORITIES,
+    'priority',
+    'priority',
+  );
+  validateBooleanQueryField(
+    errors,
+    query.requires_counterparty_action,
+    'requires_counterparty_action',
+  );
+  validateDateTimeField(errors, query.opened_from, 'opened_from');
+  validateDateTimeField(errors, query.opened_to, 'opened_to');
+  validateDateRange(errors, query.opened_from, query.opened_to, 'opened_from', 'opened_to');
+  validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 200 });
+  validateCursorField(errors, query.cursor, 'cursor');
+  return errors;
+}
+
+export function validateReturnCaseSubmission(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateTextField(errors, body.return_type, 'return_type', 'return_type is required.');
+  validateEnumField(errors, body.return_type, RETURN_CASE_TYPES, 'return_type', 'return_type');
+  validateTextField(errors, body.return_method, 'return_method', 'return_method is required.');
+  validateEnumField(
+    errors,
+    body.return_method,
+    RETURN_METHODS,
+    'return_method',
+    'return_method',
+  );
+  validateUuidField(errors, body.original_instruction_id, 'original_instruction_id');
+  validateUuidField(errors, body.original_uetr, 'original_uetr');
+  validateRequiredField(
+    errors,
+    hasText(body.original_instruction_id) || hasText(body.original_uetr),
+    'original_instruction_id',
+    'original_instruction_id or original_uetr is required.',
+  );
+  validateAmountObject(errors, body.return_amount, 'return_amount');
+  if (body.return_asset !== undefined) {
+    validateTokenIdentification(errors, body.return_asset, 'return_asset');
+  }
+  validateTextField(errors, body.reason_code, 'reason_code', 'reason_code is required.');
+  validateTextField(errors, body.narrative, 'narrative', 'narrative is required.');
+  validateNamedReference(errors, body.opened_by, 'opened_by');
+  validateNamedReference(errors, body.counterparty, 'counterparty');
+  validateUuidField(
+    errors,
+    body.linked_investigation_case_id,
+    'linked_investigation_case_id',
+  );
+  validateUuidField(
+    errors,
+    body.compensating_instruction_id,
+    'compensating_instruction_id',
+  );
+  if (body.off_chain_reference !== undefined) {
+    validateTextField(
+      errors,
+      body.off_chain_reference,
+      'off_chain_reference',
+      'off_chain_reference must be a non-empty string.',
+    );
+  }
+
+  return errors;
+}
+
+export function validateReturnCaseUpdate(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateEnumField(
+    errors,
+    body.return_status,
+    RETURN_CASE_STATUSES,
+    'return_status',
+    'return_status',
+  );
+  validateUuidField(
+    errors,
+    body.linked_investigation_case_id,
+    'linked_investigation_case_id',
+  );
+  validateUuidField(
+    errors,
+    body.compensating_instruction_id,
+    'compensating_instruction_id',
+  );
+  validateNamedReference(errors, body.counterparty, 'counterparty');
+  if (body.narrative !== undefined) {
+    validateTextField(errors, body.narrative, 'narrative', 'narrative must be a non-empty string.');
+  }
+  if (body.resolution_summary !== undefined) {
+    validateTextField(
+      errors,
+      body.resolution_summary,
+      'resolution_summary',
+      'resolution_summary must be a non-empty string.',
+    );
+  }
+  if (body.off_chain_reference !== undefined) {
+    validateTextField(
+      errors,
+      body.off_chain_reference,
+      'off_chain_reference',
+      'off_chain_reference must be a non-empty string.',
+    );
+  }
+
+  return errors;
+}
+
+export function validateReturnCaseSearchQuery(query) {
+  const errors = [];
+  validateUuidField(errors, query.original_instruction_id, 'original_instruction_id');
+  validateUuidField(errors, query.original_uetr, 'original_uetr');
+  validateUuidField(
+    errors,
+    query.linked_investigation_case_id,
+    'linked_investigation_case_id',
+  );
+  validateEnumListField(
+    errors,
+    query.return_type,
+    RETURN_CASE_TYPES,
+    'return_type',
+    'return_type',
+  );
+  validateEnumListField(
+    errors,
+    query.return_method,
+    RETURN_METHODS,
+    'return_method',
+    'return_method',
+  );
+  validateEnumListField(
+    errors,
+    query.return_status,
+    RETURN_CASE_STATUSES,
+    'return_status',
+    'return_status',
+  );
+  validateDateTimeField(errors, query.opened_from, 'opened_from');
+  validateDateTimeField(errors, query.opened_to, 'opened_to');
+  validateDateRange(errors, query.opened_from, query.opened_to, 'opened_from', 'opened_to');
+  validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 200 });
+  validateCursorField(errors, query.cursor, 'cursor');
   return errors;
 }

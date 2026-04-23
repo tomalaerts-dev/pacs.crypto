@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 
 import { normalizeChainAdapter } from './chain/adapter-contract.js';
 import { ReferenceStore } from './db.js';
+import { registerExceptionRoutes } from './routes/exception-routes.js';
 import { registerEventRoutes } from './routes/event-routes.js';
 import { registerHealthRoutes } from './routes/health-routes.js';
 import { registerInstructionRoutes } from './routes/instruction-routes.js';
@@ -115,6 +116,7 @@ export async function buildApp({
   registerHealthRoutes(app);
   registerTravelRuleRoutes(app);
   registerInstructionRoutes(app);
+  registerExceptionRoutes(app);
   registerStatusRoutes(app);
   registerEventRoutes(app);
   registerWebhookRoutes(app);

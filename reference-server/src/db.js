@@ -19,6 +19,8 @@ const WEBHOOK_EVENT_TYPES = [
   'execution_status.updated',
   'finality_receipt.updated',
   'reporting_notification.created',
+  'investigation_case.updated',
+  'return_case.updated',
 ];
 const WEBHOOK_DELIVERY_GUARANTEE = 'AT_LEAST_ONCE_BEST_EFFORT';
 const WEBHOOK_DELIVERY_TERMINAL_STATES = new Set(['DELIVERED', 'FAILED']);
@@ -1098,6 +1100,246 @@ function buildIntradayAccountViews(records) {
   }));
 }
 
+function buildExceptionResourcePaths({
+  instructionId,
+  investigationCaseId = null,
+  returnCaseId = null,
+  travelRuleRecordId = null,
+} = {}) {
+  const investigationQuery = new URLSearchParams({
+    related_instruction_id: instructionId,
+  });
+  const returnQuery = new URLSearchParams({
+    original_instruction_id: instructionId,
+  });
+
+  return {
+    instruction: `/instruction/${instructionId}`,
+    execution_status: `/execution-status/${instructionId}`,
+    finality_receipt: `/finality-receipt/${instructionId}`,
+    event_outbox: `/event-outbox?instruction_id=${instructionId}`,
+    investigations: `/exceptions/investigations?${investigationQuery.toString()}`,
+    returns: `/exceptions/returns?${returnQuery.toString()}`,
+    ...(investigationCaseId
+      ? {
+          investigation_case: `/exceptions/investigations/${investigationCaseId}`,
+        }
+      : {}),
+    ...(returnCaseId
+      ? {
+          return_case: `/exceptions/returns/${returnCaseId}`,
+        }
+      : {}),
+    ...(travelRuleRecordId
+      ? {
+          travel_rule_record: `/travel-rule/${travelRuleRecordId}`,
+        }
+      : {}),
+  };
+}
+
+function buildExceptionTraceability({
+  instructionId,
+  uetr,
+  endToEndIdentification,
+  travelRuleRecordId = null,
+  transactionHash = null,
+  investigationCaseId = null,
+  returnCaseId = null,
+}) {
+  return {
+    instruction_id: instructionId,
+    uetr,
+    end_to_end_identification: endToEndIdentification ?? null,
+    travel_rule_record_id: travelRuleRecordId,
+    transaction_hash: transactionHash,
+    resource_paths: buildExceptionResourcePaths({
+      instructionId,
+      investigationCaseId,
+      returnCaseId,
+      travelRuleRecordId,
+    }),
+  };
+}
+
+function buildExceptionCaseActivity({ status, updatedAt, summary }) {
+  return {
+    event_id: randomUUID(),
+    status,
+    updated_at: updatedAt,
+    summary,
+  };
+}
+
+function appendExceptionCaseActivity(history, { status, updatedAt, summary }) {
+  return [
+    ...(Array.isArray(history) ? history : []),
+    buildExceptionCaseActivity({ status, updatedAt, summary }),
+  ];
+}
+
+function buildInvestigationCaseRecord(submission, instruction, linkedReturnCase = null) {
+  const openedAt = nowIso();
+  const investigationCaseId = randomUUID();
+  return {
+    investigation_case_id: investigationCaseId,
+    exception_case_id: investigationCaseId,
+    exception_type: 'INVESTIGATION',
+    case_type: submission.case_type,
+    case_status: 'OPEN',
+    priority: submission.priority ?? 'NORMAL',
+    requires_counterparty_action: submission.requires_counterparty_action === true,
+    resolution_type: null,
+    resolution_summary: null,
+    linked_return_case_id: linkedReturnCase?.return_case_id ?? null,
+    reason_code: submission.reason_code,
+    narrative: submission.narrative,
+    opened_by: submission.opened_by ?? null,
+    counterparty: submission.counterparty ?? null,
+    opened_at: openedAt,
+    updated_at: openedAt,
+    related_instruction_id: instruction.instruction_id,
+    related_uetr: instruction.uetr,
+    related_travel_rule_record_id: instruction.travel_rule_record_id ?? null,
+    related_transaction_hash: instruction.on_chain_settlement?.transaction_hash ?? null,
+    end_to_end_identification:
+      instruction.payment_identification?.end_to_end_identification ?? null,
+    chain_dli: instruction.blockchain_instruction?.chain_dli ?? null,
+    token: instruction.blockchain_instruction?.token ?? null,
+    original_instruction_status: instruction.status,
+    traceability: buildExceptionTraceability({
+      instructionId: instruction.instruction_id,
+      uetr: instruction.uetr,
+      endToEndIdentification:
+        instruction.payment_identification?.end_to_end_identification ?? null,
+      travelRuleRecordId: instruction.travel_rule_record_id ?? null,
+      transactionHash: instruction.on_chain_settlement?.transaction_hash ?? null,
+      investigationCaseId,
+      returnCaseId: linkedReturnCase?.return_case_id ?? null,
+    }),
+    status_history: [
+      buildExceptionCaseActivity({
+        status: 'OPEN',
+        updatedAt: openedAt,
+        summary: 'Investigation case opened.',
+      }),
+    ],
+  };
+}
+
+function buildInvestigationCaseSummary(record) {
+  return {
+    investigation_case_id: record.investigation_case_id,
+    exception_case_id: record.exception_case_id,
+    case_type: record.case_type,
+    case_status: record.case_status,
+    priority: record.priority,
+    requires_counterparty_action: record.requires_counterparty_action,
+    reason_code: record.reason_code,
+    opened_at: record.opened_at,
+    updated_at: record.updated_at,
+    related_instruction_id: record.related_instruction_id,
+    related_uetr: record.related_uetr,
+    related_travel_rule_record_id: record.related_travel_rule_record_id,
+    linked_return_case_id: record.linked_return_case_id ?? null,
+    traceability:
+      record.traceability ??
+      buildExceptionTraceability({
+        instructionId: record.related_instruction_id,
+        uetr: record.related_uetr,
+        endToEndIdentification: record.end_to_end_identification ?? null,
+        travelRuleRecordId: record.related_travel_rule_record_id ?? null,
+        transactionHash: record.related_transaction_hash ?? null,
+        investigationCaseId: record.investigation_case_id,
+        returnCaseId: record.linked_return_case_id ?? null,
+      }),
+  };
+}
+
+function buildReturnCaseRecord(submission, instruction, linkedInvestigationCase = null) {
+  const openedAt = nowIso();
+  const returnCaseId = randomUUID();
+  return {
+    return_case_id: returnCaseId,
+    exception_case_id: returnCaseId,
+    exception_type: 'RETURN',
+    return_type: submission.return_type,
+    return_method: submission.return_method,
+    return_status: 'PROPOSED',
+    reason_code: submission.reason_code,
+    narrative: submission.narrative,
+    resolution_summary: null,
+    opened_by: submission.opened_by ?? null,
+    counterparty: submission.counterparty ?? null,
+    opened_at: openedAt,
+    updated_at: openedAt,
+    related_instruction_id: instruction.instruction_id,
+    related_uetr: instruction.uetr,
+    related_travel_rule_record_id: instruction.travel_rule_record_id ?? null,
+    related_transaction_hash: instruction.on_chain_settlement?.transaction_hash ?? null,
+    original_instruction_id: instruction.instruction_id,
+    original_uetr: instruction.uetr,
+    original_transaction_hash: instruction.on_chain_settlement?.transaction_hash ?? null,
+    end_to_end_identification:
+      instruction.payment_identification?.end_to_end_identification ?? null,
+    return_amount: submission.return_amount,
+    return_asset: submission.return_asset ?? instruction.blockchain_instruction?.token ?? null,
+    linked_investigation_case_id:
+      linkedInvestigationCase?.investigation_case_id ?? null,
+    compensating_instruction_id: submission.compensating_instruction_id ?? null,
+    off_chain_reference: submission.off_chain_reference ?? null,
+    original_instruction_status: instruction.status,
+    chain_dli: instruction.blockchain_instruction?.chain_dli ?? null,
+    traceability: buildExceptionTraceability({
+      instructionId: instruction.instruction_id,
+      uetr: instruction.uetr,
+      endToEndIdentification:
+        instruction.payment_identification?.end_to_end_identification ?? null,
+      travelRuleRecordId: instruction.travel_rule_record_id ?? null,
+      transactionHash: instruction.on_chain_settlement?.transaction_hash ?? null,
+      investigationCaseId:
+        linkedInvestigationCase?.investigation_case_id ?? null,
+      returnCaseId,
+    }),
+    status_history: [
+      buildExceptionCaseActivity({
+        status: 'PROPOSED',
+        updatedAt: openedAt,
+        summary: 'Return case opened.',
+      }),
+    ],
+  };
+}
+
+function buildReturnCaseSummary(record) {
+  return {
+    return_case_id: record.return_case_id,
+    exception_case_id: record.exception_case_id,
+    return_type: record.return_type,
+    return_method: record.return_method,
+    return_status: record.return_status,
+    reason_code: record.reason_code,
+    opened_at: record.opened_at,
+    updated_at: record.updated_at,
+    original_instruction_id: record.original_instruction_id,
+    original_uetr: record.original_uetr,
+    linked_investigation_case_id: record.linked_investigation_case_id ?? null,
+    compensating_instruction_id: record.compensating_instruction_id ?? null,
+    off_chain_reference: record.off_chain_reference ?? null,
+    traceability:
+      record.traceability ??
+      buildExceptionTraceability({
+        instructionId: record.related_instruction_id,
+        uetr: record.related_uetr,
+        endToEndIdentification: record.end_to_end_identification ?? null,
+        travelRuleRecordId: record.related_travel_rule_record_id ?? null,
+        transactionHash: record.related_transaction_hash ?? null,
+        investigationCaseId: record.linked_investigation_case_id ?? null,
+        returnCaseId: record.return_case_id,
+      }),
+  };
+}
+
 function buildOutboxEvent({
   eventType,
   payloadSchema,
@@ -1323,6 +1565,22 @@ export class ReferenceStore {
         updated_at TEXT NOT NULL,
         statement_json TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS investigation_cases (
+        investigation_case_id TEXT PRIMARY KEY,
+        related_instruction_id TEXT NOT NULL,
+        opened_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        case_json TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS return_cases (
+        return_case_id TEXT PRIMARY KEY,
+        related_instruction_id TEXT NOT NULL,
+        opened_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        case_json TEXT NOT NULL
+      );
     `);
 
     this.insertTravelRuleStmt = this.db.prepare(`
@@ -1440,6 +1698,38 @@ export class ReferenceStore {
     `);
     this.listReportingStatementsStmt = this.db.prepare(`
       SELECT statement_json FROM reporting_statements ORDER BY statement_date DESC, updated_at DESC, statement_id DESC
+    `);
+    this.insertInvestigationCaseStmt = this.db.prepare(`
+      INSERT INTO investigation_cases (
+        investigation_case_id, related_instruction_id, opened_at, updated_at, case_json
+      ) VALUES (?, ?, ?, ?, ?)
+    `);
+    this.updateInvestigationCaseStmt = this.db.prepare(`
+      UPDATE investigation_cases
+      SET updated_at = ?, case_json = ?
+      WHERE investigation_case_id = ?
+    `);
+    this.getInvestigationCaseStmt = this.db.prepare(`
+      SELECT case_json FROM investigation_cases WHERE investigation_case_id = ?
+    `);
+    this.listInvestigationCasesStmt = this.db.prepare(`
+      SELECT case_json FROM investigation_cases ORDER BY updated_at DESC, investigation_case_id DESC
+    `);
+    this.insertReturnCaseStmt = this.db.prepare(`
+      INSERT INTO return_cases (
+        return_case_id, related_instruction_id, opened_at, updated_at, case_json
+      ) VALUES (?, ?, ?, ?, ?)
+    `);
+    this.updateReturnCaseStmt = this.db.prepare(`
+      UPDATE return_cases
+      SET updated_at = ?, case_json = ?
+      WHERE return_case_id = ?
+    `);
+    this.getReturnCaseStmt = this.db.prepare(`
+      SELECT case_json FROM return_cases WHERE return_case_id = ?
+    `);
+    this.listReturnCasesStmt = this.db.prepare(`
+      SELECT case_json FROM return_cases ORDER BY updated_at DESC, return_case_id DESC
     `);
   }
 
@@ -2012,6 +2302,353 @@ export class ReferenceStore {
       generated_at: nowIso(),
       events: page,
     };
+  }
+
+  appendInvestigationCaseOutboxEvent(record) {
+    const event = buildOutboxEvent({
+      eventType: 'investigation_case.updated',
+      payloadSchema: 'investigation_case',
+      resourcePath: `/exceptions/investigations/${record.investigation_case_id}`,
+      createdAt: record.updated_at,
+      instructionId: record.related_instruction_id,
+      uetr: record.related_uetr,
+      payload: record,
+    });
+    this.insertOutboxEventStmt.run(
+      event.event_id,
+      event.event_type,
+      event.instruction_id,
+      event.created_at,
+      serialize(event),
+    );
+    this.createWebhookDeliveriesForEvent(event);
+    return event;
+  }
+
+  getInvestigationCase(caseId) {
+    const row = this.getInvestigationCaseStmt.get(caseId);
+    return row ? parseJson(row.case_json, null) : null;
+  }
+
+  listInvestigationCaseRecords() {
+    return this.listInvestigationCasesStmt
+      .all()
+      .map((row) => parseJson(row.case_json, null))
+      .filter(Boolean);
+  }
+
+  filterInvestigationCaseRecords(filters = {}) {
+    const caseTypes = parseListFilter(filters.case_type);
+    const caseStatuses = parseListFilter(filters.case_status);
+    const priorities = parseListFilter(filters.priority);
+    const requiresCounterpartyAction = parseOptionalBoolean(
+      filters.requires_counterparty_action,
+    );
+
+    return this.listInvestigationCaseRecords().filter((record) => {
+      if (
+        filters.related_instruction_id &&
+        record.related_instruction_id !== filters.related_instruction_id
+      ) {
+        return false;
+      }
+      if (filters.related_uetr && record.related_uetr !== filters.related_uetr) {
+        return false;
+      }
+      if (caseTypes.length && !caseTypes.includes(record.case_type)) {
+        return false;
+      }
+      if (caseStatuses.length && !caseStatuses.includes(record.case_status)) {
+        return false;
+      }
+      if (priorities.length && !priorities.includes(record.priority)) {
+        return false;
+      }
+      if (
+        requiresCounterpartyAction !== null &&
+        record.requires_counterparty_action !== requiresCounterpartyAction
+      ) {
+        return false;
+      }
+      if (
+        filters.opened_from &&
+        Date.parse(record.opened_at) < Date.parse(filters.opened_from)
+      ) {
+        return false;
+      }
+      if (
+        filters.opened_to &&
+        Date.parse(record.opened_at) > Date.parse(filters.opened_to)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  listInvestigationCases(filters = {}) {
+    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
+    const offset = decodeCursor(filters.cursor);
+    const records = this.filterInvestigationCaseRecords(filters);
+    const page = records.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+
+    return {
+      total_matched: records.length,
+      page_size: page.length,
+      ...(nextOffset < records.length ? { next_cursor: encodeCursor(nextOffset) } : { next_cursor: null }),
+      generated_at: nowIso(),
+      investigation_cases: page.map((record) => buildInvestigationCaseSummary(record)),
+    };
+  }
+
+  createInvestigationCase(submission, { instruction, linkedReturnCase = null } = {}) {
+    const record = buildInvestigationCaseRecord(
+      submission,
+      instruction,
+      linkedReturnCase,
+    );
+    this.insertInvestigationCaseStmt.run(
+      record.investigation_case_id,
+      record.related_instruction_id,
+      record.opened_at,
+      record.updated_at,
+      serialize(record),
+    );
+    this.appendInvestigationCaseOutboxEvent(record);
+    return record;
+  }
+
+  updateInvestigationCase(caseId, patch, { linkedReturnCase = null } = {}) {
+    const current = this.getInvestigationCase(caseId);
+    if (!current) {
+      return null;
+    }
+
+    const updatedAt = nowIso();
+    const nextStatus = patch.case_status ?? current.case_status;
+    const linkedReturnCaseId =
+      linkedReturnCase?.return_case_id ??
+      patch.linked_return_case_id ??
+      current.linked_return_case_id ??
+      null;
+    const summary =
+      patch.resolution_summary ??
+      (patch.case_status && patch.case_status !== current.case_status
+        ? `Investigation case moved to ${patch.case_status}.`
+        : 'Investigation case updated.');
+    const updated = {
+      ...current,
+      case_status: nextStatus,
+      priority: patch.priority ?? current.priority,
+      requires_counterparty_action:
+        typeof patch.requires_counterparty_action === 'boolean'
+          ? patch.requires_counterparty_action
+          : current.requires_counterparty_action,
+      resolution_type: patch.resolution_type ?? current.resolution_type ?? null,
+      resolution_summary:
+        patch.resolution_summary ?? current.resolution_summary ?? null,
+      linked_return_case_id: linkedReturnCaseId,
+      counterparty: patch.counterparty ?? current.counterparty ?? null,
+      narrative: patch.narrative ?? current.narrative,
+      updated_at: updatedAt,
+      traceability: buildExceptionTraceability({
+        instructionId: current.related_instruction_id,
+        uetr: current.related_uetr,
+        endToEndIdentification: current.end_to_end_identification ?? null,
+        travelRuleRecordId: current.related_travel_rule_record_id ?? null,
+        transactionHash: current.related_transaction_hash ?? null,
+        investigationCaseId: current.investigation_case_id,
+        returnCaseId: linkedReturnCaseId,
+      }),
+      status_history: appendExceptionCaseActivity(current.status_history, {
+        status: nextStatus,
+        updatedAt,
+        summary,
+      }),
+    };
+
+    this.updateInvestigationCaseStmt.run(
+      updated.updated_at,
+      serialize(updated),
+      updated.investigation_case_id,
+    );
+    this.appendInvestigationCaseOutboxEvent(updated);
+    return updated;
+  }
+
+  appendReturnCaseOutboxEvent(record) {
+    const event = buildOutboxEvent({
+      eventType: 'return_case.updated',
+      payloadSchema: 'return_case',
+      resourcePath: `/exceptions/returns/${record.return_case_id}`,
+      createdAt: record.updated_at,
+      instructionId: record.related_instruction_id,
+      uetr: record.related_uetr,
+      payload: record,
+    });
+    this.insertOutboxEventStmt.run(
+      event.event_id,
+      event.event_type,
+      event.instruction_id,
+      event.created_at,
+      serialize(event),
+    );
+    this.createWebhookDeliveriesForEvent(event);
+    return event;
+  }
+
+  getReturnCase(returnCaseId) {
+    const row = this.getReturnCaseStmt.get(returnCaseId);
+    return row ? parseJson(row.case_json, null) : null;
+  }
+
+  listReturnCaseRecords() {
+    return this.listReturnCasesStmt
+      .all()
+      .map((row) => parseJson(row.case_json, null))
+      .filter(Boolean);
+  }
+
+  filterReturnCaseRecords(filters = {}) {
+    const returnTypes = parseListFilter(filters.return_type);
+    const returnMethods = parseListFilter(filters.return_method);
+    const returnStatuses = parseListFilter(filters.return_status);
+
+    return this.listReturnCaseRecords().filter((record) => {
+      if (
+        filters.original_instruction_id &&
+        record.original_instruction_id !== filters.original_instruction_id
+      ) {
+        return false;
+      }
+      if (filters.original_uetr && record.original_uetr !== filters.original_uetr) {
+        return false;
+      }
+      if (
+        filters.linked_investigation_case_id &&
+        record.linked_investigation_case_id !== filters.linked_investigation_case_id
+      ) {
+        return false;
+      }
+      if (returnTypes.length && !returnTypes.includes(record.return_type)) {
+        return false;
+      }
+      if (returnMethods.length && !returnMethods.includes(record.return_method)) {
+        return false;
+      }
+      if (returnStatuses.length && !returnStatuses.includes(record.return_status)) {
+        return false;
+      }
+      if (
+        filters.opened_from &&
+        Date.parse(record.opened_at) < Date.parse(filters.opened_from)
+      ) {
+        return false;
+      }
+      if (
+        filters.opened_to &&
+        Date.parse(record.opened_at) > Date.parse(filters.opened_to)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  listReturnCases(filters = {}) {
+    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
+    const offset = decodeCursor(filters.cursor);
+    const records = this.filterReturnCaseRecords(filters);
+    const page = records.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+
+    return {
+      total_matched: records.length,
+      page_size: page.length,
+      ...(nextOffset < records.length ? { next_cursor: encodeCursor(nextOffset) } : { next_cursor: null }),
+      generated_at: nowIso(),
+      return_cases: page.map((record) => buildReturnCaseSummary(record)),
+    };
+  }
+
+  createReturnCase(submission, { instruction, linkedInvestigationCase = null } = {}) {
+    const record = buildReturnCaseRecord(
+      submission,
+      instruction,
+      linkedInvestigationCase,
+    );
+    this.insertReturnCaseStmt.run(
+      record.return_case_id,
+      record.related_instruction_id,
+      record.opened_at,
+      record.updated_at,
+      serialize(record),
+    );
+    this.appendReturnCaseOutboxEvent(record);
+    return record;
+  }
+
+  updateReturnCase(returnCaseId, patch, { linkedInvestigationCase = null } = {}) {
+    const current = this.getReturnCase(returnCaseId);
+    if (!current) {
+      return null;
+    }
+
+    const updatedAt = nowIso();
+    const nextStatus = patch.return_status ?? current.return_status;
+    const linkedInvestigationCaseId =
+      linkedInvestigationCase?.investigation_case_id ??
+      patch.linked_investigation_case_id ??
+      current.linked_investigation_case_id ??
+      null;
+    const summary =
+      patch.resolution_summary ??
+      (patch.return_status && patch.return_status !== current.return_status
+        ? `Return case moved to ${patch.return_status}.`
+        : 'Return case updated.');
+    const updated = {
+      ...current,
+      return_status: nextStatus,
+      resolution_summary:
+        patch.resolution_summary ?? current.resolution_summary ?? null,
+      linked_investigation_case_id: linkedInvestigationCaseId,
+      compensating_instruction_id:
+        patch.compensating_instruction_id ??
+        current.compensating_instruction_id ??
+        null,
+      off_chain_reference:
+        patch.off_chain_reference ?? current.off_chain_reference ?? null,
+      counterparty: patch.counterparty ?? current.counterparty ?? null,
+      narrative: patch.narrative ?? current.narrative,
+      updated_at: updatedAt,
+      settled_at:
+        nextStatus === 'SETTLED'
+          ? current.settled_at ?? updatedAt
+          : current.settled_at ?? null,
+      traceability: buildExceptionTraceability({
+        instructionId: current.related_instruction_id,
+        uetr: current.related_uetr,
+        endToEndIdentification: current.end_to_end_identification ?? null,
+        travelRuleRecordId: current.related_travel_rule_record_id ?? null,
+        transactionHash: current.related_transaction_hash ?? null,
+        investigationCaseId: linkedInvestigationCaseId,
+        returnCaseId: current.return_case_id,
+      }),
+      status_history: appendExceptionCaseActivity(current.status_history, {
+        status: nextStatus,
+        updatedAt,
+        summary,
+      }),
+    };
+
+    this.updateReturnCaseStmt.run(
+      updated.updated_at,
+      serialize(updated),
+      updated.return_case_id,
+    );
+    this.appendReturnCaseOutboxEvent(updated);
+    return updated;
   }
 
   createWebhookSubscription(submission) {

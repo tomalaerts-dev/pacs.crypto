@@ -27,6 +27,14 @@ Current scope:
 - `GET /finality-receipt/uetr/:uetr`
 - `GET /event-outbox`
 - `GET /event-outbox/:eventId`
+- `POST /exceptions/investigations`
+- `PATCH /exceptions/investigations/:caseId`
+- `GET /exceptions/investigations`
+- `GET /exceptions/investigations/:caseId`
+- `POST /exceptions/returns`
+- `PATCH /exceptions/returns/:returnCaseId`
+- `GET /exceptions/returns`
+- `GET /exceptions/returns/:returnCaseId`
 - `POST /webhook-endpoints`
 - `GET /webhook-endpoints`
 - `GET /webhook-endpoints/:subscriptionId`
@@ -83,6 +91,9 @@ Environment overrides:
 - `reporting/statements` starts the statement layer: a `camt.053` analogue that persists per-instruction account statements derived from the existing reporting notifications and instruction context.
 - Reporting records now carry explicit traceability back to instruction, status, finality, transaction hash, and Travel Rule resources where available, plus statement derivation metadata sourced from booked notifications.
 - Reporting notifications are also emitted as `reporting_notification.created` events through the same outbox and webhook delivery pipeline.
+- `exceptions/investigations` is the first exception-family runtime slice: a `camt.029`-like investigation case object linked to instruction, finality, reporting, and Travel Rule references without rewriting the original payment state.
+- `exceptions/returns` is the second exception-family runtime slice: a `pacs.004`-like remediation object for post-settlement return or refund handling, again linked to rather than overwriting the original payment.
+- Exception-family changes are emitted as `investigation_case.updated` and `return_case.updated` through the same outbox and webhook delivery pipeline.
 - Delegated signing is intentionally not implemented in this first slice.
 - The root HTML simulators support both `Demo` mode and `Live API` mode against this server.
 - The adapter boundary is intentionally narrow: quote generation, fee estimates, settlement defaults, lifecycle advancement, lifecycle timestamps, and lifecycle metadata now come from the chain adapter rather than being hard-coded in route or storage logic.

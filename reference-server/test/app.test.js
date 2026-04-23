@@ -149,6 +149,49 @@ function buildTravelRuleCallback(overrides = {}) {
   );
 }
 
+function buildInvestigationCasePayload(overrides = {}) {
+  return deepMerge(
+    {
+      case_type: 'BENEFICIARY_CREDIT_QUERY',
+      priority: 'HIGH',
+      requires_counterparty_action: true,
+      reason_code: 'BENEFICIARY_NOT_CREDITED',
+      narrative:
+        'Beneficiary reports no credit despite final on-chain settlement.',
+      opened_by: {
+        name: 'Acme Bank Operations',
+      },
+      counterparty: {
+        name: 'Receiving VASP Operations',
+      },
+    },
+    overrides,
+  );
+}
+
+function buildReturnCasePayload(overrides = {}) {
+  return deepMerge(
+    {
+      return_type: 'CUSTOMER_REFUND',
+      return_method: 'OFF_CHAIN_REFUND',
+      return_amount: {
+        amount: '250000.00',
+        currency: 'USD',
+      },
+      reason_code: 'BENEFICIARY_REJECTED_FUNDS',
+      narrative:
+        'Funds must be remediated after beneficiary-side exception handling.',
+      opened_by: {
+        name: 'Acme Bank Operations',
+      },
+      counterparty: {
+        name: 'Receiving VASP Operations',
+      },
+    },
+    overrides,
+  );
+}
+
 function assertUuid(value) {
   assert.match(
     value,
@@ -239,6 +282,28 @@ function assertAdapterMetadataShape(metadata, expectedAdapterId = null) {
   if (expectedAdapterId) {
     assert.equal(metadata.adapter_id, expectedAdapterId);
   }
+}
+
+function assertInvestigationCaseShape(response) {
+  assertUuid(response.investigation_case_id);
+  assert.equal(response.exception_type, 'INVESTIGATION');
+  assertUuid(response.related_instruction_id);
+  assertUuid(response.related_uetr);
+  assertIsoDateTime(response.opened_at);
+  assertIsoDateTime(response.updated_at);
+  assert.ok(Array.isArray(response.status_history));
+  assert.ok(response.traceability);
+}
+
+function assertReturnCaseShape(response) {
+  assertUuid(response.return_case_id);
+  assert.equal(response.exception_type, 'RETURN');
+  assertUuid(response.original_instruction_id);
+  assertUuid(response.original_uetr);
+  assertIsoDateTime(response.opened_at);
+  assertIsoDateTime(response.updated_at);
+  assert.ok(Array.isArray(response.status_history));
+  assert.ok(response.traceability);
 }
 
 async function waitFor(assertion, { timeoutMs = 1500, intervalMs = 20 } = {}) {
@@ -945,7 +1010,7 @@ test('finality receipt reflects settled on-chain state and supports uetr lookup'
   assert.equal(createResponse.statusCode, 201);
   const instruction = createResponse.json();
   const currentRecord = app.store.getInstruction(instruction.instruction_id);
-  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
   app.store.saveInstruction({
     ...currentRecord,
     created_at: agedTimestamp,
@@ -996,7 +1061,7 @@ test('finality receipt remains stable after execution status has already advance
   assert.equal(createResponse.statusCode, 201);
   const instruction = createResponse.json();
   const currentRecord = app.store.getInstruction(instruction.instruction_id);
-  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
   app.store.saveInstruction({
     ...currentRecord,
     created_at: agedTimestamp,
@@ -1150,7 +1215,7 @@ test('event outbox records final lifecycle transitions with mirrored payloads', 
   assert.equal(createResponse.statusCode, 201);
   const instruction = createResponse.json();
   const currentRecord = app.store.getInstruction(instruction.instruction_id);
-  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
   app.store.saveInstruction({
     ...currentRecord,
     created_at: agedTimestamp,
@@ -1591,7 +1656,7 @@ test('reporting notifications are created when an instruction reaches settlement
   assert.equal(initialNotificationsResponse.json().total_matched, 0);
 
   const currentRecord = app.store.getInstruction(instruction.instruction_id);
-  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
   app.store.saveInstruction({
     ...currentRecord,
     created_at: agedTimestamp,
@@ -2196,6 +2261,262 @@ test('chain adapter can be partially injected without changing route contracts',
     statusResponse.json().adapter_metadata.lifecycle_policy.required_confirmation_depth,
     9,
   );
+
+  await app.close();
+});
+
+test('investigation cases can be created, updated, listed, and emitted through outbox/webhooks', async () => {
+  const app = await buildApp();
+
+  const createInstructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-EXC-INVEST-001',
+      },
+      interbank_settlement_amount: {
+        amount: '250000.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createInstructionResponse.statusCode, 201);
+  const instruction = createInstructionResponse.json();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+  const finalizedInstruction = await waitFor(() => {
+    const record = app.store.getInstruction(instruction.instruction_id);
+    assert.equal(record.status, 'FINAL');
+    return record;
+  });
+  assert.equal(finalizedInstruction.status, 'FINAL');
+
+  const subscriptionResponse = await app.inject({
+    method: 'POST',
+    url: '/webhook-endpoints',
+    payload: {
+      url: 'https://receiver.example/investigations',
+      signing_secret: 'whsec_investigations_123456',
+      subscribed_event_types: ['investigation_case.updated'],
+    },
+  });
+
+  assert.equal(subscriptionResponse.statusCode, 201);
+
+  const createCaseResponse = await app.inject({
+    method: 'POST',
+    url: '/exceptions/investigations',
+    payload: buildInvestigationCasePayload({
+      related_instruction_id: instruction.instruction_id,
+    }),
+  });
+
+  assert.equal(createCaseResponse.statusCode, 201);
+  const investigation = createCaseResponse.json();
+  assertInvestigationCaseShape(investigation);
+  assert.equal(investigation.case_status, 'OPEN');
+  assert.equal(investigation.related_instruction_id, instruction.instruction_id);
+  assert.equal(
+    investigation.traceability.resource_paths.investigation_case,
+    `/exceptions/investigations/${investigation.investigation_case_id}`,
+  );
+
+  const updateCaseResponse = await app.inject({
+    method: 'PATCH',
+    url: `/exceptions/investigations/${investigation.investigation_case_id}`,
+    payload: {
+      case_status: 'WAITING_COUNTERPARTY',
+      resolution_summary: 'Counterparty confirmation requested.',
+    },
+  });
+
+  assert.equal(updateCaseResponse.statusCode, 200);
+  assert.equal(updateCaseResponse.json().case_status, 'WAITING_COUNTERPARTY');
+  assert.equal(updateCaseResponse.json().status_history.length, 2);
+
+  const listResponse = await app.inject({
+    method: 'GET',
+    url: `/exceptions/investigations?related_instruction_id=${instruction.instruction_id}&case_status=WAITING_COUNTERPARTY`,
+  });
+
+  assert.equal(listResponse.statusCode, 200);
+  assert.equal(listResponse.json().total_matched, 1);
+  assert.equal(
+    listResponse.json().investigation_cases[0].investigation_case_id,
+    investigation.investigation_case_id,
+  );
+
+  const instructionStillFinalResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}`,
+  });
+
+  assert.equal(instructionStillFinalResponse.statusCode, 200);
+  assert.equal(instructionStillFinalResponse.json().status, 'FINAL');
+
+  const outboxResponse = await app.inject({
+    method: 'GET',
+    url: `/event-outbox?instruction_id=${instruction.instruction_id}&event_type=investigation_case.updated`,
+  });
+
+  assert.equal(outboxResponse.statusCode, 200);
+  assert.equal(outboxResponse.json().total_matched, 2);
+
+  const deliveryResponse = await app.inject({
+    method: 'GET',
+    url: `/webhook-endpoints/${subscriptionResponse.json().subscription_id}/deliveries?event_type=investigation_case.updated`,
+  });
+
+  assert.equal(deliveryResponse.statusCode, 200);
+  assert.equal(deliveryResponse.json().total_matched, 2);
+
+  await app.close();
+});
+
+test('return cases can be created and settled without rewriting the original instruction', async () => {
+  const app = await buildApp();
+
+  const createInstructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-EXC-RETURN-001',
+      },
+      interbank_settlement_amount: {
+        amount: '250000.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createInstructionResponse.statusCode, 201);
+  const instruction = createInstructionResponse.json();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+  const finalizedInstruction = await waitFor(() => {
+    const record = app.store.getInstruction(instruction.instruction_id);
+    assert.equal(record.status, 'FINAL');
+    return record;
+  });
+  assert.equal(finalizedInstruction.status, 'FINAL');
+
+  const investigationResponse = await app.inject({
+    method: 'POST',
+    url: '/exceptions/investigations',
+    payload: buildInvestigationCasePayload({
+      related_instruction_id: instruction.instruction_id,
+      case_type: 'RETURN_REQUEST',
+      reason_code: 'RETURN_REQUESTED',
+      narrative: 'Return requested after beneficiary-side remediation flow.',
+    }),
+  });
+
+  assert.equal(investigationResponse.statusCode, 201);
+  const investigation = investigationResponse.json();
+
+  const createReturnResponse = await app.inject({
+    method: 'POST',
+    url: '/exceptions/returns',
+    payload: buildReturnCasePayload({
+      original_instruction_id: instruction.instruction_id,
+      linked_investigation_case_id: investigation.investigation_case_id,
+    }),
+  });
+
+  assert.equal(createReturnResponse.statusCode, 201);
+  const returnCase = createReturnResponse.json();
+  assertReturnCaseShape(returnCase);
+  assert.equal(returnCase.return_status, 'PROPOSED');
+  assert.equal(returnCase.original_instruction_id, instruction.instruction_id);
+  assert.equal(
+    returnCase.linked_investigation_case_id,
+    investigation.investigation_case_id,
+  );
+
+  const updateReturnResponse = await app.inject({
+    method: 'PATCH',
+    url: `/exceptions/returns/${returnCase.return_case_id}`,
+    payload: {
+      return_status: 'SETTLED',
+      off_chain_reference: 'REFUND-2026-0001',
+      resolution_summary: 'Off-chain refund completed.',
+    },
+  });
+
+  assert.equal(updateReturnResponse.statusCode, 200);
+  assert.equal(updateReturnResponse.json().return_status, 'SETTLED');
+  assert.equal(updateReturnResponse.json().off_chain_reference, 'REFUND-2026-0001');
+  assertIsoDateTime(updateReturnResponse.json().settled_at);
+
+  const listReturnResponse = await app.inject({
+    method: 'GET',
+    url: `/exceptions/returns?original_instruction_id=${instruction.instruction_id}&return_status=SETTLED`,
+  });
+
+  assert.equal(listReturnResponse.statusCode, 200);
+  assert.equal(listReturnResponse.json().total_matched, 1);
+  assert.equal(
+    listReturnResponse.json().return_cases[0].return_case_id,
+    returnCase.return_case_id,
+  );
+
+  const instructionStillFinalResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}`,
+  });
+
+  assert.equal(instructionStillFinalResponse.statusCode, 200);
+  assert.equal(instructionStillFinalResponse.json().status, 'FINAL');
+
+  const outboxResponse = await app.inject({
+    method: 'GET',
+    url: `/event-outbox?instruction_id=${instruction.instruction_id}&event_type=return_case.updated`,
+  });
+
+  assert.equal(outboxResponse.statusCode, 200);
+  assert.equal(outboxResponse.json().total_matched, 2);
+
+  await app.close();
+});
+
+test('return cases reject instructions that have not reached final settlement', async () => {
+  const app = await buildApp();
+
+  const createInstructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-EXC-RETURN-REJECT-001',
+      },
+    }),
+  });
+
+  assert.equal(createInstructionResponse.statusCode, 201);
+
+  const createReturnResponse = await app.inject({
+    method: 'POST',
+    url: '/exceptions/returns',
+    payload: buildReturnCasePayload({
+      original_instruction_id: createInstructionResponse.json().instruction_id,
+    }),
+  });
+
+  assert.equal(createReturnResponse.statusCode, 400);
+  assert.equal(createReturnResponse.json().error, 'invalid_state');
 
   await app.close();
 });
