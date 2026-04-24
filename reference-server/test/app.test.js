@@ -233,6 +233,40 @@ function assertReportEntrySearchResponseShape(response) {
   assert.ok(Array.isArray(response.entries));
 }
 
+function assertReportIntradayShape(response) {
+  assert.ok(response.group_header);
+  assert.ok(response.report);
+  assert.equal(typeof response.group_header.message_identification, 'string');
+  assertIsoDateTime(response.group_header.creation_date_time);
+  assert.equal(typeof response.report.identification, 'string');
+  assertIsoDateTime(response.report.creation_date_time);
+  assert.ok(response.report.account);
+  assert.ok(response.report.from_to_date);
+  assert.ok(Array.isArray(response.report.entries));
+}
+
+function assertReportStatementShape(response) {
+  assert.ok(response.group_header);
+  assert.ok(response.statement);
+  assert.equal(typeof response.group_header.message_identification, 'string');
+  assertIsoDateTime(response.group_header.creation_date_time);
+  assert.equal(typeof response.statement.identification, 'string');
+  assertIsoDateTime(response.statement.creation_date_time);
+  assert.ok(response.statement.account);
+  assert.ok(response.statement.from_to_date);
+  assert.ok(Array.isArray(response.statement.entries));
+}
+
+function assertBlockchainNotificationShape(response) {
+  assert.ok(response.group_header);
+  assert.equal(typeof response.notification_id, 'string');
+  assert.ok(response.notification_type);
+  assert.ok(response.account);
+  assert.ok(response.entry);
+  assert.equal(typeof response.entry.entry_reference, 'string');
+  assert.ok(response.entry.entry_status);
+}
+
 function assertReportStatsResponseShape(response) {
   assertIsoDateTime(response.generated_at);
   assert.equal(typeof response.wallet_address, 'string');
@@ -1849,6 +1883,10 @@ test('reporting notifications are emitted through outbox and webhook delivery', 
   assert.equal(deliveriesReceived.length, 2);
 
   const envelope = JSON.parse(deliveriesReceived[0].body);
+  assert.equal(
+    deliveriesReceived[0].headers['x-pacscrypto-payload-mode'],
+    'event_envelope',
+  );
   assert.equal(envelope.event_type, 'reporting_notification.created');
   assert.ok(envelope.payload.notification_id);
 
@@ -2295,8 +2333,10 @@ test('report spec paths expose search stats intraday statement and notification 
   });
 
   assert.equal(intradayResponse.statusCode, 200);
-  assert.equal(intradayResponse.json().movement_summary.notification_count, 1);
-  assert.equal(intradayResponse.json().account_views.length, 1);
+  assertReportIntradayShape(intradayResponse.json());
+  assert.equal(intradayResponse.json().report.total_entries, 1);
+  assert.equal(intradayResponse.json().report.account.identification.proxy.identification, '0xreportspecdebit');
+  assert.equal(intradayResponse.json().report.entries[0].credit_debit_indicator, 'DBIT');
 
   const statementResponse = await app.inject({
     method: 'GET',
@@ -2304,8 +2344,9 @@ test('report spec paths expose search stats intraday statement and notification 
   });
 
   assert.equal(statementResponse.statusCode, 200);
-  assert.equal(statementResponse.json().account_role, 'DEBTOR');
-  assert.equal(statementResponse.json().movement_summary.entry_count, 1);
+  assertReportStatementShape(statementResponse.json());
+  assert.equal(statementResponse.json().statement.total_entries, 1);
+  assert.equal(statementResponse.json().statement.account.identification.proxy.identification, '0xreportspecdebit');
 
   const legacyNotificationsResponse = await app.inject({
     method: 'GET',
@@ -2319,8 +2360,15 @@ test('report spec paths expose search stats intraday statement and notification 
   });
 
   assert.equal(notificationDetailResponse.statusCode, 200);
-  assert.equal(notificationDetailResponse.json().instruction_id, instruction.instruction_id);
-  assert.equal(notificationDetailResponse.json().party.wallet_address, '0xreportspecdebit');
+  assertBlockchainNotificationShape(notificationDetailResponse.json());
+  assert.equal(
+    notificationDetailResponse.json().entry.blockchain_detail.instruction_id,
+    instruction.instruction_id,
+  );
+  assert.equal(
+    notificationDetailResponse.json().account.identification.proxy.identification,
+    '0xreportspecdebit',
+  );
 
   const queryBalanceResponse = await app.inject({
     method: 'POST',
@@ -2345,6 +2393,59 @@ test('report spec paths expose search stats intraday statement and notification 
   assert.equal(queryBalanceResponse.json().query_type, 'BALANCE');
   assert.ok(Array.isArray(queryBalanceResponse.json().balances));
   assert.equal(queryBalanceResponse.json().balances.length, 1);
+  assert.equal(queryBalanceResponse.json().balances[0].balance_type, 'ITBD');
+
+  const queryIntradayResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-INTRA-001',
+      query_type: 'INTRADAY',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportspecdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+      reporting_period: {
+        from_date_time: `${agedTimestamp.slice(0, 10)}T00:00:00Z`,
+        to_date_time: `${agedTimestamp.slice(0, 10)}T23:59:59Z`,
+      },
+    },
+  });
+
+  assert.equal(queryIntradayResponse.statusCode, 201);
+  assertReportIntradayShape(queryIntradayResponse.json().intraday_report);
+
+  const queryStatementResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-STMT-001',
+      query_type: 'STATEMENT',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportspecdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+      reporting_period: {
+        from_date_time: `${agedTimestamp.slice(0, 10)}T00:00:00Z`,
+        to_date_time: `${agedTimestamp.slice(0, 10)}T23:59:59Z`,
+      },
+    },
+  });
+
+  assert.equal(queryStatementResponse.statusCode, 201);
+  assertReportStatementShape(queryStatementResponse.json().statement);
 
   await app.close();
 });
@@ -2479,6 +2580,238 @@ test('report query notification subscriptions are wallet-scoped and can be cance
 
   assert.equal(subscriptionLookupResponse.statusCode, 200);
   assert.equal(subscriptionLookupResponse.json().active, false);
+
+  await app.close();
+});
+
+test('report query notification subscriptions deliver raw spec notification payloads', async () => {
+  const deliveriesReceived = [];
+  const app = await buildApp({
+    webhookSender: async ({ headers, body }) => {
+      deliveriesReceived.push({ headers, body });
+      return {
+        status: 200,
+        bodyText: 'ok',
+      };
+    },
+  });
+
+  const subscribeResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-SUB-RAW-001',
+      query_type: 'NOTIFICATION_SUBSCRIBE',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportrawdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+      callback_url: 'https://bank.example.com/webhooks/spec-notifications',
+    },
+  });
+
+  assert.equal(subscribeResponse.statusCode, 201);
+  const subscriptionId = subscribeResponse.json().subscription_id;
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-REPORT-SUB-RAW-001',
+      },
+      debtor_account: {
+        proxy: { identification: '0xreportrawdebit' },
+      },
+      creditor_account: {
+        proxy: { identification: '0xreportrawcredit' },
+      },
+      interbank_settlement_amount: {
+        amount: '9150.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  const instruction = createResponse.json();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FINAL');
+
+  const dispatchResponse = await app.inject({
+    method: 'POST',
+    url: '/webhook-deliveries/dispatch',
+    payload: {
+      subscription_id: subscriptionId,
+    },
+  });
+
+  assert.equal(dispatchResponse.statusCode, 200);
+  assert.equal(dispatchResponse.json().dispatched_count, 1);
+  assert.equal(deliveriesReceived.length, 1);
+
+  const notification = JSON.parse(deliveriesReceived[0].body);
+  assert.equal(
+    deliveriesReceived[0].headers['x-pacscrypto-payload-mode'],
+    'spec_message',
+  );
+  assertBlockchainNotificationShape(notification);
+  assert.equal(
+    notification.account.identification.proxy.identification,
+    '0xreportrawdebit',
+  );
+  assert.equal(
+    notification.entry.blockchain_detail.instruction_id,
+    instruction.instruction_id,
+  );
+  assert.equal(notification.notification_type, 'ENTRY_FINAL');
+  assert.equal(notification.entry.entry_status, 'BOOK');
+
+  await app.close();
+});
+
+test('report query statements can be delivered asynchronously via callback_url', async () => {
+  const deliveriesReceived = [];
+  const app = await buildApp({
+    webhookSender: async ({ headers, body }) => {
+      deliveriesReceived.push({ headers, body });
+      return {
+        status: 200,
+        bodyText: 'ok',
+      };
+    },
+  });
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-REPORT-STMT-ASYNC-001',
+      },
+      debtor_account: {
+        proxy: { identification: '0xreportstmtasyncdebit' },
+      },
+      creditor_account: {
+        proxy: { identification: '0xreportstmtasynccredit' },
+      },
+      interbank_settlement_amount: {
+        amount: '9050.00',
+        currency: 'USD',
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  const instruction = createResponse.json();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  const agedTimestamp = new Date(Date.now() - 7000).toISOString();
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FINAL');
+
+  const statementQueryResponse = await app.inject({
+    method: 'POST',
+    url: '/report/query',
+    payload: {
+      query_identification: 'QRY-REPORT-STMT-ASYNC-001',
+      query_type: 'STATEMENT',
+      account: {
+        identification: {
+          proxy: {
+            identification: '0xreportstmtasyncdebit',
+          },
+        },
+        type: {
+          proprietary: 'DLID/X9J9XDMTD',
+        },
+      },
+      reporting_period: {
+        from_date_time: `${agedTimestamp.slice(0, 10)}T00:00:00Z`,
+        to_date_time: `${agedTimestamp.slice(0, 10)}T23:59:59Z`,
+      },
+      callback_url: 'https://bank.example.com/webhooks/statements',
+    },
+  });
+
+  assert.equal(statementQueryResponse.statusCode, 202);
+  assert.equal(
+    statementQueryResponse.json().query_identification,
+    'QRY-REPORT-STMT-ASYNC-001',
+  );
+
+  const callbackSubscription = app.store
+    .listWebhookSubscriptionRecords()
+    .find(
+      (record) =>
+        record.subscription_kind === 'REPORT_STATEMENT_CALLBACK' &&
+        record.query_identification === 'QRY-REPORT-STMT-ASYNC-001',
+    );
+
+  assert.ok(callbackSubscription);
+  assert.equal(callbackSubscription.active, true);
+
+  const dispatchResponse = await app.inject({
+    method: 'POST',
+    url: '/webhook-deliveries/dispatch',
+    payload: {
+      subscription_id: callbackSubscription.subscription_id,
+    },
+  });
+
+  assert.equal(dispatchResponse.statusCode, 200);
+  assert.equal(dispatchResponse.json().dispatched_count, 1);
+  assert.equal(deliveriesReceived.length, 1);
+
+  const statement = JSON.parse(deliveriesReceived[0].body);
+  assert.equal(
+    deliveriesReceived[0].headers['x-pacscrypto-payload-mode'],
+    'spec_message',
+  );
+  assert.equal(
+    deliveriesReceived[0].headers['x-pacscrypto-event-type'],
+    'reporting_statement.ready',
+  );
+  assertReportStatementShape(statement);
+  assert.equal(
+    statement.statement.account.identification.proxy.identification,
+    '0xreportstmtasyncdebit',
+  );
+  assert.equal(statement.statement.total_entries, 1);
+
+  const callbackSubscriptionAfter = app.store.getWebhookSubscriptionRecord(
+    callbackSubscription.subscription_id,
+  );
+  assert.equal(callbackSubscriptionAfter.active, false);
 
   await app.close();
 });
@@ -2689,6 +3022,223 @@ test('Sepolia broadcast mode fails safely when execution credentials are incompl
   await app.close();
 });
 
+test('Sepolia broadcast mode fails safely when RPC is not actually Sepolia', async () => {
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      provider: {
+        async getNetwork() {
+          return { chainId: 1n };
+        },
+      },
+      rpcUrl: 'https://rpc.example.invalid',
+      privateKey:
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      sourceAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+      usdcContractAddress: '0x0000000000000000000000000000000000000001',
+      broadcastEnabled: true,
+    }),
+  });
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-SEPOLIA-WRONGCHAIN-001',
+      },
+      interbank_settlement_amount: {
+        amount: '10.00',
+        currency: 'USD',
+      },
+      creditor_account: {
+        proxy: {
+          identification: '0x0000000000000000000000000000000000000002',
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FAILED');
+  assert.match(statusResponse.json().failure_reason, /expected Sepolia/i);
+  assert.equal(statusResponse.json().transaction_hash, null);
+  assertAdapterMetadataShape(statusResponse.json().adapter_metadata, 'sepolia-usdc');
+
+  await app.close();
+});
+
+test('Sepolia broadcast mode can progress from broadcast to final and surface reporting linkage', async () => {
+  const transactionHash = `0x${'a'.repeat(64)}`;
+  const sourceAddress = '0x00000000000000000000000000000000000000aa';
+  const recipientAddress = '0x00000000000000000000000000000000000000bb';
+  const observedTransfers = [];
+  const chainState = {
+    latestBlock: 0,
+    receipt: null,
+  };
+
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      provider: {
+        async getNetwork() {
+          return { chainId: 11155111n, name: 'sepolia' };
+        },
+        async getFeeData() {
+          return {
+            maxFeePerGas: 30_000_000_000n,
+          };
+        },
+        async getTransactionReceipt(hash) {
+          assert.equal(hash, transactionHash);
+          return chainState.receipt;
+        },
+        async getBlockNumber() {
+          return chainState.latestBlock;
+        },
+        async getBlock(blockNumber) {
+          assert.equal(blockNumber, 100);
+          return { timestamp: 1_712_345_678 };
+        },
+      },
+      rpcUrl: 'https://rpc.example.invalid',
+      privateKey:
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      sourceAddress,
+      usdcContractAddress: '0x0000000000000000000000000000000000000001',
+      broadcastEnabled: true,
+      requiredConfirmations: 3,
+      gasLimit: 91000,
+      walletFactory() {
+        return {
+          address: sourceAddress,
+        };
+      },
+      contractFactory() {
+        return {
+          async transfer(recipient, amount, txOverrides) {
+            observedTransfers.push({
+              recipient,
+              amount,
+              txOverrides,
+            });
+            return {
+              hash: transactionHash,
+            };
+          },
+        };
+      },
+    }),
+  });
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-SEPOLIA-HAPPY-001',
+      },
+      interbank_settlement_amount: {
+        amount: '10.00',
+        currency: 'USD',
+      },
+      creditor_account: {
+        proxy: {
+          identification: recipientAddress,
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  assert.equal(createResponse.json().status, 'PENDING');
+
+  const broadcastStatusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(broadcastStatusResponse.statusCode, 200);
+  assert.equal(broadcastStatusResponse.json().status, 'BROADCAST');
+  assert.equal(broadcastStatusResponse.json().transaction_hash, transactionHash);
+  assert.equal(broadcastStatusResponse.json().adapter_metadata.adapter_mode, 'TESTNET_BROADCAST');
+  assert.equal(observedTransfers.length, 1);
+  assert.equal(observedTransfers[0].recipient, recipientAddress);
+  assert.equal(String(observedTransfers[0].amount), '10000000');
+  assert.equal(observedTransfers[0].txOverrides.gasLimit, 91000n);
+
+  chainState.receipt = {
+    blockNumber: 100,
+    gasUsed: 45_000n,
+    gasPrice: 20_000_000_000n,
+    status: 1,
+  };
+  chainState.latestBlock = 100;
+
+  const confirmingStatusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(confirmingStatusResponse.statusCode, 200);
+  assert.equal(confirmingStatusResponse.json().status, 'CONFIRMING');
+  assert.equal(confirmingStatusResponse.json().finality_status, 'PROBABILISTIC');
+  assert.equal(confirmingStatusResponse.json().confirmation_depth, 1);
+
+  chainState.latestBlock = 102;
+
+  const finalStatusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(finalStatusResponse.statusCode, 200);
+  assert.equal(finalStatusResponse.json().status, 'FINAL');
+  assert.equal(finalStatusResponse.json().finality_status, 'FINAL');
+  assert.equal(finalStatusResponse.json().confirmation_depth, 3);
+  assert.equal(finalStatusResponse.json().required_confirmation_depth, 3);
+  assert.equal(finalStatusResponse.json().status_history.length, 4);
+
+  const finalityReceiptResponse = await app.inject({
+    method: 'GET',
+    url: `/finality-receipt/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(finalityReceiptResponse.statusCode, 200);
+  assert.equal(finalityReceiptResponse.json().instruction_status, 'FINAL');
+  assert.equal(finalityReceiptResponse.json().transaction_hash, transactionHash);
+  assert.equal(finalityReceiptResponse.json().block_number, 100);
+  assert.equal(finalityReceiptResponse.json().finality_status, 'FINAL');
+  assert.ok(finalityReceiptResponse.json().included_at);
+  assert.ok(finalityReceiptResponse.json().final_at);
+
+  const reportSearchResponse = await app.inject({
+    method: 'GET',
+    url: `/report/search?wallet_address=${recipientAddress}&chain_dli=X9J9XDMTD&instruction_id=${createResponse.json().instruction_id}&finality_status=FINAL`,
+  });
+
+  assert.equal(reportSearchResponse.statusCode, 200);
+  assertReportEntrySearchResponseShape(reportSearchResponse.json());
+  assert.equal(reportSearchResponse.json().total_matched, 1);
+  assert.equal(
+    reportSearchResponse.json().entries[0].transaction_hash,
+    transactionHash,
+  );
+  assert.equal(reportSearchResponse.json().entries[0].finality_status, 'FINAL');
+  assert.equal(
+    reportSearchResponse.json().entries[0].instruction_id,
+    createResponse.json().instruction_id,
+  );
+
+  await app.close();
+});
+
 test('investigation cases can be created, updated, listed, and emitted through outbox/webhooks', async () => {
   const app = await buildApp();
 
@@ -2722,6 +3272,21 @@ test('investigation cases can be created, updated, listed, and emitted through o
   });
   assert.equal(finalizedInstruction.status, 'FINAL');
 
+  const notificationsResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/notifications?instruction_id=${instruction.instruction_id}`,
+  });
+  assert.equal(notificationsResponse.statusCode, 200);
+  const affectedNotificationId =
+    notificationsResponse.json().notifications[0].notification_id;
+
+  const statementsResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/statements?instruction_id=${instruction.instruction_id}`,
+  });
+  assert.equal(statementsResponse.statusCode, 200);
+  const affectedStatementId = statementsResponse.json().statements[0].statement_id;
+
   const subscriptionResponse = await app.inject({
     method: 'POST',
     url: '/webhook-endpoints',
@@ -2739,6 +3304,10 @@ test('investigation cases can be created, updated, listed, and emitted through o
     url: '/exceptions/investigations',
     payload: buildInvestigationCasePayload({
       related_instruction_id: instruction.instruction_id,
+      assigned_team: 'CHAIN_OPERATIONS',
+      next_action_due_at: new Date(Date.now() + 60_000).toISOString(),
+      affected_notification_ids: [affectedNotificationId],
+      affected_statement_ids: [affectedStatementId],
     }),
   });
 
@@ -2747,6 +3316,9 @@ test('investigation cases can be created, updated, listed, and emitted through o
   assertInvestigationCaseShape(investigation);
   assert.equal(investigation.case_status, 'OPEN');
   assert.equal(investigation.related_instruction_id, instruction.instruction_id);
+  assert.equal(investigation.assigned_team, 'CHAIN_OPERATIONS');
+  assert.equal(investigation.affected_notification_ids.length, 1);
+  assert.equal(investigation.affected_statement_ids.length, 1);
   assert.equal(
     investigation.traceability.resource_paths.investigation_case,
     `/exceptions/investigations/${investigation.investigation_case_id}`,
@@ -2757,6 +3329,11 @@ test('investigation cases can be created, updated, listed, and emitted through o
     url: `/exceptions/investigations/${investigation.investigation_case_id}`,
     payload: {
       case_status: 'WAITING_COUNTERPARTY',
+      current_owner: {
+        name: 'Counterparty Liaison Desk',
+      },
+      counterparty_reference: 'CP-INV-2026-001',
+      reporting_follow_up_required: true,
       resolution_summary: 'Counterparty confirmation requested.',
     },
   });
@@ -2764,6 +3341,8 @@ test('investigation cases can be created, updated, listed, and emitted through o
   assert.equal(updateCaseResponse.statusCode, 200);
   assert.equal(updateCaseResponse.json().case_status, 'WAITING_COUNTERPARTY');
   assert.equal(updateCaseResponse.json().status_history.length, 2);
+  assert.equal(updateCaseResponse.json().current_owner.name, 'Counterparty Liaison Desk');
+  assert.equal(updateCaseResponse.json().reporting_follow_up_required, true);
 
   const listResponse = await app.inject({
     method: 'GET',
@@ -2800,6 +3379,83 @@ test('investigation cases can be created, updated, listed, and emitted through o
 
   assert.equal(deliveryResponse.statusCode, 200);
   assert.equal(deliveryResponse.json().total_matched, 2);
+
+  await app.close();
+});
+
+test('closed investigation cases reject reopening transitions', async () => {
+  const app = await buildApp();
+
+  const createInstructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-EXC-INV-CLOSE-001',
+      },
+    }),
+  });
+
+  assert.equal(createInstructionResponse.statusCode, 201);
+  const instruction = createInstructionResponse.json();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+  await waitFor(() => {
+    const record = app.store.getInstruction(instruction.instruction_id);
+    assert.equal(record.status, 'FINAL');
+    return record;
+  });
+
+  const createCaseResponse = await app.inject({
+    method: 'POST',
+    url: '/exceptions/investigations',
+    payload: buildInvestigationCasePayload({
+      related_instruction_id: instruction.instruction_id,
+    }),
+  });
+
+  assert.equal(createCaseResponse.statusCode, 201);
+  const investigation = createCaseResponse.json();
+
+  const resolveResponse = await app.inject({
+    method: 'PATCH',
+    url: `/exceptions/investigations/${investigation.investigation_case_id}`,
+    payload: {
+      case_status: 'RESOLVED',
+      resolution_type: 'INFORMATION_PROVIDED',
+      resolution_summary: 'Counterparty confirmed beneficiary credit.',
+    },
+  });
+
+  assert.equal(resolveResponse.statusCode, 200);
+
+  const closeResponse = await app.inject({
+    method: 'PATCH',
+    url: `/exceptions/investigations/${investigation.investigation_case_id}`,
+    payload: {
+      case_status: 'CLOSED',
+      resolution_type: 'INFORMATION_PROVIDED',
+      resolution_summary: 'Case closed after confirmation.',
+    },
+  });
+
+  assert.equal(closeResponse.statusCode, 200);
+
+  const reopenResponse = await app.inject({
+    method: 'PATCH',
+    url: `/exceptions/investigations/${investigation.investigation_case_id}`,
+    payload: {
+      case_status: 'IN_PROGRESS',
+    },
+  });
+
+  assert.equal(reopenResponse.statusCode, 409);
+  assert.equal(reopenResponse.json().error, 'invalid_state');
 
   await app.close();
 });
@@ -2912,6 +3568,60 @@ test('return cases can be created and settled without rewriting the original ins
 
   assert.equal(outboxResponse.statusCode, 200);
   assert.equal(outboxResponse.json().total_matched, 2);
+
+  await app.close();
+});
+
+test('on-chain compensating return cases require compensating instruction before settlement', async () => {
+  const app = await buildApp();
+
+  const createInstructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-EXC-RETURN-CHAIN-001',
+      },
+    }),
+  });
+
+  assert.equal(createInstructionResponse.statusCode, 201);
+  const instruction = createInstructionResponse.json();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+  await waitFor(() => {
+    const record = app.store.getInstruction(instruction.instruction_id);
+    assert.equal(record.status, 'FINAL');
+    return record;
+  });
+
+  const createReturnResponse = await app.inject({
+    method: 'POST',
+    url: '/exceptions/returns',
+    payload: buildReturnCasePayload({
+      original_instruction_id: instruction.instruction_id,
+      return_method: 'ON_CHAIN_COMPENSATING_TRANSFER',
+    }),
+  });
+
+  assert.equal(createReturnResponse.statusCode, 201);
+
+  const settleResponse = await app.inject({
+    method: 'PATCH',
+    url: `/exceptions/returns/${createReturnResponse.json().return_case_id}`,
+    payload: {
+      return_status: 'SETTLED',
+      resolution_summary: 'Compensating transfer broadcast without stored reference.',
+    },
+  });
+
+  assert.equal(settleResponse.statusCode, 400);
+  assert.equal(settleResponse.json().error, 'invalid_request');
 
   await app.close();
 });

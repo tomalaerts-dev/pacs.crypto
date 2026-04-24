@@ -79,6 +79,8 @@ Success criteria:
 Current status:
 
 - in progress: the `sepolia-usdc` adapter is implemented behind the existing adapter seam, read-only mode is available without private key material, and broadcast mode is environment-gated
+- in progress: the happy-path `BROADCAST -> CONFIRMING -> FINAL` Sepolia lifecycle is now covered in automated tests with injected provider/signer stubs, including reporting linkage on the same instruction identifiers
+- in progress: preflight and demo-run scripts now exist to validate wallet readiness and capture a real-chain evidence bundle once credentials are present
 - remaining: run a funded-wallet Sepolia transaction and capture the resulting tx hash, confirmations, and finality receipt for the reviewer demo
 
 ### Phase B - Spec 3 reporting alignment
@@ -92,7 +94,7 @@ Deliverables:
 
 - expose the root `/report/*` path family alongside the legacy `/reporting/*` aliases
 - keep entry search, stats, and notification subscription wallet-scoped and test-covered
-- document the remaining shape gaps between the current reference-server records and the root camt.052 / camt.053 / camt.054 wrappers
+- keep documenting the remaining gap between the root reporting flows and bank-side callback scope
 
 Success criteria:
 
@@ -102,7 +104,10 @@ Success criteria:
 Current status:
 
 - in progress: `/report/query`, `/report/intraday`, `/report/statement`, `/report/notification/{notificationId}`, `/report/search`, and `/report/stats` now exist in the reference server
-- remaining: tighten the response wire shapes toward the root YAML wrappers and decide whether raw camt.054-style webhook payloads should diverge from or replace the generic event envelope
+- in progress: the root `GET /report/*` pull routes now return camt.052 / camt.053 / camt.054-style wrappers on top of the existing reporting records without breaking the legacy `/reporting/*` aliases
+- in progress: `/report/query` notification subscriptions now deliver raw camt.054-style notification bodies, while generic `/webhook-endpoints` subscriptions keep the event envelope for operator observability
+- in progress: `STATEMENT + callback_url` now queues a raw camt.053-style statement callback through the retrying delivery engine
+- remaining: keep the bank-side callback boundary explicit and avoid over-expanding reporting before the real-chain demo
 
 ### Phase C - Reviewer demo with real chain evidence
 Target window: Q3 2026
@@ -122,6 +127,12 @@ Success criteria:
 - a reviewer can inspect one live scenario with real chain evidence in under ten minutes
 - the demo strengthens the standards story instead of turning into a generic crypto showcase
 
+Current status:
+
+- in progress: preflight and demo-run scripts exist for the funded Sepolia path
+- in progress: reviewer-summary generation is scripted so a captured run can be turned into a concise markdown evidence pack immediately after execution
+- remaining: capture one funded Sepolia run and freeze it as the canonical reviewer sample path
+
 ### Phase D - Exception handling deepening
 Target window: Q3 to Q4 2026
 
@@ -139,6 +150,12 @@ Success criteria:
 
 - real-chain operational follow-up can be tracked without mutating original `FINAL` payments
 - exception-family objects remain distinct from execution-status and finality reads
+
+Current status:
+
+- in progress: investigation cases now enforce lifecycle transitions, closure rules, and operator-workflow fields such as owner, team, due date, and counterparty reference
+- in progress: return cases now distinguish on-chain compensating-transfer settlement evidence from off-chain/manual remediation evidence
+- in progress: exception cases can now point to specific reporting notifications and statements for the same underlying instruction
 
 ### Phase E - Delegated signing
 Target window: Q4 2026 to Q1 2027

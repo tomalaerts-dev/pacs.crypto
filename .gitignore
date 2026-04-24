@@ -6,3 +6,4 @@ reference-server/.env.*
 reference-server/node_modules/
 reference-server/data/*.sqlite
 reference-server/data/*.sqlite-*
+reference-server/data/demo-runs/

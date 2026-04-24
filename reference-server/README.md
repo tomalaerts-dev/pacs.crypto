@@ -49,6 +49,12 @@ Current scope:
 - `GET /reporting/intraday`
 - `GET /reporting/statements`
 - `GET /reporting/statements/:statementId`
+- `POST /report/query`
+- `GET /report/intraday`
+- `GET /report/statement`
+- `GET /report/notification/:notificationId`
+- `GET /report/search`
+- `GET /report/stats`
 
 ## Run
 
@@ -90,6 +96,80 @@ To broadcast transactions, also set `REF_SERVER_SEPOLIA_BROADCAST_ENABLED=true`,
 `REF_SERVER_SEPOLIA_SOURCE_ADDRESS`, and
 `REF_SERVER_SEPOLIA_USDC_CONTRACT_ADDRESS`.
 
+## Real-Chain Workflow
+
+Use these commands when you want to run the first funded-wallet Sepolia proof
+path rather than the mock wedge.
+
+### 1. Preflight the wallet and RPC
+
+```bash
+cd reference-server
+npm run preflight:sepolia
+```
+
+Required environment for preflight:
+
+- `REF_SERVER_SEPOLIA_RPC_URL`
+- `REF_SERVER_SEPOLIA_PRIVATE_KEY`
+- `REF_SERVER_SEPOLIA_USDC_CONTRACT_ADDRESS`
+- optional but recommended: `REF_SERVER_SEPOLIA_SOURCE_ADDRESS`
+
+The preflight checks:
+
+- the RPC is actually Sepolia (`chain_id = 11155111`)
+- the private key matches the configured source address
+- code exists at the configured USDC contract
+- the source wallet has ETH for gas and a non-zero USDC balance
+
+### 2. Start the server in broadcast mode
+
+```bash
+REF_SERVER_CHAIN_ADAPTER=sepolia-usdc \
+REF_SERVER_SEPOLIA_BROADCAST_ENABLED=true \
+npm start
+```
+
+### 3. Run the canonical demo flow and capture evidence
+
+```bash
+REF_SERVER_DEMO_RECIPIENT_WALLET=0x... \
+REF_SERVER_DEMO_DEBTOR_WALLET="$REF_SERVER_SEPOLIA_SOURCE_ADDRESS" \
+npm run demo:sepolia
+```
+
+Optional demo controls:
+
+- `REF_SERVER_DEMO_BASE_URL` (defaults to `http://127.0.0.1:5050`)
+- `REF_SERVER_DEMO_AMOUNT` (defaults to `1.00`)
+- `REF_SERVER_DEMO_POLL_INTERVAL_MS`
+- `REF_SERVER_DEMO_TIMEOUT_MS`
+- `REF_SERVER_DEMO_LABEL`
+- `REF_SERVER_DEMO_OUTPUT_DIR`
+- `REF_SERVER_DEMO_SEND_TRAVEL_RULE_CALLBACK`
+
+The demo runner writes a full artifact bundle under:
+
+- `reference-server/data/demo-runs/<run-id>/`
+
+To render a reviewer-facing markdown summary from a captured run:
+
+```bash
+npm run demo:report -- data/demo-runs/<run-id>
+```
+
+Artifacts include:
+
+- quote request/response
+- Travel Rule request/response and callback
+- instruction request/response
+- execution-status poll history and final payload
+- finality receipt
+- reporting notification and statement payloads
+- report search and report stats payloads
+- a final summary with the tx hash and Sepolia Etherscan URL
+- a reviewer markdown summary
+
 ## Notes
 
 - Persistence uses Node's built-in `node:sqlite` module.
@@ -97,6 +177,7 @@ To broadcast transactions, also set `REF_SERVER_SEPOLIA_BROADCAST_ENABLED=true`,
 - The default adapter is a mocked EVM adapter with amount-aware fee, slippage, and finality modeling over the lifecycle:
   `PENDING -> BROADCAST -> CONFIRMING -> FINAL`
 - A `sepolia-usdc` adapter is available behind `REF_SERVER_CHAIN_ADAPTER`. It uses ethers for Sepolia RPC reads, USDC transfer broadcast, transaction receipt polling, and confirmation-depth based finality.
+- The Sepolia adapter now fails safely if the configured RPC endpoint is not actually Sepolia.
 - Adapter metadata is surfaced on quote, instruction, execution-status, and finality reads without adding new execution families.
 - `execution-status` is the pacs.002-like read surface for lifecycle state and history.
 - `finality-receipt` is the camt.025-like read surface for transaction hash, confirmations, and finality proof.
@@ -107,8 +188,10 @@ To broadcast transactions, also set `REF_SERVER_SEPOLIA_BROADCAST_ENABLED=true`,
 - `reporting/notifications` is the first reporting-family surface: a `camt.054` analogue for booked debtor debit and creditor credit notifications keyed to the instruction lifecycle.
 - `reporting/intraday` is the next reporting-family surface: a narrow `camt.052` analogue summarizing booked intraday movements and account views from those notifications.
 - `reporting/statements` starts the statement layer: a `camt.053` analogue that persists per-instruction account statements derived from the existing reporting notifications and instruction context.
+- The root `Spec 3` reporting paths (`/report/*`) are also exposed alongside the legacy `/reporting/*` aliases, and the pull reads now return camt-style `group_header` / `report` / `statement` / `entry` wrappers rather than the earlier internal-only record shapes.
 - Reporting records now carry explicit traceability back to instruction, status, finality, transaction hash, and Travel Rule resources where available, plus statement derivation metadata sourced from booked notifications.
-- Reporting notifications are also emitted as `reporting_notification.created` events through the same outbox and webhook delivery pipeline.
+- Reporting notifications are also emitted as `reporting_notification.created` events through the same outbox and webhook delivery pipeline. Generic webhook subscriptions receive the event envelope; `/report/query` notification subscriptions receive the raw camt-style notification body.
+- `POST /report/query` with `STATEMENT + callback_url` now queues a raw camt-style statement callback through the same retrying delivery engine instead of inventing a separate callback subsystem.
 - `exceptions/investigations` is the first exception-family runtime slice: a `camt.029`-like investigation case object linked to instruction, finality, reporting, and Travel Rule references without rewriting the original payment state.
 - `exceptions/returns` is the second exception-family runtime slice: a `pacs.004`-like remediation object for post-settlement return or refund handling, again linked to rather than overwriting the original payment.
 - Exception-family changes are emitted as `investigation_case.updated` and `return_case.updated` through the same outbox and webhook delivery pipeline.

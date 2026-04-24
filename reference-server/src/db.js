@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 import { normalizeChainAdapter } from './chain/adapter-contract.js';
@@ -19,6 +19,7 @@ const WEBHOOK_EVENT_TYPES = [
   'execution_status.updated',
   'finality_receipt.updated',
   'reporting_notification.created',
+  'reporting_statement.ready',
   'investigation_case.updated',
   'return_case.updated',
 ];
@@ -590,6 +591,7 @@ function normalizeInstructionSubmission(submission) {
     creditor: submission.creditor ?? null,
     creditor_account: submission.creditor_account ?? null,
     creditor_agent: submission.creditor_agent ?? null,
+    charge_bearer: submission.charge_bearer ?? null,
     interbank_settlement_amount:
       submission.interbank_settlement_amount ?? {
         amount: submission.amount ?? '0',
@@ -701,34 +703,408 @@ function sortReportingNotificationRecords(records, sort) {
   return [...records].sort((left, right) => compareReportingRecords(left, right, sort));
 }
 
-function buildReportBalanceSnapshots(records) {
+function buildStableReportingIdentifier(prefix, seed) {
+  const digest = createHash('sha256')
+    .update(String(seed ?? ''))
+    .digest('hex')
+    .slice(0, 12)
+    .toUpperCase();
+  return `${prefix}-${digest}`.slice(0, 35);
+}
+
+function toUtcDayStart(dateValue) {
+  return `${dateValue}T00:00:00Z`;
+}
+
+function toUtcDayEnd(dateValue) {
+  return `${dateValue}T23:59:59.999Z`;
+}
+
+function formatTokenAmountValue(value) {
+  return formatDecimalAmount(value, 8);
+}
+
+function buildSpecPartyIdentification(party = null) {
+  if (!party || typeof party !== 'object') {
+    return {};
+  }
+
+  return {
+    ...(party.name ? { name: party.name } : {}),
+    ...(party.lei ? { lei: party.lei } : {}),
+    ...(party.country ? { country: party.country } : {}),
+    ...(party.postal_address ? { postal_address: party.postal_address } : {}),
+  };
+}
+
+function buildSpecAgentIdentification(agent = null) {
+  if (!agent || typeof agent !== 'object') {
+    return null;
+  }
+
+  const normalized = {
+    ...(agent.name ? { name: agent.name } : {}),
+    ...(agent.lei ? { lei: agent.lei } : {}),
+    ...(agent.bic ? { bic: agent.bic } : {}),
+    ...(agent.country ? { country: agent.country } : {}),
+  };
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function buildSpecTokenIdentification(record, instruction = null) {
+  const token =
+    record?.token ??
+    instruction?.blockchain_instruction?.token ??
+    {};
+  const chainDli =
+    token.chain_dli ??
+    record?.chain_dli ??
+    instruction?.blockchain_instruction?.chain_dli ??
+    null;
+
+  return {
+    ...(token.token_dti ? { token_dti: token.token_dti } : {}),
+    ...(token.contract_address ? { contract_address: token.contract_address } : {}),
+    ...(chainDli ? { chain_dli: chainDli } : {}),
+    ...(token.isin ? { isin: token.isin } : {}),
+    ...(token.token_symbol ? { token_symbol: token.token_symbol } : {}),
+    ...(token.token_standard ? { token_standard: token.token_standard } : {}),
+    ...(token.token_issuer ? { token_issuer: token.token_issuer } : {}),
+  };
+}
+
+function deriveReportingEntryLifecycle(record) {
+  const currentInstructionStatus =
+    record?.status_reference?.current_instruction_status ?? null;
+  const triggerStatus = record?.status_reference?.trigger_status ?? null;
+
+  if (currentInstructionStatus === 'FINAL' || triggerStatus === 'FINAL') {
+    return {
+      entryStatus: 'BOOK',
+      finalityStatus: 'FINAL',
+      notificationType: 'ENTRY_FINAL',
+    };
+  }
+
+  if (currentInstructionStatus === 'CONFIRMING') {
+    return {
+      entryStatus: 'PDNG',
+      finalityStatus: 'PROBABILISTIC',
+      notificationType: 'ENTRY_PENDING',
+    };
+  }
+
+  return {
+    entryStatus: 'PDNG',
+    finalityStatus: record?.transaction_hash ? 'PROBABILISTIC' : 'PENDING',
+    notificationType: 'ENTRY_PENDING',
+  };
+}
+
+function buildSpecEntryReference(record) {
+  return buildStableReportingIdentifier(
+    'ENT',
+    `${record?.instruction_id ?? ''}:${record?.account_role ?? ''}`,
+  );
+}
+
+function buildSpecWalletAccount(record = null, overrides = {}) {
+  const walletAddress =
+    overrides.wallet_address ??
+    record?.party?.wallet_address ??
+    null;
+  const chainDli =
+    overrides.chain_dli ??
+    record?.chain_dli ??
+    null;
+  const owner = buildSpecPartyIdentification(record?.party ?? null);
+  const servicer = buildSpecAgentIdentification(record?.servicing_agent ?? null);
+  const account = {
+    identification: {
+      proxy: {
+        type: {
+          code: 'EWAL',
+        },
+        identification: walletAddress,
+      },
+    },
+    type: {
+      proprietary: `DLID/${chainDli}`,
+    },
+  };
+
+  if (record?.party?.name) {
+    account.name = record.party.name;
+  }
+  if (Object.keys(owner).length > 0) {
+    account.owner = owner;
+  }
+  if (servicer) {
+    account.servicer = servicer;
+  }
+
+  return account;
+}
+
+function buildSpecGroupHeader({
+  prefix,
+  seed,
+  createdAt,
+  recipient = null,
+  additionalInformation = null,
+}) {
+  return {
+    message_identification: buildStableReportingIdentifier(prefix, seed),
+    creation_date_time: createdAt ?? nowIso(),
+    message_recipient: buildSpecPartyIdentification(recipient),
+    ...(additionalInformation
+      ? { additional_information: additionalInformation }
+      : {}),
+  };
+}
+
+function buildSpecChargesInformation(record, instruction = null) {
+  const amount =
+    instruction?.on_chain_settlement?.actual_gas_cost_fiat?.amount ??
+    instruction?.fee_estimate?.gas_cost_fiat?.amount ??
+    null;
+  const currency =
+    instruction?.on_chain_settlement?.actual_gas_cost_fiat?.currency ??
+    instruction?.fee_estimate?.gas_cost_fiat?.currency ??
+    null;
+  const agent = buildSpecAgentIdentification(record?.servicing_agent ?? null);
+
+  if (!amount || !currency) {
+    return null;
+  }
+
+  return {
+    amount,
+    currency,
+    ...(instruction?.charge_bearer ? { charge_bearer: instruction.charge_bearer } : {}),
+    ...(agent ? { agent } : {}),
+  };
+}
+
+function buildSpecGasDetail(record, instruction = null, chainAdapter = null) {
+  if (!instruction) {
+    return null;
+  }
+
+  const adapterMetadata = buildAdapterMetadata(chainAdapter, instruction);
+  const chainDli =
+    record?.chain_dli ??
+    instruction?.blockchain_instruction?.chain_dli ??
+    null;
+  const nativeCurrency =
+    adapterMetadata?.network_profile?.native_currency ?? 'ETH';
+  const nativeFeeAmount =
+    instruction?.on_chain_settlement?.actual_gas_cost_native ??
+    instruction?.fee_estimate?.gas_cost_native?.amount ??
+    null;
+  const fiatEquivalent =
+    instruction?.on_chain_settlement?.actual_gas_cost_fiat ??
+    instruction?.fee_estimate?.gas_cost_fiat ??
+    null;
+  const gasLimit = adapterMetadata?.fee_model?.gas_limit ?? null;
+  const detail = {};
+
+  if (nativeFeeAmount) {
+    detail.native_fee = {
+      amount: nativeFeeAmount,
+      token: {
+        token_symbol: nativeCurrency,
+        ...(chainDli ? { chain_dli: chainDli } : {}),
+      },
+    };
+  }
+
+  if (fiatEquivalent?.amount && fiatEquivalent?.currency) {
+    detail.fiat_equivalent = {
+      amount: fiatEquivalent.amount,
+      currency: fiatEquivalent.currency,
+    };
+  }
+
+  if (gasLimit !== null && gasLimit !== undefined) {
+    detail.gas_limit = gasLimit;
+  }
+
+  return Object.keys(detail).length > 0 ? detail : null;
+}
+
+function buildSpecBlockchainDetail(record, instruction = null, chainAdapter = null) {
+  const transactionHash =
+    record?.transaction_hash ??
+    instruction?.on_chain_settlement?.transaction_hash ??
+    null;
+  const chainDli =
+    record?.chain_dli ??
+    instruction?.blockchain_instruction?.chain_dli ??
+    null;
+
+  if (!transactionHash || !chainDli) {
+    return null;
+  }
+
+  const lifecycle = deriveReportingEntryLifecycle(record);
+  const detail = {
+    transaction_hash: transactionHash,
+    chain_dli: chainDli,
+  };
+  const settlement = instruction?.on_chain_settlement ?? null;
+
+  if (settlement?.block_number !== null && settlement?.block_number !== undefined) {
+    detail.block_number = settlement.block_number;
+  }
+  if (settlement?.block_timestamp) {
+    detail.block_timestamp = settlement.block_timestamp;
+  }
+  if (
+    settlement?.confirmation_depth !== null &&
+    settlement?.confirmation_depth !== undefined
+  ) {
+    detail.confirmation_depth = settlement.confirmation_depth;
+  }
+
+  detail.finality_status = lifecycle.finalityStatus;
+
+  if (lifecycle.finalityStatus === 'FINAL') {
+    if (
+      settlement?.required_confirmation_depth !== null &&
+      settlement?.required_confirmation_depth !== undefined
+    ) {
+      detail.confirmation_depth_at_finality =
+        settlement.required_confirmation_depth;
+    }
+    if (record?.booking_date_time) {
+      detail.finality_achieved_at = record.booking_date_time;
+    }
+  }
+
+  const gasDetail = buildSpecGasDetail(record, instruction, chainAdapter);
+  if (gasDetail) {
+    detail.gas_detail = gasDetail;
+  }
+  if (instruction?.instruction_id) {
+    detail.instruction_id = instruction.instruction_id;
+  }
+  if (record?.travel_rule_record_id ?? instruction?.travel_rule_record_id) {
+    detail.travel_rule_record_id =
+      record?.travel_rule_record_id ?? instruction?.travel_rule_record_id;
+  }
+  if (record?.counterparty?.wallet_address) {
+    detail.counterparty_wallet = record.counterparty.wallet_address;
+  }
+
+  return detail;
+}
+
+function buildSpecBlockchainEntry(record, instruction = null, chainAdapter = null) {
+  const lifecycle = deriveReportingEntryLifecycle(record);
+  const token = buildSpecTokenIdentification(record, instruction);
+  const entry = {
+    entry_reference: buildSpecEntryReference(record),
+    credit_debit_indicator: toReportCreditDebitIndicator(record.entry_type),
+    entry_status: lifecycle.entryStatus,
+    booking_date: record.booking_date_time,
+    value_date: record.booking_date_time?.slice(0, 10) ?? null,
+    token,
+    token_amount: {
+      amount: record.settlement_amount?.amount ?? '0',
+    },
+  };
+  const instructedAmount =
+    instruction?.instructed_amount ??
+    record?.settlement_amount ??
+    null;
+  const chargesInformation = buildSpecChargesInformation(record, instruction);
+  const blockchainDetail = buildSpecBlockchainDetail(
+    record,
+    instruction,
+    chainAdapter,
+  );
+
+  if (instructedAmount?.amount && instructedAmount?.currency) {
+    entry.instructed_amount = {
+      amount: instructedAmount.amount,
+      currency: instructedAmount.currency,
+    };
+  }
+  if (chargesInformation) {
+    entry.charges_information = chargesInformation;
+  }
+  if (record?.remittance_information) {
+    entry.remittance_information = record.remittance_information;
+  }
+  if (blockchainDetail) {
+    entry.blockchain_detail = blockchainDetail;
+  }
+
+  return entry;
+}
+
+function buildSpecBalanceAggregation(records, mode, snapshotTime) {
   const totals = new Map();
+
   for (const record of records) {
     const key = serialize({
-      currency: record.settlement_amount?.currency ?? 'XXX',
       token_dti: record.token?.token_dti ?? null,
       token_symbol: record.token?.token_symbol ?? null,
+      chain_dli: record.chain_dli ?? null,
     });
     const existing = totals.get(key) ?? {
-      token: record.token ?? {},
-      currency: record.settlement_amount?.currency ?? 'XXX',
-      netAmount: 0,
+      token: buildSpecTokenIdentification(record, null),
+      bookedNet: 0,
+      pendingNet: 0,
     };
     const amount = Number.parseFloat(record.settlement_amount?.amount ?? '0');
-    existing.netAmount += record.entry_type === 'DEBIT' ? -amount : amount;
+    const signedAmount = record.entry_type === 'DEBIT' ? -amount : amount;
+    const lifecycle = deriveReportingEntryLifecycle(record);
+
+    if (lifecycle.entryStatus === 'BOOK') {
+      existing.bookedNet += signedAmount;
+    } else {
+      existing.pendingNet += signedAmount;
+    }
+
     totals.set(key, existing);
   }
 
-  return Array.from(totals.values()).map((entry) => ({
-    balance_type: 'ITBD',
-    token: entry.token,
-    token_amount: {
-      amount: formatDecimalAmount(entry.netAmount),
-      currency: entry.currency,
-    },
-    credit_debit_indicator: entry.netAmount < 0 ? 'DBIT' : 'CRDT',
-    date_time: nowIso(),
-  }));
+  return Array.from(totals.values()).flatMap((entry) => {
+    const balances = [];
+    const addBalance = (balanceType, amount) => {
+      balances.push({
+        balance_type: balanceType,
+        token: entry.token,
+        token_amount: {
+          amount: formatTokenAmountValue(amount),
+        },
+        credit_debit_indicator: amount < 0 ? 'DBIT' : 'CRDT',
+        date_time: snapshotTime,
+      });
+    };
+
+    if (mode === 'STATEMENT') {
+      addBalance('OPBD', 0);
+      addBalance('CLBD', entry.bookedNet);
+      return balances;
+    }
+
+    if (mode === 'INTRADAY') {
+      addBalance('OPBD', 0);
+    }
+    addBalance('ITBD', entry.bookedNet);
+    if (entry.pendingNet !== 0) {
+      addBalance('XPCD', entry.bookedNet + entry.pendingNet);
+    }
+    return balances;
+  });
+}
+
+function buildReportBalanceSnapshots(records) {
+  return buildSpecBalanceAggregation(records, 'BALANCE', nowIso());
 }
 
 function buildReportingNotificationRecord(record, notificationKind, chainAdapter) {
@@ -912,21 +1288,16 @@ function buildReportingNotificationSummary(record) {
 }
 
 function buildReportEntrySummary(record) {
+  const lifecycle = deriveReportingEntryLifecycle(record);
   return {
-    entry_reference: record.notification_id,
+    entry_reference: buildSpecEntryReference(record),
     credit_debit_indicator: toReportCreditDebitIndicator(record.entry_type),
-    entry_status: toReportEntryStatus(record.booking_status),
+    entry_status: lifecycle.entryStatus,
     booking_date: record.booking_date_time,
     token_dti: record.token?.token_dti ?? null,
     token_symbol: record.token?.token_symbol ?? null,
     token_amount: record.settlement_amount?.amount ?? null,
-    finality_status: record.status_reference?.current_instruction_status === 'FINAL'
-      ? 'FINAL'
-      : record.status_reference?.trigger_status === 'BROADCAST'
-        ? 'PENDING'
-        : record.status_reference?.trigger_status === 'CONFIRMING'
-          ? 'PROBABILISTIC'
-          : (record.traceability?.transaction_hash ? 'PROBABILISTIC' : 'PENDING'),
+    finality_status: lifecycle.finalityStatus,
     transaction_hash: record.transaction_hash ?? null,
     instruction_id: record.instruction_id,
     travel_rule_record_id: record.travel_rule_record_id ?? null,
@@ -1309,9 +1680,148 @@ function appendExceptionCaseActivity(history, { status, updatedAt, summary }) {
   ];
 }
 
+const INVESTIGATION_CASE_ALLOWED_TRANSITIONS = {
+  OPEN: new Set(['IN_PROGRESS', 'WAITING_COUNTERPARTY', 'RESOLVED', 'CLOSED']),
+  IN_PROGRESS: new Set(['WAITING_COUNTERPARTY', 'RESOLVED', 'CLOSED']),
+  WAITING_COUNTERPARTY: new Set(['IN_PROGRESS', 'RESOLVED', 'CLOSED']),
+  RESOLVED: new Set(['CLOSED']),
+  CLOSED: new Set([]),
+};
+
+const RETURN_CASE_ALLOWED_TRANSITIONS = {
+  PROPOSED: new Set(['APPROVED', 'SETTLED', 'DECLINED', 'CANCELLED']),
+  APPROVED: new Set(['SETTLED', 'CANCELLED']),
+  SETTLED: new Set([]),
+  DECLINED: new Set([]),
+  CANCELLED: new Set([]),
+};
+
+function buildExceptionDomainError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function normalizeExceptionReferenceIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.filter(Boolean)));
+}
+
+function assertAllowedCaseTransition(currentStatus, nextStatus, transitionMap, label) {
+  if (!nextStatus || nextStatus === currentStatus) {
+    return;
+  }
+
+  const allowed = transitionMap[currentStatus] ?? new Set();
+  if (!allowed.has(nextStatus)) {
+    throw buildExceptionDomainError(
+      'CONFLICT',
+      `${label} cannot move from ${currentStatus} to ${nextStatus}.`,
+    );
+  }
+}
+
+function assertInvestigationCaseWorkflow(current, nextStatus, patch) {
+  assertAllowedCaseTransition(
+    current.case_status,
+    nextStatus,
+    INVESTIGATION_CASE_ALLOWED_TRANSITIONS,
+    'Investigation case',
+  );
+
+  const requiresCounterpartyAction =
+    typeof patch.requires_counterparty_action === 'boolean'
+      ? patch.requires_counterparty_action
+      : current.requires_counterparty_action;
+  const resolutionType = patch.resolution_type ?? current.resolution_type ?? null;
+  const resolutionSummary =
+    patch.resolution_summary ?? current.resolution_summary ?? null;
+
+  if (
+    nextStatus === 'WAITING_COUNTERPARTY' &&
+    requiresCounterpartyAction !== true
+  ) {
+    throw buildExceptionDomainError(
+      'INVALID_REQUEST',
+      'WAITING_COUNTERPARTY requires requires_counterparty_action to be true.',
+    );
+  }
+
+  if (
+    ['RESOLVED', 'CLOSED'].includes(nextStatus) &&
+    (!resolutionType || !resolutionSummary)
+  ) {
+    throw buildExceptionDomainError(
+      'INVALID_REQUEST',
+      'RESOLVED and CLOSED investigation cases require both resolution_type and resolution_summary.',
+    );
+  }
+}
+
+function assertReturnCaseWorkflow(current, nextStatus, patch) {
+  assertAllowedCaseTransition(
+    current.return_status,
+    nextStatus,
+    RETURN_CASE_ALLOWED_TRANSITIONS,
+    'Return case',
+  );
+
+  const resolutionSummary =
+    patch.resolution_summary ?? current.resolution_summary ?? null;
+  const compensatingInstructionId =
+    patch.compensating_instruction_id ??
+    current.compensating_instruction_id ??
+    null;
+  const offChainReference =
+    patch.off_chain_reference ?? current.off_chain_reference ?? null;
+
+  if (
+    ['DECLINED', 'CANCELLED'].includes(nextStatus) &&
+    !resolutionSummary
+  ) {
+    throw buildExceptionDomainError(
+      'INVALID_REQUEST',
+      'DECLINED and CANCELLED return cases require resolution_summary.',
+    );
+  }
+
+  if (nextStatus === 'SETTLED') {
+    if (
+      current.return_method === 'ON_CHAIN_COMPENSATING_TRANSFER' &&
+      !compensatingInstructionId
+    ) {
+      throw buildExceptionDomainError(
+        'INVALID_REQUEST',
+        'SETTLED on-chain compensating transfers require compensating_instruction_id.',
+      );
+    }
+
+    if (
+      ['OFF_CHAIN_REFUND', 'MANUAL_FIAT_REMEDIATION'].includes(
+        current.return_method,
+      ) &&
+      !offChainReference
+    ) {
+      throw buildExceptionDomainError(
+        'INVALID_REQUEST',
+        `SETTLED ${current.return_method} cases require off_chain_reference.`,
+      );
+    }
+  }
+}
+
 function buildInvestigationCaseRecord(submission, instruction, linkedReturnCase = null) {
   const openedAt = nowIso();
   const investigationCaseId = randomUUID();
+  const affectedNotificationIds = normalizeExceptionReferenceIds(
+    submission.affected_notification_ids,
+  );
+  const affectedStatementIds = normalizeExceptionReferenceIds(
+    submission.affected_statement_ids,
+  );
   return {
     investigation_case_id: investigationCaseId,
     exception_case_id: investigationCaseId,
@@ -1326,6 +1836,13 @@ function buildInvestigationCaseRecord(submission, instruction, linkedReturnCase 
     reason_code: submission.reason_code,
     narrative: submission.narrative,
     opened_by: submission.opened_by ?? null,
+    current_owner: submission.current_owner ?? submission.opened_by ?? null,
+    assigned_team: submission.assigned_team ?? 'EXCEPTIONS_OPERATIONS',
+    next_action_due_at: submission.next_action_due_at ?? null,
+    counterparty_reference: submission.counterparty_reference ?? null,
+    reporting_follow_up_required: submission.reporting_follow_up_required === true,
+    affected_notification_ids: affectedNotificationIds,
+    affected_statement_ids: affectedStatementIds,
     counterparty: submission.counterparty ?? null,
     opened_at: openedAt,
     updated_at: openedAt,
@@ -1373,6 +1890,12 @@ function buildInvestigationCaseSummary(record) {
     related_uetr: record.related_uetr,
     related_travel_rule_record_id: record.related_travel_rule_record_id,
     linked_return_case_id: record.linked_return_case_id ?? null,
+    current_owner: record.current_owner ?? null,
+    assigned_team: record.assigned_team ?? null,
+    next_action_due_at: record.next_action_due_at ?? null,
+    reporting_follow_up_required: record.reporting_follow_up_required === true,
+    affected_notification_count: record.affected_notification_ids?.length ?? 0,
+    affected_statement_count: record.affected_statement_ids?.length ?? 0,
     traceability:
       record.traceability ??
       buildExceptionTraceability({
@@ -1390,6 +1913,12 @@ function buildInvestigationCaseSummary(record) {
 function buildReturnCaseRecord(submission, instruction, linkedInvestigationCase = null) {
   const openedAt = nowIso();
   const returnCaseId = randomUUID();
+  const affectedNotificationIds = normalizeExceptionReferenceIds(
+    submission.affected_notification_ids,
+  );
+  const affectedStatementIds = normalizeExceptionReferenceIds(
+    submission.affected_statement_ids,
+  );
   return {
     return_case_id: returnCaseId,
     exception_case_id: returnCaseId,
@@ -1401,6 +1930,13 @@ function buildReturnCaseRecord(submission, instruction, linkedInvestigationCase 
     narrative: submission.narrative,
     resolution_summary: null,
     opened_by: submission.opened_by ?? null,
+    current_owner: submission.current_owner ?? submission.opened_by ?? null,
+    assigned_team: submission.assigned_team ?? 'EXCEPTIONS_OPERATIONS',
+    next_action_due_at: submission.next_action_due_at ?? null,
+    counterparty_reference: submission.counterparty_reference ?? null,
+    reporting_follow_up_required: submission.reporting_follow_up_required === true,
+    affected_notification_ids: affectedNotificationIds,
+    affected_statement_ids: affectedStatementIds,
     counterparty: submission.counterparty ?? null,
     opened_at: openedAt,
     updated_at: openedAt,
@@ -1457,6 +1993,12 @@ function buildReturnCaseSummary(record) {
     linked_investigation_case_id: record.linked_investigation_case_id ?? null,
     compensating_instruction_id: record.compensating_instruction_id ?? null,
     off_chain_reference: record.off_chain_reference ?? null,
+    current_owner: record.current_owner ?? null,
+    assigned_team: record.assigned_team ?? null,
+    next_action_due_at: record.next_action_due_at ?? null,
+    reporting_follow_up_required: record.reporting_follow_up_required === true,
+    affected_notification_count: record.affected_notification_ids?.length ?? 0,
+    affected_statement_count: record.affected_statement_ids?.length ?? 0,
     traceability:
       record.traceability ??
       buildExceptionTraceability({
@@ -1590,6 +2132,30 @@ function doesWebhookSubscriptionMatchEvent(subscription, event) {
     }
   }
 
+  if (event.event_type === 'reporting_statement.ready') {
+    const walletFilter = subscription.filter_wallet_address;
+    const chainFilter = subscription.filter_chain_dli;
+    const subscriptionQueryIdentification =
+      subscription.query_identification ?? null;
+    const eventWallet = event.payload?.wallet_address ?? null;
+    const eventChain = event.payload?.chain_dli ?? null;
+    const eventQueryIdentification =
+      event.payload?.query_identification ?? null;
+
+    if (walletFilter && eventWallet !== walletFilter) {
+      return false;
+    }
+    if (chainFilter && eventChain !== chainFilter) {
+      return false;
+    }
+    if (
+      subscriptionQueryIdentification &&
+      eventQueryIdentification !== subscriptionQueryIdentification
+    ) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -1604,6 +2170,40 @@ function buildWebhookEnvelope(event, delivery) {
     uetr: event.uetr,
     created_at: event.created_at,
     payload: event.payload,
+  };
+}
+
+function buildWebhookDeliveryPayload({
+  event,
+  delivery,
+  subscription,
+  reportingNotificationPayload = null,
+}) {
+  if (
+    subscription?.subscription_kind === 'REPORT_NOTIFICATION' &&
+    event?.event_type === 'reporting_notification.created' &&
+    reportingNotificationPayload
+  ) {
+    return {
+      payload_mode: 'spec_message',
+      body_object: reportingNotificationPayload,
+    };
+  }
+
+  if (
+    subscription?.subscription_kind === 'REPORT_STATEMENT_CALLBACK' &&
+    event?.event_type === 'reporting_statement.ready' &&
+    event?.payload?.statement
+  ) {
+    return {
+      payload_mode: 'spec_message',
+      body_object: event.payload.statement,
+    };
+  }
+
+  return {
+    payload_mode: 'event_envelope',
+    body_object: buildWebhookEnvelope(event, delivery),
   };
 }
 
@@ -2364,6 +2964,7 @@ export class ReferenceStore {
       creditor: normalized.creditor,
       creditor_account: normalized.creditor_account,
       creditor_agent: normalized.creditor_agent,
+      charge_bearer: normalized.charge_bearer,
       interbank_settlement_amount: normalized.interbank_settlement_amount,
       instructed_amount: normalized.instructed_amount,
       instruction_for_next_agent: normalized.instruction_for_next_agent,
@@ -2438,6 +3039,7 @@ export class ReferenceStore {
       creditor: normalized.creditor,
       creditor_account: normalized.creditor_account,
       creditor_agent: normalized.creditor_agent,
+      charge_bearer: normalized.charge_bearer,
       interbank_settlement_amount: normalized.interbank_settlement_amount,
       instructed_amount: normalized.instructed_amount,
       instruction_for_next_agent: normalized.instruction_for_next_agent,
@@ -2709,11 +3311,20 @@ export class ReferenceStore {
 
     const updatedAt = nowIso();
     const nextStatus = patch.case_status ?? current.case_status;
+    assertInvestigationCaseWorkflow(current, nextStatus, patch);
     const linkedReturnCaseId =
       linkedReturnCase?.return_case_id ??
       patch.linked_return_case_id ??
       current.linked_return_case_id ??
       null;
+    const affectedNotificationIds =
+      patch.affected_notification_ids !== undefined
+        ? normalizeExceptionReferenceIds(patch.affected_notification_ids)
+        : normalizeExceptionReferenceIds(current.affected_notification_ids);
+    const affectedStatementIds =
+      patch.affected_statement_ids !== undefined
+        ? normalizeExceptionReferenceIds(patch.affected_statement_ids)
+        : normalizeExceptionReferenceIds(current.affected_statement_ids);
     const summary =
       patch.resolution_summary ??
       (patch.case_status && patch.case_status !== current.case_status
@@ -2731,6 +3342,19 @@ export class ReferenceStore {
       resolution_summary:
         patch.resolution_summary ?? current.resolution_summary ?? null,
       linked_return_case_id: linkedReturnCaseId,
+      current_owner:
+        patch.current_owner ?? current.current_owner ?? current.opened_by ?? null,
+      assigned_team: patch.assigned_team ?? current.assigned_team ?? null,
+      next_action_due_at:
+        patch.next_action_due_at ?? current.next_action_due_at ?? null,
+      counterparty_reference:
+        patch.counterparty_reference ?? current.counterparty_reference ?? null,
+      reporting_follow_up_required:
+        typeof patch.reporting_follow_up_required === 'boolean'
+          ? patch.reporting_follow_up_required
+          : current.reporting_follow_up_required === true,
+      affected_notification_ids: affectedNotificationIds,
+      affected_statement_ids: affectedStatementIds,
       counterparty: patch.counterparty ?? current.counterparty ?? null,
       narrative: patch.narrative ?? current.narrative,
       updated_at: updatedAt,
@@ -2879,11 +3503,20 @@ export class ReferenceStore {
 
     const updatedAt = nowIso();
     const nextStatus = patch.return_status ?? current.return_status;
+    assertReturnCaseWorkflow(current, nextStatus, patch);
     const linkedInvestigationCaseId =
       linkedInvestigationCase?.investigation_case_id ??
       patch.linked_investigation_case_id ??
       current.linked_investigation_case_id ??
       null;
+    const affectedNotificationIds =
+      patch.affected_notification_ids !== undefined
+        ? normalizeExceptionReferenceIds(patch.affected_notification_ids)
+        : normalizeExceptionReferenceIds(current.affected_notification_ids);
+    const affectedStatementIds =
+      patch.affected_statement_ids !== undefined
+        ? normalizeExceptionReferenceIds(patch.affected_statement_ids)
+        : normalizeExceptionReferenceIds(current.affected_statement_ids);
     const summary =
       patch.resolution_summary ??
       (patch.return_status && patch.return_status !== current.return_status
@@ -2901,6 +3534,19 @@ export class ReferenceStore {
         null,
       off_chain_reference:
         patch.off_chain_reference ?? current.off_chain_reference ?? null,
+      current_owner:
+        patch.current_owner ?? current.current_owner ?? current.opened_by ?? null,
+      assigned_team: patch.assigned_team ?? current.assigned_team ?? null,
+      next_action_due_at:
+        patch.next_action_due_at ?? current.next_action_due_at ?? null,
+      counterparty_reference:
+        patch.counterparty_reference ?? current.counterparty_reference ?? null,
+      reporting_follow_up_required:
+        typeof patch.reporting_follow_up_required === 'boolean'
+          ? patch.reporting_follow_up_required
+          : current.reporting_follow_up_required === true,
+      affected_notification_ids: affectedNotificationIds,
+      affected_statement_ids: affectedStatementIds,
       counterparty: patch.counterparty ?? current.counterparty ?? null,
       narrative: patch.narrative ?? current.narrative,
       updated_at: updatedAt,
@@ -2994,10 +3640,18 @@ export class ReferenceStore {
       return null;
     }
 
+    return this.deactivateWebhookSubscriptionRecord(current);
+  }
+
+  deactivateWebhookSubscriptionRecord(subscription, updatedAt = nowIso()) {
+    if (!subscription) {
+      return null;
+    }
+
     const updated = {
-      ...current,
+      ...subscription,
       active: false,
-      updated_at: nowIso(),
+      updated_at: updatedAt,
     };
     this.updateWebhookSubscriptionStmt.run(
       updated.url,
@@ -3042,6 +3696,59 @@ export class ReferenceStore {
     return {
       duplicate: false,
       subscription,
+    };
+  }
+
+  createReportStatementCallback({
+    callbackUrl,
+    queryIdentification,
+    walletAddress,
+    chainDli,
+    statement,
+  }) {
+    const statementInstructionId =
+      statement?.statement?.entries?.[0]?.blockchain_detail?.instruction_id ??
+      queryIdentification;
+    const subscription = this.createWebhookSubscription({
+      url: callbackUrl,
+      signing_secret: randomUUID().replaceAll('-', ''),
+      subscribed_event_types: ['reporting_statement.ready'],
+      description: `Spec 3 statement callback for ${walletAddress} on ${chainDli} (${queryIdentification})`,
+      filter_wallet_address: walletAddress,
+      filter_chain_dli: chainDli,
+      subscription_kind: 'REPORT_STATEMENT_CALLBACK',
+      query_identification: queryIdentification,
+      max_attempts: 3,
+    });
+    const event = buildOutboxEvent({
+      eventType: 'reporting_statement.ready',
+      payloadSchema: 'wallet_statement',
+      resourcePath: `/report/statement?wallet_address=${encodeURIComponent(
+        walletAddress,
+      )}&chain_dli=${encodeURIComponent(chainDli)}`,
+      createdAt: nowIso(),
+      instructionId: statementInstructionId,
+      uetr: null,
+      payload: {
+        query_identification: queryIdentification,
+        wallet_address: walletAddress,
+        chain_dli: chainDli,
+        statement,
+      },
+    });
+
+    this.insertOutboxEventStmt.run(
+      event.event_id,
+      event.event_type,
+      event.instruction_id,
+      event.created_at,
+      serialize(event),
+    );
+    this.createWebhookDeliveriesForEvent(event);
+
+    return {
+      subscription_id: subscription.subscription_id,
+      event_id: event.event_id,
     };
   }
 
@@ -3273,8 +3980,19 @@ export class ReferenceStore {
       }
 
       const attemptAt = nowIso();
-      const envelope = buildWebhookEnvelope(event, delivery);
-      const body = serialize(envelope);
+      const deliveryPayload = buildWebhookDeliveryPayload({
+        event,
+        delivery,
+        subscription,
+        reportingNotificationPayload:
+          subscription.subscription_kind === 'REPORT_NOTIFICATION' &&
+          event.event_type === 'reporting_notification.created'
+            ? this.getSpecReportingNotification(
+                event.payload?.notification_id ?? null,
+              )
+            : null,
+      });
+      const body = serialize(deliveryPayload.body_object);
       const timestamp = String(Math.floor(Date.parse(attemptAt) / 1000));
       const signature = buildWebhookSignature(subscription.signing_secret, timestamp, body);
 
@@ -3286,6 +4004,7 @@ export class ReferenceStore {
             'x-pacscrypto-event-id': event.event_id,
             'x-pacscrypto-delivery-id': delivery.delivery_id,
             'x-pacscrypto-event-type': event.event_type,
+            'x-pacscrypto-payload-mode': deliveryPayload.payload_mode,
             'x-pacscrypto-signature': signature,
             'x-pacscrypto-signature-timestamp': timestamp,
           },
@@ -3346,6 +4065,17 @@ export class ReferenceStore {
             serialize(subscriptionUpdated),
             subscriptionUpdated.subscription_id,
           );
+          if (subscription.subscription_kind === 'REPORT_STATEMENT_CALLBACK') {
+            this.deactivateWebhookSubscriptionRecord(
+              subscriptionUpdated,
+              attemptAt,
+            );
+          }
+        } else if (
+          attemptCount >= subscription.max_attempts &&
+          subscription.subscription_kind === 'REPORT_STATEMENT_CALLBACK'
+        ) {
+          this.deactivateWebhookSubscriptionRecord(subscription, attemptAt);
         }
 
         results.push(updated);
@@ -3385,6 +4115,12 @@ export class ReferenceStore {
           serialize(updated),
           updated.delivery_id,
         );
+        if (
+          attemptCount >= subscription.max_attempts &&
+          subscription.subscription_kind === 'REPORT_STATEMENT_CALLBACK'
+        ) {
+          this.deactivateWebhookSubscriptionRecord(subscription, attemptAt);
+        }
         results.push(updated);
       }
     }
@@ -3561,7 +4297,7 @@ export class ReferenceStore {
       }
       if (
         entryStatuses.length &&
-        !entryStatuses.includes(toReportEntryStatus(record.booking_status))
+        !entryStatuses.includes(deriveReportingEntryLifecycle(record).entryStatus)
       ) {
         return false;
       }
@@ -3658,6 +4394,192 @@ export class ReferenceStore {
     );
 
     return buildReportBalanceSnapshots(records);
+  }
+
+  buildReportingInstructionLookup(records = []) {
+    const instructionIds = Array.from(
+      new Set(records.map((record) => record.instruction_id).filter(Boolean)),
+    );
+    const lookup = new Map();
+
+    for (const instructionId of instructionIds) {
+      lookup.set(instructionId, this.getInstruction(instructionId));
+    }
+
+    return lookup;
+  }
+
+  getSpecReportingNotification(notificationId) {
+    const notification = this.getReportingNotification(notificationId);
+    if (!notification) {
+      return null;
+    }
+
+    const instruction = notification.instruction_id
+      ? this.getInstruction(notification.instruction_id)
+      : null;
+
+    return {
+      group_header: buildSpecGroupHeader({
+        prefix: 'NTF',
+        seed: notification.notification_id,
+        createdAt: notification.created_at ?? notification.booking_date_time ?? nowIso(),
+        recipient: notification.servicing_agent ?? notification.party ?? null,
+      }),
+      notification_id: notification.notification_id,
+      notification_type: deriveReportingEntryLifecycle(notification).notificationType,
+      account: buildSpecWalletAccount(notification),
+      entry: buildSpecBlockchainEntry(
+        notification,
+        instruction,
+        this.chainAdapter,
+      ),
+    };
+  }
+
+  getSpecIntradayReport(filters = {}) {
+    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
+    const offset = decodeCursor(filters.cursor ?? filters.after);
+    const allRecords = sortReportingNotificationRecords(
+      this.filterReportingNotificationRecords(filters),
+      filters.sort ?? 'booking_date_desc',
+    );
+    const page = allRecords.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+    const generatedAt = nowIso();
+    const representativeRecord = allRecords[0] ?? null;
+    const instructionLookup = this.buildReportingInstructionLookup(page);
+    const period = {
+      from_date_time:
+        filters.booked_from ??
+        new Date(
+          Date.UTC(
+            new Date(generatedAt).getUTCFullYear(),
+            new Date(generatedAt).getUTCMonth(),
+            new Date(generatedAt).getUTCDate(),
+          ),
+        ).toISOString(),
+      to_date_time: filters.booked_to ?? generatedAt,
+    };
+    const debitCount = allRecords.filter(
+      (record) => record.entry_type === 'DEBIT',
+    ).length;
+    const creditCount = allRecords.filter(
+      (record) => record.entry_type === 'CREDIT',
+    ).length;
+
+    return {
+      group_header: buildSpecGroupHeader({
+        prefix: 'INTRA',
+        seed: `${filters.wallet_address ?? ''}:${filters.chain_dli ?? ''}:${period.from_date_time}:${period.to_date_time}`,
+        createdAt: generatedAt,
+        recipient:
+          representativeRecord?.servicing_agent ??
+          representativeRecord?.party ??
+          null,
+      }),
+      report: {
+        identification: buildStableReportingIdentifier(
+          'RPT',
+          `${filters.wallet_address ?? ''}:${filters.chain_dli ?? ''}:${period.from_date_time}:${period.to_date_time}`,
+        ),
+        creation_date_time: generatedAt,
+        from_to_date: period,
+        account: buildSpecWalletAccount(representativeRecord, filters),
+        balances: buildSpecBalanceAggregation(
+          allRecords,
+          'INTRADAY',
+          generatedAt,
+        ),
+        total_entries: allRecords.length,
+        total_credit_entries: creditCount,
+        total_debit_entries: debitCount,
+        next_cursor:
+          nextOffset < allRecords.length ? encodeCursor(nextOffset) : null,
+        entries: page.map((record) =>
+          buildSpecBlockchainEntry(
+            record,
+            instructionLookup.get(record.instruction_id) ?? null,
+            this.chainAdapter,
+          ),
+        ),
+      },
+    };
+  }
+
+  getSpecStatementReport(filters = {}) {
+    const pageSize = Number.parseInt(filters.page_size ?? '50', 10) || 50;
+    const offset = decodeCursor(filters.cursor ?? filters.after);
+    const statementFilters = {
+      ...filters,
+      entry_status: 'BOOK',
+    };
+    const allRecords = sortReportingNotificationRecords(
+      this.filterReportingNotificationRecords(statementFilters),
+      filters.sort ?? 'booking_date_asc',
+    );
+    if (!allRecords.length) {
+      return null;
+    }
+
+    const page = allRecords.slice(offset, offset + pageSize);
+    const nextOffset = offset + page.length;
+    const generatedAt = nowIso();
+    const representativeRecord = allRecords[0];
+    const instructionLookup = this.buildReportingInstructionLookup(page);
+    const fromDateTime =
+      filters.booked_from ?? allRecords[0].booking_date_time ?? generatedAt;
+    const toDateTime =
+      filters.booked_to ??
+      allRecords.at(-1)?.booking_date_time ??
+      generatedAt;
+    const debitCount = allRecords.filter(
+      (record) => record.entry_type === 'DEBIT',
+    ).length;
+    const creditCount = allRecords.filter(
+      (record) => record.entry_type === 'CREDIT',
+    ).length;
+
+    return {
+      group_header: buildSpecGroupHeader({
+        prefix: 'STMT',
+        seed: `${filters.wallet_address ?? ''}:${filters.chain_dli ?? ''}:${fromDateTime}:${toDateTime}`,
+        createdAt: generatedAt,
+        recipient:
+          representativeRecord?.servicing_agent ??
+          representativeRecord?.party ??
+          null,
+      }),
+      statement: {
+        identification: buildStableReportingIdentifier(
+          'STM',
+          `${filters.wallet_address ?? ''}:${filters.chain_dli ?? ''}:${fromDateTime}:${toDateTime}`,
+        ),
+        creation_date_time: generatedAt,
+        from_to_date: {
+          from_date_time: fromDateTime,
+          to_date_time: toDateTime,
+        },
+        account: buildSpecWalletAccount(representativeRecord, filters),
+        balances: buildSpecBalanceAggregation(
+          allRecords,
+          'STATEMENT',
+          generatedAt,
+        ),
+        total_entries: allRecords.length,
+        total_credit_entries: creditCount,
+        total_debit_entries: debitCount,
+        next_cursor:
+          nextOffset < allRecords.length ? encodeCursor(nextOffset) : null,
+        entries: page.map((record) =>
+          buildSpecBlockchainEntry(
+            record,
+            instructionLookup.get(record.instruction_id) ?? null,
+            this.chainAdapter,
+          ),
+        ),
+      },
+    };
   }
 
   searchReportEntries(filters = {}) {

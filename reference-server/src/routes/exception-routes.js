@@ -73,6 +73,88 @@ function sendReferenceError(reply, payload) {
   return reply.code(400).send(payload);
 }
 
+function sendDomainError(reply, error) {
+  if (error?.code === 'CONFLICT') {
+    return reply.code(409).send({
+      error: 'invalid_state',
+      message: error.message,
+    });
+  }
+
+  if (error?.code === 'INVALID_REQUEST') {
+    return reply.code(400).send({
+      error: 'invalid_request',
+      message: error.message,
+    });
+  }
+
+  throw error;
+}
+
+function resolveExceptionReportingReferences(store, {
+  instructionId,
+  affectedNotificationIds,
+  affectedStatementIds,
+} = {}) {
+  const normalizedNotificationIds = Array.isArray(affectedNotificationIds)
+    ? Array.from(new Set(affectedNotificationIds.filter(Boolean)))
+    : undefined;
+  const normalizedStatementIds = Array.isArray(affectedStatementIds)
+    ? Array.from(new Set(affectedStatementIds.filter(Boolean)))
+    : undefined;
+
+  if (normalizedNotificationIds) {
+    for (const notificationId of normalizedNotificationIds) {
+      const notification = store.getReportingNotification(notificationId);
+      if (!notification) {
+        return {
+          error: {
+            error: 'invalid_reference',
+            message: `affected_notification_ids contains unknown notification_id ${notificationId}.`,
+          },
+        };
+      }
+      if (notification.instruction_id !== instructionId) {
+        return {
+          error: {
+            error: 'invalid_reference',
+            message:
+              'affected_notification_ids must reference reporting records for the same underlying instruction.',
+          },
+        };
+      }
+    }
+  }
+
+  if (normalizedStatementIds) {
+    for (const statementId of normalizedStatementIds) {
+      const statement = store.getReportingStatement(statementId);
+      if (!statement) {
+        return {
+          error: {
+            error: 'invalid_reference',
+            message: `affected_statement_ids contains unknown statement_id ${statementId}.`,
+          },
+        };
+      }
+      if (statement.instruction_id !== instructionId) {
+        return {
+          error: {
+            error: 'invalid_reference',
+            message:
+              'affected_statement_ids must reference reporting records for the same underlying instruction.',
+          },
+        };
+      }
+    }
+  }
+
+  return {
+    affected_notification_ids: normalizedNotificationIds,
+    affected_statement_ids: normalizedStatementIds,
+  };
+}
+
 export function registerExceptionRoutes(app) {
   app.post('/exceptions/investigations', async (request, reply) => {
     const errors = validateInvestigationCaseSubmission(request.body);
@@ -110,7 +192,19 @@ export function registerExceptionRoutes(app) {
       }
     }
 
-    const investigation = app.store.createInvestigationCase(request.body, {
+    const reportingReferences = resolveExceptionReportingReferences(app.store, {
+      instructionId: reference.instruction.instruction_id,
+      affectedNotificationIds: request.body.affected_notification_ids,
+      affectedStatementIds: request.body.affected_statement_ids,
+    });
+    if (reportingReferences.error) {
+      return sendReferenceError(reply, reportingReferences.error);
+    }
+
+    const investigation = app.store.createInvestigationCase({
+      ...request.body,
+      ...reportingReferences,
+    }, {
       instruction: reference.instruction,
       linkedReturnCase,
     });
@@ -147,9 +241,29 @@ export function registerExceptionRoutes(app) {
       }
     }
 
-    return app.store.updateInvestigationCase(request.params.caseId, request.body, {
-      linkedReturnCase,
+    const reportingReferences = resolveExceptionReportingReferences(app.store, {
+      instructionId: existing.related_instruction_id,
+      affectedNotificationIds: request.body.affected_notification_ids,
+      affectedStatementIds: request.body.affected_statement_ids,
     });
+    if (reportingReferences.error) {
+      return sendReferenceError(reply, reportingReferences.error);
+    }
+
+    try {
+      return app.store.updateInvestigationCase(
+        request.params.caseId,
+        {
+          ...request.body,
+          ...reportingReferences,
+        },
+        {
+          linkedReturnCase,
+        },
+      );
+    } catch (error) {
+      return sendDomainError(reply, error);
+    }
   });
 
   app.get('/exceptions/investigations', async (request, reply) => {
@@ -225,7 +339,19 @@ export function registerExceptionRoutes(app) {
       }
     }
 
-    const returnCase = app.store.createReturnCase(request.body, {
+    const reportingReferences = resolveExceptionReportingReferences(app.store, {
+      instructionId: reference.instruction.instruction_id,
+      affectedNotificationIds: request.body.affected_notification_ids,
+      affectedStatementIds: request.body.affected_statement_ids,
+    });
+    if (reportingReferences.error) {
+      return sendReferenceError(reply, reportingReferences.error);
+    }
+
+    const returnCase = app.store.createReturnCase({
+      ...request.body,
+      ...reportingReferences,
+    }, {
       instruction: reference.instruction,
       linkedInvestigationCase,
     });
@@ -274,9 +400,29 @@ export function registerExceptionRoutes(app) {
       });
     }
 
-    return app.store.updateReturnCase(request.params.returnCaseId, request.body, {
-      linkedInvestigationCase,
+    const reportingReferences = resolveExceptionReportingReferences(app.store, {
+      instructionId: existing.related_instruction_id,
+      affectedNotificationIds: request.body.affected_notification_ids,
+      affectedStatementIds: request.body.affected_statement_ids,
     });
+    if (reportingReferences.error) {
+      return sendReferenceError(reply, reportingReferences.error);
+    }
+
+    try {
+      return app.store.updateReturnCase(
+        request.params.returnCaseId,
+        {
+          ...request.body,
+          ...reportingReferences,
+        },
+        {
+          linkedInvestigationCase,
+        },
+      );
+    } catch (error) {
+      return sendDomainError(reply, error);
+    }
   });
 
   app.get('/exceptions/returns', async (request, reply) => {

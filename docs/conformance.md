@@ -25,10 +25,10 @@ Status meanings:
 | `DELETE /instruction/{instructionId}` | `instruction-api-v1.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
 | `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
 | `GET /instruction/search` | `instruction-api-v1.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
-| `POST /report/query` | `camt-crypto-reporting-v1.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance, intraday, statement, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Async statement delivery and raw camt.054 callback posting remain out of scope. |
-| `GET /report/intraday` | `camt-crypto-reporting-v1.yaml` | query params | `IntradayReport` | Partial | Spec path and query validation are present. The response currently returns the reference-server intraday view rather than the full camt.052 wrapper from the root YAML. |
-| `GET /report/statement` | `camt-crypto-reporting-v1.yaml` | query params | `WalletStatement` | Partial | Spec path and wallet/chain lookup are present. The response uses the current persisted statement record shape rather than the full root-spec wrapper. |
-| `GET /report/notification/{notificationId}` | `camt-crypto-reporting-v1.yaml` | n/a | `BlockchainNotification` | Partial | Spec lookup path is present on top of the current reporting notification record shape. |
+| `POST /report/query` | `camt-crypto-reporting-v1.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance and intraday responses, synchronous or async statement delivery, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Notification subscriptions now deliver raw camt.054-style bodies and async statements are queued through the retrying delivery engine. The route remains partial because the bank-side callback endpoint and full request idempotency window are still out of scope. |
+| `GET /report/intraday` | `camt-crypto-reporting-v1.yaml` | query params | `IntradayReport` | Implemented | The route now returns a root-spec camt.052-style wrapper with `group_header`, `report`, paginated `entries`, and per-token balance lines built from the reference-server reporting records. |
+| `GET /report/statement` | `camt-crypto-reporting-v1.yaml` | query params | `WalletStatement` | Implemented | The route now returns a root-spec camt.053-style wrapper with `group_header`, `statement`, paginated booked entries, and statement-period balance lines for the current wallet/date filters. |
+| `GET /report/notification/{notificationId}` | `camt-crypto-reporting-v1.yaml` | n/a | `BlockchainNotification` | Implemented | The route now returns a root-spec camt.054-style wrapper with `group_header`, `account`, and `entry` derived from the underlying reporting notification and instruction context. |
 | `POST /report/notification/callback` | `camt-crypto-reporting-v1.yaml` | `BlockchainNotification` | acknowledgement | Out of scope | This is explicitly a bank-side endpoint. The reference server is the VASP side and returns `501` to make that boundary explicit. |
 | `GET /report/search` | `camt-crypto-reporting-v1.yaml` | query params | `EntrySearchResponse` | Implemented | Wallet-scoped entry search, pagination, amount/finality filters, and spec-style entry summaries are present. |
 | `GET /report/stats` | `camt-crypto-reporting-v1.yaml` | query params | `ReportStatsResponse` | Implemented | Wallet-scoped token totals and grouped breakdowns are present for the current local dataset. |
@@ -73,7 +73,8 @@ The current conformance work is intentionally limited to the bank-to-VASP wedge 
   - delegated signing
   - bank-side reporting callback endpoint
 
-Delegated signing, non-EVM flows, richer exception families, and full camt.052 /
-camt.053 / camt.054 wire-shape parity remain outside the current conformance
-target. The current conformance layer is hand-authored in code for the
-implemented wedge rather than generated directly from the YAML.
+Delegated signing, non-EVM flows, richer exception families, bank-side callback
+endpoint implementation, and full request idempotency-window semantics remain
+outside the current conformance target. The current conformance layer is
+hand-authored in code for the implemented wedge rather than generated directly
+from the YAML.

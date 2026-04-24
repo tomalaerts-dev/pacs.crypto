@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "preflight:sepolia": "node scripts/sepolia-preflight.mjs",
+    "demo:sepolia": "node scripts/run-sepolia-demo.mjs",
+    "demo:report": "node scripts/render-demo-evidence.mjs"
   },
   "dependencies": {
     "ethers": "^6.16.0",

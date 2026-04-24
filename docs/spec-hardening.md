@@ -124,11 +124,20 @@ The current event families are:
 - `execution_status.updated`
 - `finality_receipt.updated`
 - `reporting_notification.created`
+- `reporting_statement.ready` (internal callback-delivery event)
 
 For each event:
 
 - the event `payload` is the same object returned by the matching read endpoint
 - the transport envelope adds delivery and event metadata only
+
+Current reporting exception:
+
+- generic webhook subscriptions still receive the event envelope
+- `POST /report/query` notification subscriptions receive the raw
+  `BlockchainNotification` body
+- `POST /report/query` statement callbacks receive the raw `WalletStatement`
+  body
 
 This keeps push and poll aligned and reduces the chance of divergent field semantics.
 

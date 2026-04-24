@@ -2,8 +2,10 @@
 
 This is the reviewer-facing demo for the current `pacs.crypto` execution wedge.
 
-It is the current mock-backed reviewer script. The active roadmap now treats a
-real-chain `Sepolia + USDC` reviewer path as the next demo milestone.
+The repo now supports two demo modes:
+
+- `mock demo` for fast local walkthroughs
+- `real-chain Sepolia + USDC demo` for reviewer evidence capture
 
 It is intentionally narrow:
 
@@ -130,6 +132,70 @@ The point to emphasize:
 
 - reporting is institution-facing booked-entry reporting, not a block explorer
 
+## Real-Chain Run
+
+Use this path when you want one reviewer-grade Sepolia proof bundle rather than
+the default mock-backed walkthrough.
+
+### 1. Preflight the wallet
+
+```bash
+cd reference-server
+npm run preflight:sepolia
+```
+
+This verifies:
+
+- the configured RPC is actually Sepolia
+- the private key and configured source address match
+- the configured USDC contract has code
+- the source wallet has ETH for gas and a non-zero USDC balance
+
+### 2. Start the server in broadcast mode
+
+```bash
+REF_SERVER_CHAIN_ADAPTER=sepolia-usdc \
+REF_SERVER_SEPOLIA_BROADCAST_ENABLED=true \
+npm start
+```
+
+### 3. Run the canonical funded-wallet demo
+
+```bash
+REF_SERVER_DEMO_RECIPIENT_WALLET=0x... \
+REF_SERVER_DEMO_DEBTOR_WALLET="$REF_SERVER_SEPOLIA_SOURCE_ADDRESS" \
+npm run demo:sepolia
+```
+
+The runner writes a complete evidence bundle under:
+
+- `reference-server/data/demo-runs/<run-id>/`
+
+To turn that bundle into a reviewer-ready one-pager:
+
+```bash
+cd reference-server
+npm run demo:report -- data/demo-runs/<run-id>
+```
+
+That writes:
+
+- `reference-server/data/demo-runs/<run-id>/21-reviewer-summary.md`
+
+The bundle includes:
+
+- Travel Rule submission and callback
+- quote and instruction payloads
+- execution-status poll history
+- finality receipt
+- reporting notifications and statements
+- report search and stats views
+- summary JSON with tx hash and Sepolia Etherscan URL
+- reviewer markdown summary keyed to the same evidence files
+
+Use that bundle as the basis for the Tom-facing walkthrough once one clean run
+has been captured.
+
 ## Sample Payload Pack
 
 The exact happy-path payload set used for this demo is under
@@ -168,6 +234,6 @@ Still intentionally out of scope:
 
 - delegated signing
 - non-EVM chains
-- testnet execution
+- production-chain execution
 - deeper exception workflow beyond the first-slice investigation/return APIs
 - tokenized assets, CBDC, or DeFi expansion

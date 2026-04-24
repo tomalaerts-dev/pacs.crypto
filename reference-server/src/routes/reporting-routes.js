@@ -80,6 +80,10 @@ function normalizeStatementFilters(query = {}) {
     token_dti: query.token_dti ?? null,
     statement_date_from: query.from_date ?? null,
     statement_date_to: query.to_date ?? null,
+    booked_from: query.from_date ? `${query.from_date}T00:00:00Z` : null,
+    booked_to: query.to_date ? `${query.to_date}T23:59:59.999Z` : null,
+    page_size: query.page_size ?? null,
+    cursor: query.after ?? query.cursor ?? null,
     sort: query.sort ?? null,
   };
 }
@@ -117,11 +121,11 @@ export function registerReportingRoutes(app) {
         return reply.code(201).send({
           query_identification: request.body.query_identification,
           query_type: request.body.query_type,
-          intraday_report: app.store.getIntradayReportingView(queryFilters),
+          intraday_report: app.store.getSpecIntradayReport(queryFilters),
         });
 
       case 'STATEMENT': {
-        const statement = app.store.getReportingStatementForAccount({
+        const statement = app.store.getSpecStatementReport({
           wallet_address: walletAddress,
           chain_dli: chainDli,
           token_dti: tokenDti,
@@ -129,9 +133,27 @@ export function registerReportingRoutes(app) {
             request.body.reporting_period?.from_date_time?.slice(0, 10) ?? null,
           statement_date_to:
             request.body.reporting_period?.to_date_time?.slice(0, 10) ?? null,
+          booked_from: request.body.reporting_period?.from_date_time ?? null,
+          booked_to: request.body.reporting_period?.to_date_time ?? null,
         });
         if (!statement) {
           return sendNotFound(reply, 'Wallet statement');
+        }
+
+        if (request.body.callback_url) {
+          app.store.createReportStatementCallback({
+            callbackUrl: request.body.callback_url,
+            queryIdentification: request.body.query_identification,
+            walletAddress,
+            chainDli,
+            statement,
+          });
+
+          return reply.code(202).send({
+            query_identification: request.body.query_identification,
+            message:
+              'Statement will be delivered asynchronously to the provided callback_url.',
+          });
         }
 
         return reply.code(201).send({
@@ -195,7 +217,7 @@ export function registerReportingRoutes(app) {
       return sendValidationError(reply, errors);
     }
 
-    return app.store.getIntradayReportingView(normalizeReportFilters(request.query));
+    return app.store.getSpecIntradayReport(normalizeReportFilters(request.query));
   });
 
   app.get('/report/statement', async (request, reply) => {
@@ -204,7 +226,7 @@ export function registerReportingRoutes(app) {
       return sendValidationError(reply, errors);
     }
 
-    const statement = app.store.getReportingStatementForAccount(
+    const statement = app.store.getSpecStatementReport(
       normalizeStatementFilters(request.query),
     );
     if (!statement) {
@@ -215,7 +237,7 @@ export function registerReportingRoutes(app) {
   });
 
   app.get('/report/notification/:notificationId', async (request, reply) => {
-    const notification = app.store.getReportingNotification(
+    const notification = app.store.getSpecReportingNotification(
       request.params.notificationId,
     );
     if (!notification) {

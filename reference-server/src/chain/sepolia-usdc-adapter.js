@@ -2,11 +2,13 @@ import { Contract, JsonRpcProvider, Wallet, formatEther, parseUnits } from 'ethe
 import { randomUUID } from 'node:crypto';
 
 const SEPOLIA_CHAIN_DLI = 'X9J9XDMTD';
+const SEPOLIA_CHAIN_ID = 11155111n;
 const DEFAULT_REQUIRED_CONFIRMATIONS = 3;
 const DEFAULT_USDC_DECIMALS = 6;
 const DEFAULT_GAS_LIMIT = 85000;
 const DEFAULT_MAX_FEE_GWEI = '35';
 const DEFAULT_PRIORITY_FEE_GWEI = '2';
+const DEFAULT_EXPLORER_BASE_URL = 'https://sepolia.etherscan.io';
 const ERC20_ABI = [
   'function transfer(address to, uint256 amount) returns (bool)',
 ];
@@ -74,6 +76,9 @@ function buildFallbackFeeEstimate(config = {}) {
 function normalizeConfig(config = {}) {
   return {
     rpcUrl: config.rpcUrl ?? null,
+    provider: config.provider ?? null,
+    walletFactory: config.walletFactory ?? null,
+    contractFactory: config.contractFactory ?? null,
     privateKey: normalizeHex(config.privateKey),
     usdcContractAddress: normalizeHex(config.usdcContractAddress),
     sourceAddress: normalizeHex(config.sourceAddress),
@@ -87,6 +92,7 @@ function normalizeConfig(config = {}) {
     maxFeePerGasGwei: config.maxFeePerGasGwei ?? DEFAULT_MAX_FEE_GWEI,
     maxPriorityFeePerGasGwei:
       config.maxPriorityFeePerGasGwei ?? DEFAULT_PRIORITY_FEE_GWEI,
+    explorerBaseUrl: config.explorerBaseUrl ?? DEFAULT_EXPLORER_BASE_URL,
   };
 }
 
@@ -100,10 +106,12 @@ function buildAdapterMetadata(config, input = {}) {
     simulated: false,
     network_profile: {
       chain_name: 'Ethereum Sepolia',
+      expected_chain_id: String(SEPOLIA_CHAIN_ID),
       native_currency: 'ETH',
       usdc_contract_address: config.usdcContractAddress,
       configured_source_address: config.sourceAddress,
       rpc_configured: hasText(config.rpcUrl),
+      explorer_base_url: config.explorerBaseUrl,
     },
     lifecycle_policy: {
       custody_model:
@@ -144,7 +152,65 @@ function buildPreExecutionSettlementState(settlement, amount, config) {
 }
 
 function buildProvider(config) {
+  if (config.provider) {
+    return config.provider;
+  }
   return hasText(config.rpcUrl) ? new JsonRpcProvider(config.rpcUrl) : null;
+}
+
+function buildWallet(config, provider) {
+  if (typeof config.walletFactory === 'function') {
+    return config.walletFactory({
+      provider,
+      privateKey: config.privateKey,
+      sourceAddress: config.sourceAddress,
+      config,
+    });
+  }
+
+  return new Wallet(config.privateKey, provider);
+}
+
+function buildUsdcContract(config, wallet) {
+  if (typeof config.contractFactory === 'function') {
+    return config.contractFactory({
+      contractAddress: config.usdcContractAddress,
+      wallet,
+      config,
+    });
+  }
+
+  return new Contract(config.usdcContractAddress, ERC20_ABI, wallet);
+}
+
+async function getProviderChainId(provider) {
+  if (!provider || typeof provider.getNetwork !== 'function') {
+    return null;
+  }
+
+  const network = await provider.getNetwork();
+  if (!network || network.chainId === undefined || network.chainId === null) {
+    return null;
+  }
+
+  try {
+    return BigInt(network.chainId);
+  } catch {
+    return null;
+  }
+}
+
+async function validateSepoliaNetwork(provider) {
+  const chainId = await getProviderChainId(provider);
+  if (chainId === null) {
+    return null;
+  }
+
+  if (chainId !== SEPOLIA_CHAIN_ID) {
+    return `Configured RPC endpoint is on chain_id ${chainId}, expected Sepolia ${SEPOLIA_CHAIN_ID}.`;
+  }
+
+  return null;
 }
 
 async function buildFeeEstimate(config, provider) {
@@ -172,6 +238,15 @@ async function buildFeeEstimate(config, provider) {
 async function getReceiptSettlementState({ config, provider, record, settlement }) {
   if (!provider || !settlement?.transaction_hash) {
     return settlement;
+  }
+
+  const networkFailure = await validateSepoliaNetwork(provider);
+  if (networkFailure) {
+    return {
+      ...settlement,
+      finality_status: 'FAILED',
+      network_failure_reason: networkFailure,
+    };
   }
 
   const receipt = await provider.getTransactionReceipt(settlement.transaction_hash);
@@ -218,6 +293,15 @@ async function broadcastUsdcTransfer({ config, provider, record, settlement }) {
     };
   }
 
+  const networkFailure = await validateSepoliaNetwork(provider);
+  if (networkFailure) {
+    return {
+      status: 'FAILED',
+      failureReason: networkFailure,
+      onChainSettlement: settlement,
+    };
+  }
+
   if (!hasText(config.privateKey)) {
     return {
       status: 'FAILED',
@@ -244,7 +328,7 @@ async function broadcastUsdcTransfer({ config, provider, record, settlement }) {
     };
   }
 
-  const wallet = new Wallet(config.privateKey, provider);
+  const wallet = buildWallet(config, provider);
   const sourceAddress = config.sourceAddress ?? wallet.address;
   if (sourceAddress.toLowerCase() !== wallet.address.toLowerCase()) {
     return {
@@ -254,7 +338,7 @@ async function broadcastUsdcTransfer({ config, provider, record, settlement }) {
     };
   }
 
-  const contract = new Contract(config.usdcContractAddress, ERC20_ABI, wallet);
+  const contract = buildUsdcContract(config, wallet);
   const amount = parseUnits(
     record.interbank_settlement_amount?.amount ?? '0',
     config.usdcDecimals,
@@ -385,7 +469,7 @@ export function createSepoliaUsdcAdapter(config = {}) {
           status,
           failureReason:
             settlement.finality_status === 'FAILED'
-              ? 'Sepolia transaction reverted.'
+              ? settlement.network_failure_reason ?? 'Sepolia transaction reverted.'
               : null,
           onChainSettlement: settlement,
         };

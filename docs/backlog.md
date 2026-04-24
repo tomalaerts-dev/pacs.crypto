@@ -27,6 +27,7 @@ Status: `Done`
 - pacs.002-like status reads and camt.025-like finality reads
 - outbox-backed webhook subscriptions, retries, dead-letter handling, and signed delivery attempts
 - reporting notifications, intraday views, and statements
+- root `/report/*` pull routes now emit camt-style wrappers on top of the internal reporting records
 - first-slice `investigation_case` and `return_case` runtime surfaces
 - reviewer demo package, architecture note, and sample payload pack
 
@@ -61,7 +62,10 @@ Current status:
 - `sepolia-usdc` adapter exists and is opt-in by environment
 - mock adapter remains default
 - read-only Sepolia mode is covered by tests
+- happy-path Sepolia broadcast, confirmation, and reporting linkage are now covered in automated tests through injected provider/signer stubs
 - incomplete broadcast configuration fails safely
+- wrong-network RPC configuration now fails safely
+- preflight and demo-run scripts now exist for the funded-wallet path
 - real funded-wallet broadcast still needs to be run and captured
 
 Acceptance criteria:
@@ -85,6 +89,11 @@ Work items:
 - distinguish clearly between `mock demo` and `real-chain demo` in docs and simulator guidance
 - keep the narrative optimized for Tom review rather than public platform packaging
 
+Current status:
+
+- real-chain demo runner and preflight scripts are in place for the funded-wallet path
+- reviewer-summary generation is now scripted so a captured run can be turned into a Tom-facing markdown evidence pack immediately
+
 Acceptance criteria:
 
 - a reviewer can follow one bank-to-VASP happy path backed by a real Sepolia transaction
@@ -93,7 +102,7 @@ Acceptance criteria:
 
 ### Epic 12 - Deepen exception handling
 Priority: `P1`
-Status: `Planned`
+Status: `In progress`
 Depends on: Epic 10
 
 Work items:
@@ -102,6 +111,12 @@ Work items:
 - deepen `return_case` remediation semantics around real-chain versus off-chain outcomes
 - tighten linkage from exception objects to real-chain evidence and reporting consequences
 - keep bilateral cancellation deferred unless real operator flow proves it is necessary
+
+Current status:
+
+- investigation cases now enforce explicit lifecycle transitions and closure requirements
+- return cases now enforce method-specific settlement evidence for on-chain versus off-chain remediation
+- both exception families can now link directly to specific reporting notifications and statements for the same instruction
 
 Acceptance criteria:
 

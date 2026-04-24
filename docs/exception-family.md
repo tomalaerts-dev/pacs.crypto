@@ -320,8 +320,8 @@ The order used for the first slice is:
 
 Current status:
 
-- `investigation_case`: implemented first slice
-- `return_case`: implemented first slice
+- `investigation_case`: implemented and now enforcing workflow transitions plus operator metadata
+- `return_case`: implemented and now enforcing method-specific settlement evidence plus reporting-linkage fields
 - `cancellation_case`: deferred
 
 Reason:
@@ -337,11 +337,10 @@ Reason:
 
 The next questions after the first slice are:
 
-1. Deepen `investigation_case` semantics beyond the current create/update/list/read model.
-2. Deepen `return_case` settlement semantics for compensating transfers versus off-chain refunds.
+1. Decide whether reviewer-facing demo material should include one explicit exception flow after the Sepolia evidence path lands.
+2. Decide whether compensating-transfer returns should eventually require a completed linked instruction rather than just a stored reference.
 3. Decide whether bilateral cancellation is actually needed before adding a
    `cancellation_case` family.
-4. Decide whether richer operator and reviewer demo flows need exception handling in scope.
 
 ## Non-Goals
 

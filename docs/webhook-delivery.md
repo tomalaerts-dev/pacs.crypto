@@ -31,11 +31,21 @@ The push model remains aligned to the polling model:
 - webhook envelopes add transport metadata only
 - the `payload` equals the object returned by the matching read endpoint
 
+Reporting note:
+
+- generic `/webhook-endpoints` subscriptions receive the event envelope
+- `POST /report/query` notification subscriptions receive the raw
+  `BlockchainNotification` message body from the root reporting spec
+- `POST /report/query` statement callbacks receive the raw `WalletStatement`
+  message body from the root reporting spec
+- receivers can distinguish the mode via `x-pacscrypto-payload-mode`
+
 Current event families:
 
 - `execution_status.updated`
 - `finality_receipt.updated`
 - `reporting_notification.created`
+- `reporting_statement.ready` (internal callback-delivery event)
 
 ## Delivery States
 
@@ -110,6 +120,7 @@ Headers:
 - `x-pacscrypto-event-id`
 - `x-pacscrypto-delivery-id`
 - `x-pacscrypto-event-type`
+- `x-pacscrypto-payload-mode`
 
 ## Scope Limit
 

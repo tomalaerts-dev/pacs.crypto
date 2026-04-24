@@ -330,6 +330,21 @@ function validateUuidField(errors, value, field) {
   }
 }
 
+function validateUuidArrayField(errors, value, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (!Array.isArray(value)) {
+    pushError(errors, field, `${field} must be an array of UUIDs.`);
+    return;
+  }
+
+  value.forEach((entry, index) => {
+    validateUuidField(errors, entry, `${field}[${index}]`);
+  });
+}
+
 function validateTextField(errors, value, field, message) {
   validateRequiredField(errors, hasText(value), field, message);
 }
@@ -1483,8 +1498,41 @@ export function validateInvestigationCaseSubmission(body) {
   validateTextField(errors, body.reason_code, 'reason_code', 'reason_code is required.');
   validateTextField(errors, body.narrative, 'narrative', 'narrative is required.');
   validateNamedReference(errors, body.opened_by, 'opened_by');
+  validateNamedReference(errors, body.current_owner, 'current_owner');
   validateNamedReference(errors, body.counterparty, 'counterparty');
+  if (body.assigned_team !== undefined) {
+    validateTextField(
+      errors,
+      body.assigned_team,
+      'assigned_team',
+      'assigned_team must be a non-empty string.',
+    );
+  }
+  validateDateTimeField(errors, body.next_action_due_at, 'next_action_due_at');
+  validateBooleanField(
+    errors,
+    body.reporting_follow_up_required,
+    'reporting_follow_up_required',
+  );
+  if (body.counterparty_reference !== undefined) {
+    validateTextField(
+      errors,
+      body.counterparty_reference,
+      'counterparty_reference',
+      'counterparty_reference must be a non-empty string.',
+    );
+  }
   validateUuidField(errors, body.linked_return_case_id, 'linked_return_case_id');
+  validateUuidArrayField(
+    errors,
+    body.affected_notification_ids,
+    'affected_notification_ids',
+  );
+  validateUuidArrayField(
+    errors,
+    body.affected_statement_ids,
+    'affected_statement_ids',
+  );
 
   return errors;
 }
@@ -1517,7 +1565,40 @@ export function validateInvestigationCaseUpdate(body) {
     'resolution_type',
   );
   validateUuidField(errors, body.linked_return_case_id, 'linked_return_case_id');
+  validateNamedReference(errors, body.current_owner, 'current_owner');
   validateNamedReference(errors, body.counterparty, 'counterparty');
+  if (body.assigned_team !== undefined) {
+    validateTextField(
+      errors,
+      body.assigned_team,
+      'assigned_team',
+      'assigned_team must be a non-empty string.',
+    );
+  }
+  validateDateTimeField(errors, body.next_action_due_at, 'next_action_due_at');
+  validateBooleanField(
+    errors,
+    body.reporting_follow_up_required,
+    'reporting_follow_up_required',
+  );
+  if (body.counterparty_reference !== undefined) {
+    validateTextField(
+      errors,
+      body.counterparty_reference,
+      'counterparty_reference',
+      'counterparty_reference must be a non-empty string.',
+    );
+  }
+  validateUuidArrayField(
+    errors,
+    body.affected_notification_ids,
+    'affected_notification_ids',
+  );
+  validateUuidArrayField(
+    errors,
+    body.affected_statement_ids,
+    'affected_statement_ids',
+  );
   if (body.narrative !== undefined) {
     validateTextField(errors, body.narrative, 'narrative', 'narrative must be a non-empty string.');
   }
@@ -1614,7 +1695,30 @@ export function validateReturnCaseSubmission(body) {
   validateTextField(errors, body.reason_code, 'reason_code', 'reason_code is required.');
   validateTextField(errors, body.narrative, 'narrative', 'narrative is required.');
   validateNamedReference(errors, body.opened_by, 'opened_by');
+  validateNamedReference(errors, body.current_owner, 'current_owner');
   validateNamedReference(errors, body.counterparty, 'counterparty');
+  if (body.assigned_team !== undefined) {
+    validateTextField(
+      errors,
+      body.assigned_team,
+      'assigned_team',
+      'assigned_team must be a non-empty string.',
+    );
+  }
+  validateDateTimeField(errors, body.next_action_due_at, 'next_action_due_at');
+  validateBooleanField(
+    errors,
+    body.reporting_follow_up_required,
+    'reporting_follow_up_required',
+  );
+  if (body.counterparty_reference !== undefined) {
+    validateTextField(
+      errors,
+      body.counterparty_reference,
+      'counterparty_reference',
+      'counterparty_reference must be a non-empty string.',
+    );
+  }
   validateUuidField(
     errors,
     body.linked_investigation_case_id,
@@ -1633,6 +1737,16 @@ export function validateReturnCaseSubmission(body) {
       'off_chain_reference must be a non-empty string.',
     );
   }
+  validateUuidArrayField(
+    errors,
+    body.affected_notification_ids,
+    'affected_notification_ids',
+  );
+  validateUuidArrayField(
+    errors,
+    body.affected_statement_ids,
+    'affected_statement_ids',
+  );
 
   return errors;
 }
@@ -1661,7 +1775,40 @@ export function validateReturnCaseUpdate(body) {
     body.compensating_instruction_id,
     'compensating_instruction_id',
   );
+  validateNamedReference(errors, body.current_owner, 'current_owner');
   validateNamedReference(errors, body.counterparty, 'counterparty');
+  if (body.assigned_team !== undefined) {
+    validateTextField(
+      errors,
+      body.assigned_team,
+      'assigned_team',
+      'assigned_team must be a non-empty string.',
+    );
+  }
+  validateDateTimeField(errors, body.next_action_due_at, 'next_action_due_at');
+  validateBooleanField(
+    errors,
+    body.reporting_follow_up_required,
+    'reporting_follow_up_required',
+  );
+  if (body.counterparty_reference !== undefined) {
+    validateTextField(
+      errors,
+      body.counterparty_reference,
+      'counterparty_reference',
+      'counterparty_reference must be a non-empty string.',
+    );
+  }
+  validateUuidArrayField(
+    errors,
+    body.affected_notification_ids,
+    'affected_notification_ids',
+  );
+  validateUuidArrayField(
+    errors,
+    body.affected_statement_ids,
+    'affected_statement_ids',
+  );
   if (body.narrative !== undefined) {
     validateTextField(errors, body.narrative, 'narrative', 'narrative must be a non-empty string.');
   }
