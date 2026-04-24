@@ -162,6 +162,16 @@ The three pacs.crypto specifications form a layered stack covering the full life
 └─────────────────────────────────────────────────────────┘
 ```
 
+### Relation to corporate treasury — TCMAG-aligned use
+
+The specifications work unchanged for **corporate-to-bank** flows, not just bank-to-VASP. A corporate treasury submitting a pacs.crypto instruction sits naturally as the ISO 20022 `debtor`, with its relationship bank as the `debtor_agent`. The bank can act as the VASP itself, or forward the instruction to a partner VASP, which then takes the `debtor_crypto_agent` role. pacs.008 supports this multi-agent chain natively (via `previous_instructing_agent_1/2/3` where relevant), so no structural change to the specs is required to accommodate it.
+
+Corporates whose treasury management systems (TMS) or ERP platforms already process pacs.008 and camt.052/053/054 — for example SAP, Kyriba, FIS, and similar — can ingest pacs.crypto API responses through the same pipeline they use for conventional payment reporting. The `ChargesInformation` layer ensures gas costs arrive as standard charge lines ready for accounting treatment without requiring chain-specific parsing. Account reporting via the camt spec delivers wallet positions in a structure TMS systems already understand.
+
+This positioning aligns directly with the principles published by the [Tokenized Cash Management Advisory Group (TCMAG)](https://www.tcmag.org) in April 2026 — in particular the *Integrated* principle (seamless TMS/ERP integration via standard interfaces), *Multi-Bank / Multi-Issuer* (no single-provider dependency), *Accounting Standards* (unambiguous accounting treatment), *Settlement Finality* (explicit `FinalityStatus` semantics), and *Operational Resilience* (structured reversal and cancellation handling via camt.056/029 and `ENTRY_REVERSED`). The pacs.crypto family is offered as a community building block that corporate treasurers, banks, and their technology providers can use to operationalise tokenised cash management on ISO 20022-aligned rails.
+
+A brief comparison to `pain.001` / `pain.002` is worth noting. In traditional payments, `pain.001` is the customer-to-bank initiation message, while `pacs.008` is the bank-to-bank interbank message derived from it. The pacs.crypto Instruction API plays a `pain.001`-equivalent role when used corporate-to-bank, structured on pacs.008 components — a deliberate choice to keep a single dictionary across both deployment patterns rather than split the family into two parallel specifications.
+
 ### Relation to on-chain compliance standards — EAS / ERC-3643
 
 For regulated tokenised asset transfers (real-world assets, tokenised securities, regulated stablecoins under MiCA), smart-contract-enforced compliance is increasingly common. The leading framework is **ERC-3643 / T-REX**, used in production by BlackRock BUIDL, ABN AMRO, and Société Générale Forge, combined with **EAS (Ethereum Attestation Service)** for portable compliance attestations.
@@ -195,6 +205,7 @@ A reference OpenClaw skill for pacs.crypto submission is planned as a concrete d
 ### 2. Further family members under consideration
 
 - **Tokenised asset transfers** — extensions for regulated tokenised securities, CBDCs, and stablecoin issuers where additional asset-specific fields and regulatory reporting requirements apply; the `credential_attestation` field introduced in the current specs is the foundation for this work
+- **Corporate cash management primitives** — pooling, sweeping, netting, and in-house banking message flows, extending the existing camt reporting spec. Aligned with TCMAG's *Functional Equivalence* principle for tokenised corporate cash management. ISO 20022 already defines these flows for conventional cash (`camt.004` / `camt.005` for account queries, `camt.009`–`camt.015` for limit and standing order management); the work would adapt the relevant components for multi-wallet, multi-token positions with settlement finality semantics.
 - **Regulated DeFi** — how the pacs.crypto data model applies when one or both counterparties interact via smart contract rather than a custodial VASP
 
 ### 3. Pre-execution intelligence API — later phase
@@ -207,14 +218,15 @@ A pre-execution intelligence API surfacing this information in a consistent, cha
 
 ## How to contribute
 
-This project benefits from review by people with operational experience on either side of the bank-VASP boundary, and from people who can see where the family should go next. Specifically welcome:
+This project benefits from review by people with operational experience across the bank–VASP boundary and corporate treasury boundary, and from people who can see where the family should go next. Specifically welcome:
 
 - **Compliance and legal review** — are the sanctions, tipping-off, and FATF obligation descriptions accurate and complete across jurisdictions?
 - **Implementation feedback** — what would break or be missing if you tried to implement any spec against your current system?
+- **Corporate treasury / TMS / ERP perspective** — do the specs map cleanly to existing ISO 20022 ingestion in TMS and ERP platforms? What additional fields or flows would make the corporate deployment pattern more operational?
 - **ISO 20022 alignment review** — are the pacs.008 and camt component mappings correct and idiomatic? Are there other ISO 20022 messages that should be in scope for the family?
 - **Ecosystem proposals** — concrete proposals for the PKI model, directory service, or legal framework layer
-- **Next specifications** — proposals for the next family member: tokenised assets, CBDC integration, regulated DeFi, or others
-- **Additional scenarios** — new example flows: tokenised securities, stablecoin issuers, regulated DeFi, institutional custody, delegated signing with HSM, ERC-3643 regulated token transfers, EBSI gateway integration
+- **Next specifications** — proposals for the next family member: tokenised assets, CBDC integration, corporate cash management primitives (pooling, sweeping, netting), regulated DeFi, or others
+- **Additional scenarios** — new example flows: tokenised securities, stablecoin issuers, regulated DeFi, institutional custody, delegated signing with HSM, ERC-3643 regulated token transfers, EBSI gateway integration, corporate-to-bank-to-VASP three-party chains
 
 Please open an issue or a pull request. Fundamental challenges to the approach are as welcome as incremental improvements.
 
