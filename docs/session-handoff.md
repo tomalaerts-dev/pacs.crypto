@@ -172,10 +172,10 @@ git push origin main
 
 After commit/push, continue with `P0`:
 
-- run the funded Sepolia path
-- capture one real evidence bundle under
+- run the funded Sepolia path and capture one real evidence bundle under
   `reference-server/data/demo-runs/<run-id>/`
-- generate `21-reviewer-summary.md` with `npm run demo:report`
+- generate `21-reviewer-summary.md` with `npm run demo:report` only after the
+  run reaches `FINAL` execution and `FINAL` finality
 
 ## Main Remaining Blocker
 

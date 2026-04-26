@@ -94,9 +94,11 @@ Success criteria:
 
 Current status:
 
-- in progress: review findings are documented and now gate funded Sepolia use
-- remaining: implement and test the hardening items before running a funded
-  Sepolia transaction
+- implemented: funded Sepolia use is gated by explicit submit-only broadcast,
+  concurrency/idempotency protection, corridor checks, ERC-20 transfer-log
+  verification, reporting finality upgrade, unsigned balance evidence, and
+  demo/preflight failure gates
+- remaining: validate with one controlled funded Sepolia run in Phase A
 
 ### Phase A - Real Sepolia execution
 Target window: Q2 to Q3 2026
@@ -125,7 +127,8 @@ Current status:
 - in progress: the `sepolia-usdc` adapter is implemented behind the existing adapter seam, read-only mode is available without private key material, and broadcast mode is environment-gated
 - in progress: the happy-path `BROADCAST -> CONFIRMING -> FINAL` Sepolia lifecycle is now covered in automated tests with injected provider/signer stubs, including reporting linkage on the same instruction identifiers
 - in progress: preflight and demo-run scripts now exist to validate wallet readiness and capture a real-chain evidence bundle once credentials are present
-- blocked: funded Sepolia execution waits for Phase A0 hardening
+- ready: funded Sepolia execution awaits configured RPC, private key, source
+  wallet funding, and recipient wallet
 - remaining: run a funded-wallet Sepolia transaction and capture the resulting tx hash, confirmations, and finality receipt for the reviewer demo
 
 ### Phase B - Spec 3 reporting alignment

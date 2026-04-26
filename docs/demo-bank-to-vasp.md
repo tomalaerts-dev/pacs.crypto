@@ -149,7 +149,8 @@ This verifies:
 - the configured RPC is actually Sepolia
 - the private key and configured source address match
 - the configured USDC contract has code
-- the source wallet has ETH for gas and a non-zero USDC balance
+- the source wallet has ETH for gas and enough USDC for `REF_SERVER_DEMO_AMOUNT`
+  (default `1.00`)
 
 ### 2. Start the server in broadcast mode
 
@@ -170,6 +171,9 @@ npm run demo:sepolia
 The runner writes a complete evidence bundle under:
 
 - `reference-server/data/demo-runs/<run-id>/`
+
+The runner exits non-zero unless the captured execution status and finality
+receipt are both `FINAL`.
 
 To turn that bundle into a reviewer-ready one-pager:
 

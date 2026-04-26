@@ -21,6 +21,7 @@
   "confirmation_depth": 12,
   "required_confirmation_depth": 12,
   "finality_status": "FINAL",
+  "transfer_verification": null,
   "observed_at": "2026-04-22T13:48:23.347Z",
   "final_at": "2026-04-22T13:48:23.347Z",
   "not_applicable_reason": null,

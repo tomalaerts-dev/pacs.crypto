@@ -46,7 +46,7 @@ These defaults are now part of the backlog, not open questions:
 
 ### Epic 10A - Execution safety and evidence hardening
 Priority: `P0`
-Status: `In progress`
+Status: `Implemented - pending funded validation`
 Depends on: completed chain-adapter boundary
 
 Work items:
@@ -70,11 +70,13 @@ Work items:
 
 Current status:
 
-- review found execution safety issues that must be fixed before any funded
-  Sepolia run
-- automated happy-path Sepolia lifecycle coverage exists, but it uses injected
-  provider/signer stubs and does not prove funded safety
-- real funded-wallet broadcast is blocked until this epic is closed
+- implemented: submit-only live broadcast boundary, concurrency/idempotency guard,
+  Sepolia corridor checks, ERC-20 transfer-log verification, debtor reporting
+  upgrade, unsigned balance evidence, and demo/preflight failure gates
+- automated Sepolia lifecycle coverage uses injected provider/signer stubs and
+  now checks transfer-log evidence, but still does not prove funded safety
+- real funded-wallet broadcast is ready for controlled validation once
+  credentials, funds, and a recipient wallet are configured
 
 Acceptance criteria:
 
@@ -93,7 +95,7 @@ Acceptance criteria:
 
 ### Epic 10 - Testnet execution
 Priority: `P1`
-Status: `Blocked`
+Status: `Ready for funded validation`
 Depends on: Epic 10A
 
 Work items:
@@ -113,7 +115,7 @@ Current status:
 - incomplete broadcast configuration fails safely
 - wrong-network RPC configuration now fails safely
 - preflight and demo-run scripts now exist for the funded-wallet path
-- live execution is blocked by the Epic 10A safety and evidence review findings
+- live execution is unblocked from the Epic 10A safety review perspective
 - real funded-wallet broadcast still needs to be run and captured
 
 Acceptance criteria:

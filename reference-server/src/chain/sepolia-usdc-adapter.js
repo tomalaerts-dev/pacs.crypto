@@ -1,4 +1,12 @@
-import { Contract, JsonRpcProvider, Wallet, formatEther, parseUnits } from 'ethers';
+import {
+  Contract,
+  Interface,
+  JsonRpcProvider,
+  Wallet,
+  formatEther,
+  formatUnits,
+  parseUnits,
+} from 'ethers';
 import { randomUUID } from 'node:crypto';
 
 const SEPOLIA_CHAIN_DLI = 'X9J9XDMTD';
@@ -12,7 +20,9 @@ const DEFAULT_PRIORITY_FEE_GWEI = '2';
 const DEFAULT_EXPLORER_BASE_URL = 'https://sepolia.etherscan.io';
 const ERC20_ABI = [
   'function transfer(address to, uint256 amount) returns (bool)',
+  'event Transfer(address indexed from, address indexed to, uint256 value)',
 ];
+const ERC20_INTERFACE = new Interface(ERC20_ABI);
 
 function nowIso() {
   return new Date().toISOString();
@@ -47,6 +57,10 @@ function normalizeComparisonAddress(value) {
   return normalizeHex(value)?.toLowerCase() ?? null;
 }
 
+function normalizeLogAddress(value) {
+  return normalizeComparisonAddress(value);
+}
+
 function normalizeInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -54,6 +68,18 @@ function normalizeInteger(value, fallback) {
 
 function parseGweiToWei(value) {
   return parseUnits(String(value ?? '0'), 9);
+}
+
+function safeBigInt(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
 }
 
 function getRecipientAddress(input = {}) {
@@ -241,6 +267,138 @@ function buildUsdcContract(config, wallet) {
   return new Contract(config.usdcContractAddress, ERC20_ABI, wallet);
 }
 
+function parseTransferLog(log) {
+  if (!log || typeof log !== 'object') {
+    return null;
+  }
+
+  if (
+    log.eventName === 'Transfer' &&
+    log.args &&
+    log.args.from !== undefined &&
+    log.args.to !== undefined &&
+    log.args.value !== undefined
+  ) {
+    return {
+      from: log.args.from,
+      to: log.args.to,
+      value: safeBigInt(log.args.value),
+    };
+  }
+
+  if (
+    log.fragment?.name === 'Transfer' &&
+    log.args &&
+    log.args.from !== undefined &&
+    log.args.to !== undefined &&
+    log.args.value !== undefined
+  ) {
+    return {
+      from: log.args.from,
+      to: log.args.to,
+      value: safeBigInt(log.args.value),
+    };
+  }
+
+  try {
+    const parsed = ERC20_INTERFACE.parseLog({
+      topics: log.topics,
+      data: log.data,
+    });
+    if (parsed?.name !== 'Transfer') {
+      return null;
+    }
+
+    return {
+      from: parsed.args.from,
+      to: parsed.args.to,
+      value: safeBigInt(parsed.args.value),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildExpectedTransfer({ config, record, settlement }) {
+  const expectedFrom =
+    normalizeComparisonAddress(getDebtorAddress(record)) ??
+    normalizeComparisonAddress(settlement?.broadcast_transaction?.from) ??
+    normalizeComparisonAddress(config.sourceAddress);
+  const expectedTo = normalizeComparisonAddress(getRecipientAddress(record));
+  const expectedToken = normalizeComparisonAddress(config.usdcContractAddress);
+  const expectedValue = safeBigInt(
+    parseUnits(
+      record.interbank_settlement_amount?.amount ?? '0',
+      config.usdcDecimals,
+    ),
+  );
+
+  return {
+    expectedFrom,
+    expectedTo,
+    expectedToken,
+    expectedValue,
+  };
+}
+
+function verifyTransferLog({ config, record, receipt, settlement }) {
+  const expected = buildExpectedTransfer({ config, record, settlement });
+  if (
+    !expected.expectedFrom ||
+    !expected.expectedTo ||
+    !expected.expectedToken ||
+    expected.expectedValue === null
+  ) {
+    return {
+      verified: false,
+      failure_reason:
+        'Sepolia finality requires source wallet, recipient wallet, token contract, and amount evidence.',
+    };
+  }
+
+  const logs = Array.isArray(receipt?.logs) ? receipt.logs : [];
+  for (const log of logs) {
+    if (normalizeLogAddress(log.address) !== expected.expectedToken) {
+      continue;
+    }
+
+    const transfer = parseTransferLog(log);
+    if (!transfer) {
+      continue;
+    }
+
+    const from = normalizeComparisonAddress(transfer.from);
+    const to = normalizeComparisonAddress(transfer.to);
+    const value = transfer.value;
+
+    if (
+      from === expected.expectedFrom &&
+      to === expected.expectedTo &&
+      value === expected.expectedValue
+    ) {
+      return {
+        verified: true,
+        token_contract_address: normalizeHex(config.usdcContractAddress),
+        from: normalizeHex(transfer.from),
+        to: normalizeHex(transfer.to),
+        amount: formatUnits(value, config.usdcDecimals),
+        amount_raw: value.toString(),
+        log_index: log.index ?? log.logIndex ?? null,
+      };
+    }
+  }
+
+  return {
+    verified: false,
+    token_contract_address: normalizeHex(config.usdcContractAddress),
+    expected_from: normalizeHex(expected.expectedFrom),
+    expected_to: normalizeHex(expected.expectedTo),
+    expected_amount_raw: expected.expectedValue.toString(),
+    failure_reason:
+      'Sepolia transaction receipt did not contain the expected USDC Transfer log.',
+  };
+}
+
 async function getProviderChainId(provider) {
   if (!provider || typeof provider.getNetwork !== 'function') {
     return null;
@@ -323,6 +481,16 @@ async function getReceiptSettlementState({ config, provider, record, settlement 
   const block = await provider.getBlock(receipt.blockNumber);
   const gasCostWei =
     receipt.gasUsed * (receipt.gasPrice ?? receipt.effectiveGasPrice ?? 0n);
+  const transferVerification =
+    receipt.status === 0
+      ? {
+          verified: false,
+          failure_reason: 'Sepolia transaction reverted before token transfer verification.',
+        }
+      : verifyTransferLog({ config, record, receipt, settlement });
+  const finalityFailureReason = transferVerification.verified
+    ? null
+    : transferVerification.failure_reason;
 
   return {
     ...settlement,
@@ -332,11 +500,21 @@ async function getReceiptSettlementState({ config, provider, record, settlement 
       : settlement.block_timestamp ?? nowIso(),
     confirmation_depth: confirmationDepth,
     required_confirmation_depth: config.requiredConfirmations,
-    finality_status: receipt.status === 0 ? 'FAILED' : finalityStatus,
+    finality_status:
+      receipt.status === 0 || !transferVerification.verified
+        ? 'FAILED'
+        : finalityStatus,
+    transfer_verification: transferVerification,
+    network_failure_reason:
+      receipt.status === 0
+        ? 'Sepolia transaction reverted.'
+        : finalityFailureReason ?? settlement.network_failure_reason ?? null,
     actual_amount_transferred:
-      settlement.actual_amount_transferred ??
-      record.interbank_settlement_amount?.amount ??
-      '0',
+      transferVerification.verified
+        ? transferVerification.amount
+        : (settlement.actual_amount_transferred ??
+          record.interbank_settlement_amount?.amount ??
+          '0'),
     actual_gas_cost_native: formatEther(gasCostWei),
     adapter_execution_mode: config.broadcastEnabled ? 'LIVE_BROADCAST' : 'READ_ONLY',
   };

@@ -469,6 +469,8 @@ function buildExecutionStatusResponse(record, chainAdapter = null) {
     confirmation_depth: record.on_chain_settlement?.confirmation_depth ?? null,
     required_confirmation_depth:
       record.on_chain_settlement?.required_confirmation_depth ?? null,
+    transfer_verification:
+      record.on_chain_settlement?.transfer_verification ?? null,
     debit_timing: record.debit_timing,
     expiry_date_time: record.expiry_date_time,
     created_at: record.created_at,
@@ -514,6 +516,8 @@ function buildFinalityReceipt(record, chainAdapter = null) {
     required_confirmation_depth:
       record.on_chain_settlement?.required_confirmation_depth ?? null,
     finality_status: record.on_chain_settlement?.finality_status ?? null,
+    transfer_verification:
+      record.on_chain_settlement?.transfer_verification ?? null,
     observed_at: record.updated_at,
     final_at: finalEvent?.status_at ?? null,
     not_applicable_reason: notApplicableReason,
@@ -749,6 +753,14 @@ function toUtcDayEnd(dateValue) {
 
 function formatTokenAmountValue(value) {
   return formatDecimalAmount(value, 8);
+}
+
+function buildReportingBalance(amount, currency) {
+  return {
+    amount: formatDecimalAmount(Math.abs(amount)),
+    currency,
+    credit_debit_indicator: amount < 0 ? 'DBIT' : 'CRDT',
+  };
 }
 
 function buildSpecPartyIdentification(party = null) {
@@ -994,6 +1006,9 @@ function buildSpecBlockchainDetail(record, instruction = null, chainAdapter = nu
   ) {
     detail.confirmation_depth = settlement.confirmation_depth;
   }
+  if (settlement?.transfer_verification) {
+    detail.transfer_verification = settlement.transfer_verification;
+  }
 
   detail.finality_status = lifecycle.finalityStatus;
 
@@ -1106,7 +1121,7 @@ function buildSpecBalanceAggregation(records, mode, snapshotTime) {
         balance_type: balanceType,
         token: entry.token,
         token_amount: {
-          amount: formatTokenAmountValue(amount),
+          amount: formatTokenAmountValue(Math.abs(amount)),
         },
         credit_debit_indicator: amount < 0 ? 'DBIT' : 'CRDT',
         date_time: snapshotTime,
@@ -1208,6 +1223,32 @@ function buildReportingNotificationRecord(record, notificationKind, chainAdapter
       notificationId,
     }),
     created_at: nowIso(),
+  };
+}
+
+function upgradeReportingNotificationToFinal(notification, record, chainAdapter) {
+  const finalAt = chainAdapter.getLifecycleTimestamp(record, 'FINAL');
+  return {
+    ...notification,
+    notification_type: 'BOOKED_ENTRY',
+    booking_status: 'BOOKED',
+    transaction_hash: record.on_chain_settlement?.transaction_hash ?? notification.transaction_hash ?? null,
+    status_reference: {
+      ...(notification.status_reference ?? {}),
+      current_instruction_status: 'FINAL',
+      finalized_at: finalAt,
+    },
+    traceability: buildReportingTraceability({
+      instructionId: record.instruction_id,
+      uetr: record.uetr,
+      endToEndIdentification:
+        record.payment_identification?.end_to_end_identification ?? null,
+      travelRuleRecordId: record.travel_rule_record_id,
+      transactionHash: record.on_chain_settlement?.transaction_hash ?? null,
+      accountRole: notification.account_role,
+      notificationId: notification.notification_id,
+    }),
+    updated_at: nowIso(),
   };
 }
 
@@ -1460,23 +1501,21 @@ function buildReportingStatementRecord(
     },
     balance_summary: {
       opening_balance: {
-        amount: formatDecimalAmount(openingBalance),
-        currency,
+        ...buildReportingBalance(openingBalance, currency),
       },
       closing_balance: {
-        amount: formatDecimalAmount(closingBalance),
-        currency,
+        ...buildReportingBalance(closingBalance, currency),
       },
       available_balance: {
-        amount: formatDecimalAmount(closingBalance),
-        currency,
+        ...buildReportingBalance(closingBalance, currency),
       },
     },
     movement_summary: {
       entry_count: summaryNotifications.length,
       debit_total: formatDecimalAmount(debitTotal),
       credit_total: formatDecimalAmount(creditTotal),
-      net_total: formatDecimalAmount(closingBalance),
+      net_total: formatDecimalAmount(Math.abs(closingBalance)),
+      net_credit_debit_indicator: closingBalance < 0 ? 'DBIT' : 'CRDT',
     },
     entries: summaryNotifications,
     traceability: buildReportingTraceability({
@@ -2283,6 +2322,7 @@ export class ReferenceStore {
 
     this.chainAdapter = normalizeChainAdapter(chainAdapter);
     this.webhookRetryScheduleMs = normalizeRetryScheduleMs(webhookRetryScheduleMs);
+    this.inFlightInstructionCreations = new Map();
     this.db = new DatabaseSync(dbPath);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS travel_rule_records (
@@ -2461,6 +2501,11 @@ export class ReferenceStore {
       INSERT INTO reporting_notifications (
         notification_id, instruction_id, booking_date_time, notification_json
       ) VALUES (?, ?, ?, ?)
+    `);
+    this.updateReportingNotificationStmt = this.db.prepare(`
+      UPDATE reporting_notifications
+      SET notification_json = ?
+      WHERE notification_id = ?
     `);
     this.getReportingNotificationStmt = this.db.prepare(`
       SELECT notification_json FROM reporting_notifications WHERE notification_id = ?
@@ -3038,6 +3083,28 @@ export class ReferenceStore {
 
   async createInstructionAsync(submission) {
     const normalized = normalizeInstructionSubmission(submission);
+    const creationKey =
+      normalized.payment_identification?.end_to_end_identification ??
+      normalized.payment_identification?.uetr ??
+      null;
+
+    if (!creationKey) {
+      return this.createInstructionFromNormalizedAsync(normalized);
+    }
+
+    const inFlightCreation = this.inFlightInstructionCreations.get(creationKey);
+    if (inFlightCreation) {
+      return inFlightCreation;
+    }
+
+    const creation = this.createInstructionFromNormalizedAsync(normalized).finally(() => {
+      this.inFlightInstructionCreations.delete(creationKey);
+    });
+    this.inFlightInstructionCreations.set(creationKey, creation);
+    return creation;
+  }
+
+  async createInstructionFromNormalizedAsync(normalized) {
     const createdAt = nowIso();
     const initialStatus = this.chainAdapter.hasExpired(normalized.expiry_date_time)
       ? 'EXPIRED'
@@ -4233,6 +4300,7 @@ export class ReferenceStore {
     );
     const created = [];
     const debitTriggerStatus = getDebitNotificationTriggerStatus(record.debit_timing);
+    const upgraded = [];
 
     if (!hasDebtorDebit && hasInstructionReachedStatus(record, debitTriggerStatus)) {
       const notification = buildReportingNotificationRecord(
@@ -4247,6 +4315,29 @@ export class ReferenceStore {
         serialize(notification),
       );
       created.push(notification);
+    }
+
+    if (record.status === 'FINAL') {
+      for (const notification of existing) {
+        if (
+          notification.account_role !== 'DEBTOR' ||
+          notification.entry_type !== 'DEBIT' ||
+          deriveReportingEntryLifecycle(notification).entryStatus === 'BOOK'
+        ) {
+          continue;
+        }
+
+        const upgradedNotification = upgradeReportingNotificationToFinal(
+          notification,
+          record,
+          this.chainAdapter,
+        );
+        this.updateReportingNotificationStmt.run(
+          serialize(upgradedNotification),
+          upgradedNotification.notification_id,
+        );
+        upgraded.push(upgradedNotification);
+      }
     }
 
     if (!hasCreditorCredit && record.status === 'FINAL') {
@@ -4266,7 +4357,7 @@ export class ReferenceStore {
 
     this.appendReportingNotificationOutboxEvents(created);
     this.refreshReportingStatements(record);
-    return created;
+    return [...created, ...upgraded];
   }
 
   refreshReportingStatements(record) {

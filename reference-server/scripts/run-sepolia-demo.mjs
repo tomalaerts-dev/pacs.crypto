@@ -542,10 +542,20 @@ async function main() {
     reporting_statement_count:
       artifacts.reporting_statements.json.total_matched ?? null,
   };
+  summary.evidence_valid =
+    summary.final_status === 'FINAL' &&
+    summary.finality_status === 'FINAL' &&
+    hasText(summary.transaction_hash);
 
   await writeJson(resolve(outputRoot, '20-summary.json'), summary);
 
   console.log(JSON.stringify(summary, null, 2));
+
+  if (!summary.evidence_valid) {
+    throw new Error(
+      `Sepolia demo evidence is not valid: execution status ${summary.final_status ?? 'unknown'}, finality ${summary.finality_status ?? 'unknown'}.`,
+    );
+  }
 }
 
 main().catch((error) => {

@@ -4,6 +4,7 @@ const EXPECTED_CHAIN_ID = 11155111n;
 const DEFAULT_GAS_LIMIT = 85000;
 const DEFAULT_MAX_FEE_GWEI = '35';
 const DEFAULT_MAX_PRIORITY_FEE_GWEI = '2';
+const DEFAULT_DEMO_AMOUNT = '1.00';
 const ERC20_ABI = [
   'function balanceOf(address owner) view returns (uint256)',
   'function decimals() view returns (uint8)',
@@ -26,6 +27,15 @@ function normalizeHex(value) {
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? '', 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseDemoAmount(value) {
+  const normalized = String(value ?? DEFAULT_DEMO_AMOUNT).trim();
+  if (!/^\d+(\.\d+)?$/.test(normalized) || Number.parseFloat(normalized) <= 0) {
+    throw new Error('REF_SERVER_DEMO_AMOUNT must be a positive decimal amount.');
+  }
+
+  return normalized;
 }
 
 function requireEnv(name) {
@@ -55,6 +65,7 @@ async function main() {
   const maxPriorityFeePerGasGwei =
     process.env.REF_SERVER_SEPOLIA_MAX_PRIORITY_FEE_GWEI ??
     DEFAULT_MAX_PRIORITY_FEE_GWEI;
+  const demoAmount = parseDemoAmount(process.env.REF_SERVER_DEMO_AMOUNT);
 
   const provider = new JsonRpcProvider(rpcUrl);
   const wallet = new Wallet(privateKey, provider);
@@ -78,7 +89,9 @@ async function main() {
   ]);
 
   const chainId = BigInt(network.chainId);
+  const tokenDecimals = Number(usdcDecimals);
   const maxGasCostWei = parseUnits(String(maxFeePerGasGwei), 9) * BigInt(gasLimit);
+  const demoAmountRaw = parseUnits(demoAmount, tokenDecimals);
   const recommendations = [];
   let ok = true;
 
@@ -117,8 +130,11 @@ async function main() {
     );
   }
 
-  if (usdcBalanceRaw === 0n) {
-    recommendations.push('USDC balance is zero; the demo transfer will fail.');
+  if (usdcBalanceRaw < demoAmountRaw) {
+    ok = false;
+    recommendations.push(
+      `USDC balance is below REF_SERVER_DEMO_AMOUNT (${demoAmount}); the demo transfer would fail.`,
+    );
   }
 
   const summary = {
@@ -142,8 +158,10 @@ async function main() {
     token: {
       contract_address: usdcContractAddress,
       symbol: usdcSymbol,
-      decimals: Number(usdcDecimals),
-      balance: formatUnits(usdcBalanceRaw, usdcDecimals),
+      decimals: tokenDecimals,
+      balance: formatUnits(usdcBalanceRaw, tokenDecimals),
+      demo_amount: demoAmount,
+      has_demo_amount: usdcBalanceRaw >= demoAmountRaw,
       code_present: contractCode !== '0x',
     },
     gas_policy: {

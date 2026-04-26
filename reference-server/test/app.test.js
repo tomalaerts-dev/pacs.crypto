@@ -26,6 +26,25 @@ function deepMerge(base, overrides = {}) {
   return result;
 }
 
+function buildParsedTransferLog({
+  tokenAddress,
+  from,
+  to,
+  amountRaw,
+  logIndex = 0,
+}) {
+  return {
+    address: tokenAddress,
+    eventName: 'Transfer',
+    args: {
+      from,
+      to,
+      value: BigInt(amountRaw),
+    },
+    logIndex,
+  };
+}
+
 function buildQuoteRequest(overrides = {}) {
   return deepMerge(
     {
@@ -2069,7 +2088,11 @@ test('statement reporting derives persisted account statements from reporting no
   );
 
   assert.ok(debtorStatement);
-  assert.equal(debtorStatement.balance_summary.closing_balance.amount, '-5100');
+  assert.equal(debtorStatement.balance_summary.closing_balance.amount, '5100');
+  assert.equal(
+    debtorStatement.balance_summary.closing_balance.credit_debit_indicator,
+    'DBIT',
+  );
   assert.equal(debtorStatement.movement_summary.entry_count, 1);
   assert.equal(debtorStatement.instruction_context.finality_status, 'FINAL');
   assert.equal(debtorStatement.statement_scope.source_notification_count, 1);
@@ -2394,6 +2417,8 @@ test('report spec paths expose search stats intraday statement and notification 
   assert.ok(Array.isArray(queryBalanceResponse.json().balances));
   assert.equal(queryBalanceResponse.json().balances.length, 1);
   assert.equal(queryBalanceResponse.json().balances[0].balance_type, 'ITBD');
+  assert.equal(queryBalanceResponse.json().balances[0].token_amount.amount, '8800');
+  assert.equal(queryBalanceResponse.json().balances[0].credit_debit_indicator, 'DBIT');
 
   const queryIntradayResponse = await app.inject({
     method: 'POST',
@@ -3251,10 +3276,229 @@ test('Sepolia broadcast mode rejects invalid corridor metadata before transfer',
   await app.close();
 });
 
+test('concurrent duplicate Sepolia submissions do not duplicate the broadcast', async () => {
+  const transactionHash = `0x${'e'.repeat(64)}`;
+  const sourceAddress = '0x00000000000000000000000000000000000000aa';
+  const recipientAddress = '0x00000000000000000000000000000000000000bb';
+  const tokenAddress = '0x0000000000000000000000000000000000000001';
+  const observedTransfers = [];
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      provider: {
+        async getNetwork() {
+          return { chainId: 11155111n, name: 'sepolia' };
+        },
+        async getTransactionReceipt() {
+          return null;
+        },
+      },
+      rpcUrl: 'https://rpc.example.invalid',
+      privateKey:
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      sourceAddress,
+      usdcContractAddress: tokenAddress,
+      broadcastEnabled: true,
+      walletFactory() {
+        return {
+          address: sourceAddress,
+        };
+      },
+      contractFactory() {
+        return {
+          async transfer() {
+            observedTransfers.push(true);
+            await new Promise((resolveTransfer) => {
+              setTimeout(resolveTransfer, 20);
+            });
+            return {
+              hash: transactionHash,
+            };
+          },
+        };
+      },
+    }),
+  });
+
+  const payload = buildInstructionPayload({
+    payment_identification: {
+      end_to_end_identification: 'INV-SEPOLIA-CONCURRENT-001',
+    },
+    interbank_settlement_amount: {
+      amount: '10.00',
+      currency: 'USD',
+    },
+    debtor_account: {
+      proxy: {
+        identification: sourceAddress,
+      },
+    },
+    creditor_account: {
+      proxy: {
+        identification: recipientAddress,
+      },
+    },
+  });
+
+  const responses = await Promise.all([
+    app.inject({
+      method: 'POST',
+      url: '/instruction',
+      payload,
+    }),
+    app.inject({
+      method: 'POST',
+      url: '/instruction',
+      payload,
+    }),
+  ]);
+
+  assert.equal(observedTransfers.length, 1);
+  const createdResponses = responses.filter((response) => response.statusCode === 201);
+  assert.ok(createdResponses.length >= 1);
+  const instructionId = createdResponses[0].json().instruction_id;
+  for (const response of responses) {
+    if (response.statusCode === 201) {
+      assert.equal(response.json().instruction_id, instructionId);
+    } else {
+      assert.equal(response.statusCode, 409);
+      assert.equal(response.json().instruction_id, instructionId);
+    }
+  }
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${instructionId}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().transaction_hash, transactionHash);
+
+  await app.close();
+});
+
+test('Sepolia finality fails if the receipt lacks the expected USDC Transfer log', async () => {
+  const transactionHash = `0x${'d'.repeat(64)}`;
+  const sourceAddress = '0x00000000000000000000000000000000000000aa';
+  const recipientAddress = '0x00000000000000000000000000000000000000bb';
+  const tokenAddress = '0x0000000000000000000000000000000000000001';
+  const chainState = {
+    latestBlock: 102,
+    receipt: {
+      blockNumber: 100,
+      gasUsed: 45_000n,
+      gasPrice: 20_000_000_000n,
+      status: 1,
+      logs: [
+        buildParsedTransferLog({
+          tokenAddress,
+          from: sourceAddress,
+          to: '0x00000000000000000000000000000000000000cc',
+          amountRaw: 10_000_000n,
+        }),
+      ],
+    },
+  };
+
+  const app = await buildApp({
+    chainAdapter: createSepoliaUsdcAdapter({
+      provider: {
+        async getNetwork() {
+          return { chainId: 11155111n, name: 'sepolia' };
+        },
+        async getTransactionReceipt(hash) {
+          assert.equal(hash, transactionHash);
+          return chainState.receipt;
+        },
+        async getBlockNumber() {
+          return chainState.latestBlock;
+        },
+        async getBlock(blockNumber) {
+          assert.equal(blockNumber, 100);
+          return { timestamp: 1_712_345_678 };
+        },
+      },
+      rpcUrl: 'https://rpc.example.invalid',
+      privateKey:
+        '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      sourceAddress,
+      usdcContractAddress: tokenAddress,
+      broadcastEnabled: true,
+      requiredConfirmations: 3,
+      walletFactory() {
+        return {
+          address: sourceAddress,
+        };
+      },
+      contractFactory() {
+        return {
+          async transfer() {
+            return {
+              hash: transactionHash,
+            };
+          },
+        };
+      },
+    }),
+  });
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-SEPOLIA-LOG-MISMATCH-001',
+      },
+      interbank_settlement_amount: {
+        amount: '10.00',
+        currency: 'USD',
+      },
+      debtor_account: {
+        proxy: {
+          identification: sourceAddress,
+        },
+      },
+      creditor_account: {
+        proxy: {
+          identification: recipientAddress,
+        },
+      },
+    }),
+  });
+
+  assert.equal(createResponse.statusCode, 201);
+  assert.equal(createResponse.json().status, 'BROADCAST');
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/execution-status/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(statusResponse.statusCode, 200);
+  assert.equal(statusResponse.json().status, 'FAILED');
+  assert.match(statusResponse.json().failure_reason, /Transfer log/i);
+  assert.equal(statusResponse.json().finality_status, 'FAILED');
+  assert.equal(
+    statusResponse.json().transfer_verification.verified,
+    false,
+  );
+
+  const finalityReceiptResponse = await app.inject({
+    method: 'GET',
+    url: `/finality-receipt/${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(finalityReceiptResponse.statusCode, 200);
+  assert.equal(finalityReceiptResponse.json().finality_status, 'FAILED');
+  assert.equal(finalityReceiptResponse.json().transfer_verification.verified, false);
+
+  await app.close();
+});
+
 test('Sepolia broadcast mode can progress from broadcast to final and surface reporting linkage', async () => {
   const transactionHash = `0x${'a'.repeat(64)}`;
   const sourceAddress = '0x00000000000000000000000000000000000000aa';
   const recipientAddress = '0x00000000000000000000000000000000000000bb';
+  const tokenAddress = '0x0000000000000000000000000000000000000001';
   const observedTransfers = [];
   const chainState = {
     latestBlock: 0,
@@ -3288,7 +3532,7 @@ test('Sepolia broadcast mode can progress from broadcast to final and surface re
       privateKey:
         '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
       sourceAddress,
-      usdcContractAddress: '0x0000000000000000000000000000000000000001',
+      usdcContractAddress: tokenAddress,
       broadcastEnabled: true,
       requiredConfirmations: 3,
       gasLimit: 91000,
@@ -3370,6 +3614,14 @@ test('Sepolia broadcast mode can progress from broadcast to final and surface re
     gasUsed: 45_000n,
     gasPrice: 20_000_000_000n,
     status: 1,
+    logs: [
+      buildParsedTransferLog({
+        tokenAddress,
+        from: sourceAddress,
+        to: recipientAddress,
+        amountRaw: 10_000_000n,
+      }),
+    ],
   };
   chainState.latestBlock = 100;
 
@@ -3407,8 +3659,39 @@ test('Sepolia broadcast mode can progress from broadcast to final and surface re
   assert.equal(finalityReceiptResponse.json().transaction_hash, transactionHash);
   assert.equal(finalityReceiptResponse.json().block_number, 100);
   assert.equal(finalityReceiptResponse.json().finality_status, 'FINAL');
+  assert.equal(finalityReceiptResponse.json().transfer_verification.verified, true);
+  assert.equal(
+    finalityReceiptResponse.json().transfer_verification.token_contract_address,
+    tokenAddress,
+  );
+  assert.equal(finalityReceiptResponse.json().transfer_verification.amount, '10.0');
   assert.ok(finalityReceiptResponse.json().included_at);
   assert.ok(finalityReceiptResponse.json().final_at);
+
+  const reportingNotificationsResponse = await app.inject({
+    method: 'GET',
+    url: `/reporting/notifications?instruction_id=${createResponse.json().instruction_id}`,
+  });
+
+  assert.equal(reportingNotificationsResponse.statusCode, 200);
+  assert.equal(reportingNotificationsResponse.json().total_matched, 2);
+  const debitNotification = reportingNotificationsResponse.json().notifications.find(
+    (notification) => notification.account_role === 'DEBTOR',
+  );
+  assert.ok(debitNotification);
+
+  const debitSpecNotificationResponse = await app.inject({
+    method: 'GET',
+    url: `/report/notification/${debitNotification.notification_id}`,
+  });
+
+  assert.equal(debitSpecNotificationResponse.statusCode, 200);
+  assert.equal(debitSpecNotificationResponse.json().notification_type, 'ENTRY_FINAL');
+  assert.equal(debitSpecNotificationResponse.json().entry.entry_status, 'BOOK');
+  assert.equal(
+    debitSpecNotificationResponse.json().entry.blockchain_detail.finality_status,
+    'FINAL',
+  );
 
   const reportSearchResponse = await app.inject({
     method: 'GET',

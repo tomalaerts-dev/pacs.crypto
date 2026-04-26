@@ -49,22 +49,26 @@
   "balance_summary": {
     "opening_balance": {
       "amount": "0",
-      "currency": "USD"
+      "currency": "USD",
+      "credit_debit_indicator": "CRDT"
     },
     "closing_balance": {
       "amount": "125000",
-      "currency": "USD"
+      "currency": "USD",
+      "credit_debit_indicator": "CRDT"
     },
     "available_balance": {
       "amount": "125000",
-      "currency": "USD"
+      "currency": "USD",
+      "credit_debit_indicator": "CRDT"
     }
   },
   "movement_summary": {
     "entry_count": 1,
     "debit_total": "0",
     "credit_total": "125000",
-    "net_total": "125000"
+    "net_total": "125000",
+    "net_credit_debit_indicator": "CRDT"
   },
   "entries": [
     {

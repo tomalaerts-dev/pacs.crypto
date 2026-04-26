@@ -114,13 +114,14 @@ Required environment for preflight:
 - `REF_SERVER_SEPOLIA_PRIVATE_KEY`
 - `REF_SERVER_SEPOLIA_USDC_CONTRACT_ADDRESS`
 - optional but recommended: `REF_SERVER_SEPOLIA_SOURCE_ADDRESS`
+- optional: `REF_SERVER_DEMO_AMOUNT` (defaults to `1.00`)
 
 The preflight checks:
 
 - the RPC is actually Sepolia (`chain_id = 11155111`)
 - the private key matches the configured source address
 - code exists at the configured USDC contract
-- the source wallet has ETH for gas and a non-zero USDC balance
+- the source wallet has ETH for gas and enough USDC for `REF_SERVER_DEMO_AMOUNT`
 
 ### 2. Start the server in broadcast mode
 
@@ -151,6 +152,10 @@ Optional demo controls:
 The demo runner writes a full artifact bundle under:
 
 - `reference-server/data/demo-runs/<run-id>/`
+
+The runner exits non-zero unless the captured execution status and finality
+receipt are both `FINAL`, so failed or probabilistic runs are not mistaken for
+reviewer evidence.
 
 To render a reviewer-facing markdown summary from a captured run:
 
