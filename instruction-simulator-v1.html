@@ -127,6 +127,7 @@
     .s201,.s200{background:var(--green-bg);border:1px solid rgba(63,185,80,.35);color:var(--green)}
     .s409{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--amber)}
     .s404,.s400,.s422{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+    .s500{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--amber)}
     .rt{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
     .rb{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
 
@@ -420,6 +421,15 @@
         <input type="number" id="f-sr-page" placeholder="50" value="50"/></div>
     </div>
 
+    <div class="fsec">Execution Mode</div>
+    <div class="fg"><div class="fl">Mode</div>
+      <select id="f-mode" onchange="updatePreview()">
+        <option value="DEMO">DEMO — local simulator logic</option>
+        <option value="LIVE">LIVE API — call reference server</option>
+      </select></div>
+    <div class="fg"><div class="fl">API Base URL <span class="ft">used in LIVE mode</span></div>
+      <input type="text" id="f-api-base" value="http://127.0.0.1:5050" placeholder="http://127.0.0.1:5050"/></div>
+
     <button class="sbtn sp" id="sbtn" onclick="sendRequest()">
       <span id="slbl">▶ Request Quote</span>
     </button>
@@ -459,7 +469,7 @@
     <div class="fg"><div class="fl">Name <span class="freq">MANDATORY</span></div>
       <input type="text" id="f-caname" placeholder="Kraken Belgium BVBA"/></div>
     <div class="fg"><div class="fl">LEI</div>
-      <input type="text" id="f-calei" placeholder="5299000DUFB71VFOHVB49"/></div>
+      <input type="text" id="f-calei" placeholder="635400DUFB71VFOHVB49"/></div>
   </div>
 
   <!-- CHAIN TAB -->
@@ -664,7 +674,7 @@ const SCENARIOS = {
                daname:'Bitvavo B.V.', dalei:'7245007VX57GR4IUVZ79', dabic:'BITVNL2AXXX',
                cname:'Bravo Supplies B.V.', clei:'724500QHKL6MVSQQ1Z17', cctry:'NL',
                cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',
-               caname:'Kraken Belgium BVBA', calei:'5299000DUFB71VFOHVB49' },
+               caname:'Kraken Belgium BVBA', calei:'635400DUFB71VFOHVB49' },
     chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
              contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
              issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
@@ -683,7 +693,7 @@ const SCENARIOS = {
                daname:'Bitvavo B.V.', dalei:'7245007VX57GR4IUVZ79', dabic:'BITVNL2AXXX',
                cname:'Bravo Supplies B.V.', clei:'724500QHKL6MVSQQ1Z17', cctry:'NL',
                cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',
-               caname:'Kraken Belgium BVBA', calei:'5299000DUFB71VFOHVB49' },
+               caname:'Kraken Belgium BVBA', calei:'635400DUFB71VFOHVB49' },
     chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
              contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
              issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
@@ -720,7 +730,7 @@ const SCENARIOS = {
                daname:'Bitvavo B.V.', dalei:'7245007VX57GR4IUVZ79', dabic:'BITVNL2AXXX',
                cname:'Bravo Supplies B.V.', clei:'724500QHKL6MVSQQ1Z17', cctry:'NL',
                cwallet:'0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe',
-               caname:'Kraken Belgium BVBA', calei:'5299000DUFB71VFOHVB49' },
+               caname:'Kraken Belgium BVBA', calei:'635400DUFB71VFOHVB49' },
     chain: { chain:'DLID/X9J9XDMTD', tokendti:'T9B3X8H2K', tokensym:'USDC',
              contract:'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', tokstd:'ERC-20',
              issuer:'Circle Internet Financial LLC', issuerlei:'549300EZRIYGDZHEDL36' },
@@ -978,11 +988,706 @@ function highlight(json) {
 }
 
 // ── SEND REQUEST ─────────────────────────────────────────────────────────────
-function sendRequest() {
+function getExecutionMode() {
+  return g('f-mode') || 'DEMO';
+}
+
+function getApiBase() {
+  return (g('f-api-base') || 'http://127.0.0.1:5050').replace(/\/+$/, '');
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function tryParseJson(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function getStatusPillClass(status) {
+  if (status === 'FINAL') return 'st-final';
+  if (status === 'CONFIRMING') return 'st-confirming';
+  if (['PENDING', 'BROADCAST', 'QUOTED'].includes(status)) return 'st-pending';
+  if (['FAILED', 'SLIPPAGE_EXCEEDED', 'RAMP_FAILED'].includes(status)) return 'st-failed';
+  if (['CANCELLED', 'EXPIRED'].includes(status)) return 'st-cancelled';
+  return 'st-pending';
+}
+
+async function requestJson(url, init) {
+  const response = await fetch(url, init);
+  const rawText = await response.text();
+  const payload = tryParseJson(rawText);
+  return {
+    ok: response.ok,
+    status: response.status,
+    url,
+    payload,
+    rawText
+  };
+}
+
+async function resolveInstructionReference(referenceValue) {
+  const base = getApiBase();
+  const encoded = encodeURIComponent(referenceValue);
+  const byUetr = await requestJson(`${base}/execution-status/uetr/${encoded}`);
+  if (byUetr.ok && byUetr.payload?.instruction_id) {
+    return {
+      ok: true,
+      referenceType: 'uetr',
+      instructionId: byUetr.payload.instruction_id,
+      executionStatus: byUetr
+    };
+  }
+
+  const byInstructionId = await requestJson(`${base}/execution-status/${encoded}`);
+  if (byInstructionId.ok && byInstructionId.payload?.instruction_id) {
+    return {
+      ok: true,
+      referenceType: 'instruction_id',
+      instructionId: byInstructionId.payload.instruction_id,
+      executionStatus: byInstructionId
+    };
+  }
+
+  return {
+    ok: false,
+    attempts: [byUetr, byInstructionId]
+  };
+}
+
+function renderJsonPayloadCard(icon, title, payload, rawText) {
+  const pretty = payload !== undefined && payload !== null
+    ? JSON.stringify(payload, null, 2)
+    : (rawText || 'null');
+  return `
+    <div class="card">
+      <div class="ch"><span>${icon}</span><span class="ct">${title}</span></div>
+      <div class="cb">
+        <pre style="white-space:pre-wrap;word-break:break-word">${highlight(pretty)}</pre>
+      </div>
+    </div>`;
+}
+
+function renderStatusHistory(history) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return `<div style="font-size:10px;color:var(--dim)">No status history recorded.</div>`;
+  }
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${history.map(event => `
+        <div class="sr-row">
+          <div class="sr-top">
+            <span class="sr-id">#${event.sequence} · ${escapeHtml(event.status_at || '—')}</span>
+            <span class="status-pill ${getStatusPillClass(event.status)}">${escapeHtml(event.status)}</span>
+          </div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.6">
+            <div><strong style="color:var(--text)">reason_code</strong> ${escapeHtml(event.reason_code || '—')}</div>
+            <div>${escapeHtml(event.description || '—')}</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function truncateMid(value, front = 10, back = 8) {
+  const text = String(value ?? '—');
+  if (text.length <= front + back + 3) {
+    return text;
+  }
+  return `${text.slice(0, front)}…${text.slice(-back)}`;
+}
+
+function renderReportingNotificationSummary(notification) {
+  const amount = notification?.amount ?? '—';
+  const currency = notification?.currency ?? '';
+  const party = notification?.party_name || '—';
+  const counterparty = notification?.counterparty_name || '—';
+  return `
+    <div class="sr-row">
+      <div class="sr-top">
+        <span class="sr-id">${escapeHtml(truncateMid(notification?.notification_id, 12, 8))}</span>
+        <span class="status-pill ${notification?.entry_type === 'DEBIT' ? 'st-pending' : 'st-final'}">
+          ${escapeHtml(notification?.entry_type || '—')} · ${escapeHtml(notification?.account_role || '—')}
+        </span>
+      </div>
+      <div class="sr-parties">
+        <span style="font-weight:500">${escapeHtml(party)}</span>
+        <span style="color:var(--dim)">→</span>
+        <span style="font-weight:500">${escapeHtml(counterparty)}</span>
+      </div>
+      <div class="sr-meta">
+        <span class="sr-amt">${escapeHtml(amount)} ${escapeHtml(currency)}</span>
+        <span class="dti-tag">${escapeHtml(notification?.token_symbol || '—')}</span>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${escapeHtml(notification?.booking_date_time || '—')}</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">
+        ${escapeHtml(notification?.chain_dli || '—')} · ${escapeHtml(notification?.transaction_hash || '—')}
+        ${notification?.travel_rule_record_id ? ` · TR ${escapeHtml(truncateMid(notification.travel_rule_record_id, 8, 6))}` : ''}
+      </div>
+    </div>`;
+}
+
+function renderTraceabilityCard(traceability, title = 'Traceability') {
+  if (!traceability) {
+    return '';
+  }
+
+  const resourcePaths = Object.entries(traceability.resource_paths || {}).filter(([, value]) => Boolean(value));
+  return `
+    <div class="card">
+      <div class="ch"><span>🧷</span><span class="ct">${escapeHtml(title)}</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${escapeHtml(traceability.instruction_id || '—')}</div></div>
+        <div class="dr"><div class="dk">uetr</div><div class="dv">${escapeHtml(traceability.uetr || '—')}</div></div>
+        <div class="dr"><div class="dk">end_to_end_identification</div><div class="dv">${escapeHtml(traceability.end_to_end_identification || '—')}</div></div>
+        <div class="dr"><div class="dk">travel_rule_record_id</div><div class="dv">${escapeHtml(traceability.travel_rule_record_id || '—')}</div></div>
+        <div class="dr"><div class="dk">transaction_hash</div><div class="dv addr">${escapeHtml(traceability.transaction_hash || '—')}</div></div>
+        ${Array.isArray(traceability.source_notification_ids) && traceability.source_notification_ids.length
+          ? `<div class="dr"><div class="dk">source_notification_ids</div><div class="dv">${traceability.source_notification_ids.map((id) => escapeHtml(truncateMid(id, 10, 6))).join(', ')}</div></div>`
+          : ''}
+        ${resourcePaths.length
+          ? resourcePaths.map(([key, value]) => `
+              <div class="dr"><div class="dk">${escapeHtml(key)}</div><div class="dv addr">${escapeHtml(value)}</div></div>
+            `).join('')
+          : ''}
+      </div>
+    </div>`;
+}
+
+function renderReportingNotificationDetail(notification) {
+  if (!notification) {
+    return `<div style="font-size:10px;color:var(--dim)">No reporting notification detail available.</div>`;
+  }
+
+  return `
+    <div class="card">
+      <div class="ch"><span>🧾</span><span class="ct">Reporting Notification Detail</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_id</div><div class="dv hi">${escapeHtml(notification.notification_id)}</div></div>
+        <div class="dr"><div class="dk">message_family</div><div class="dv">${escapeHtml(notification.message_family || '—')}</div></div>
+        <div class="dr"><div class="dk">entry_type</div><div class="dv">${escapeHtml(notification.entry_type || '—')}</div></div>
+        <div class="dr"><div class="dk">account_role</div><div class="dv">${escapeHtml(notification.account_role || '—')}</div></div>
+        <div class="dr"><div class="dk">booking_status</div><div class="dv">${escapeHtml(notification.booking_status || '—')}</div></div>
+        <div class="dr"><div class="dk">booking_date_time</div><div class="dv">${escapeHtml(notification.booking_date_time || '—')}</div></div>
+        <div class="dr"><div class="dk">value_date_time</div><div class="dv">${escapeHtml(notification.value_date_time || '—')}</div></div>
+        <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${escapeHtml(notification.instruction_id || '—')}</div></div>
+        <div class="dr"><div class="dk">uetr</div><div class="dv">${escapeHtml(notification.uetr || '—')}</div></div>
+        <div class="dr"><div class="dk">travel_rule_record_id</div><div class="dv">${escapeHtml(notification.travel_rule_record_id || '—')}</div></div>
+        <div class="dr"><div class="dk">status_reference.trigger_status</div><div class="dv">${escapeHtml(notification.status_reference?.trigger_status || '—')}</div></div>
+        <div class="dr"><div class="dk">status_reference.current_instruction_status</div><div class="dv">${escapeHtml(notification.status_reference?.current_instruction_status || '—')}</div></div>
+        <div class="dr"><div class="dk">party</div><div class="dv">${escapeHtml(notification.party?.name || '—')} · ${escapeHtml(notification.party?.wallet_address || '—')}</div></div>
+        <div class="dr"><div class="dk">counterparty</div><div class="dv">${escapeHtml(notification.counterparty?.name || '—')} · ${escapeHtml(notification.counterparty?.wallet_address || '—')}</div></div>
+        <div class="dr"><div class="dk">settlement_amount</div><div class="dv wa">${escapeHtml(notification.settlement_amount?.amount || '—')} ${escapeHtml(notification.settlement_amount?.currency || '')}</div></div>
+        <div class="dr"><div class="dk">chain_dli</div><div class="dv">${escapeHtml(notification.chain_dli || '—')}</div></div>
+        <div class="dr"><div class="dk">token</div><div class="dv">${escapeHtml(notification.token?.token_symbol || '—')} ${notification.token?.token_dti ? `· ${escapeHtml(notification.token.token_dti)}` : ''}</div></div>
+        <div class="dr"><div class="dk">transaction_hash</div><div class="dv addr">${escapeHtml(notification.transaction_hash || '—')}</div></div>
+        ${notification.remittance_information?.structured?.creditor_reference_information?.reference
+          ? `<div class="dr"><div class="dk">remittance_reference</div><div class="dv">${escapeHtml(notification.remittance_information.structured.creditor_reference_information.reference)}</div></div>`
+          : ''}
+        ${notification.remittance_information?.unstructured
+          ? `<div class="dr"><div class="dk">unstructured_remittance</div><div class="dv">${escapeHtml(notification.remittance_information.unstructured)}</div></div>`
+          : ''}
+      </div>
+    </div>
+    ${renderTraceabilityCard(notification.traceability, 'Notification Traceability')}`;
+}
+
+function renderIntradayReportingView(intradayPayload) {
+  if (!intradayPayload) {
+    return `<div style="font-size:10px;color:var(--dim)">No intraday reporting view available.</div>`;
+  }
+
+  const totals = Array.isArray(intradayPayload.movement_summary?.totals)
+    ? intradayPayload.movement_summary.totals
+    : [];
+  const accountViews = Array.isArray(intradayPayload.account_views)
+    ? intradayPayload.account_views
+    : [];
+
+  return `
+    <div class="card">
+      <div class="ch"><span>📈</span><span class="ct">Intraday Reporting View</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">notification_count</div><div class="dv ok">${escapeHtml(intradayPayload.movement_summary?.notification_count ?? '—')}</div></div>
+        <div class="dr"><div class="dk">debit_count</div><div class="dv">${escapeHtml(intradayPayload.movement_summary?.debit_count ?? '—')}</div></div>
+        <div class="dr"><div class="dk">credit_count</div><div class="dv">${escapeHtml(intradayPayload.movement_summary?.credit_count ?? '—')}</div></div>
+        <div class="dr"><div class="dk">generated_at</div><div class="dv">${escapeHtml(intradayPayload.generated_at || '—')}</div></div>
+        <div class="dr"><div class="dk">period</div><div class="dv">${escapeHtml(intradayPayload.period?.from || '—')} → ${escapeHtml(intradayPayload.period?.to || '—')}</div></div>
+        <div class="dr"><div class="dk">filters_applied.instruction_id</div><div class="dv hi">${escapeHtml(intradayPayload.filters_applied?.instruction_id || '—')}</div></div>
+        <div class="dr"><div class="dk">filters_applied.uetr</div><div class="dv">${escapeHtml(intradayPayload.filters_applied?.uetr || '—')}</div></div>
+      </div>
+    </div>
+    ${renderTraceabilityCard(intradayPayload.traceability, 'Intraday Traceability')}
+    <div class="card">
+      <div class="ch"><span>💱</span><span class="ct">Movement Totals</span></div>
+      <div class="cb">
+        ${totals.length ? totals.map((total) => `
+          <div class="sr-row" style="margin-bottom:6px">
+            <div class="sr-top">
+              <span class="sr-id">${escapeHtml(total.currency || '—')}${total.token_symbol ? ` · ${escapeHtml(total.token_symbol)}` : ''}</span>
+              <span class="status-pill st-final">${escapeHtml(total.notification_count ?? '0')} entries</span>
+            </div>
+            <div class="sr-meta">
+              <span class="sr-amt">Debit ${escapeHtml(total.debit_total || '0')}</span>
+              <span class="sr-amt">Credit ${escapeHtml(total.credit_total || '0')}</span>
+              <span class="sr-amt">Net ${escapeHtml(total.net_total || '0')}</span>
+            </div>
+          </div>
+        `).join('') : `<div style="font-size:10px;color:var(--dim)">No booked movement totals.</div>`}
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>🏦</span><span class="ct">Intraday Account Views</span></div>
+      <div class="cb">
+        ${accountViews.length ? accountViews.map((account) => `
+          <div class="sr-row" style="margin-bottom:6px">
+            <div class="sr-top">
+              <span class="sr-id">${escapeHtml(account.account_role || '—')} · ${escapeHtml(account.party_name || '—')}</span>
+              <span class="status-pill st-confirming">${escapeHtml(account.notification_count ?? '0')} notifications</span>
+            </div>
+            <div class="sr-meta">
+              <span class="dti-tag">${escapeHtml(account.chain_dli || '—')}</span>
+              <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${escapeHtml(account.wallet_address || '—')}</span>
+            </div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.6">
+              ${Array.isArray(account.movement_totals) ? account.movement_totals.map((movement) =>
+                `${escapeHtml(movement.currency || '—')}${movement.token_symbol ? `/${escapeHtml(movement.token_symbol)}` : ''}: ${escapeHtml(movement.net_total || '0')}`
+              ).join(' · ') : '—'}
+            </div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--dim);line-height:1.6;margin-top:4px">
+              ${Array.isArray(account.instruction_ids) && account.instruction_ids.length ? `Instructions ${account.instruction_ids.map((id) => escapeHtml(truncateMid(id, 10, 6))).join(', ')}` : ''}
+              ${Array.isArray(account.travel_rule_record_ids) && account.travel_rule_record_ids.length ? ` · Travel Rule ${account.travel_rule_record_ids.map((id) => escapeHtml(truncateMid(id, 10, 6))).join(', ')}` : ''}
+            </div>
+          </div>
+        `).join('') : `<div style="font-size:10px;color:var(--dim)">No intraday account views.</div>`}
+      </div>
+    </div>`;
+}
+
+function renderReportingStatementSummary(statement) {
+  return `
+    <div class="sr-row">
+      <div class="sr-top">
+        <span class="sr-id">${escapeHtml(truncateMid(statement?.statement_id, 12, 8))}</span>
+        <span class="status-pill st-final">${escapeHtml(statement?.account_role || '—')} · ${escapeHtml(statement?.statement_type || '—')}</span>
+      </div>
+      <div class="sr-parties">
+        <span style="font-weight:500">${escapeHtml(statement?.party_name || '—')}</span>
+        <span style="color:var(--dim)">→</span>
+        <span style="font-weight:500">${escapeHtml(statement?.counterparty_name || '—')}</span>
+      </div>
+      <div class="sr-meta">
+        <span class="sr-amt">Close ${escapeHtml(statement?.balance_summary?.closing_balance?.amount || '—')} ${escapeHtml(statement?.balance_summary?.closing_balance?.currency || '')}</span>
+        <span class="dti-tag">${escapeHtml(statement?.token_symbol || '—')}</span>
+        <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${escapeHtml(statement?.statement_date || '—')}</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--dim)">
+        ${escapeHtml(statement?.chain_dli || '—')} · ${escapeHtml(statement?.transaction_hash || '—')}
+        ${statement?.travel_rule_record_id ? ` · TR ${escapeHtml(truncateMid(statement.travel_rule_record_id, 8, 6))}` : ''}
+      </div>
+    </div>`;
+}
+
+function renderReportingStatementDetail(statement) {
+  if (!statement) {
+    return `<div style="font-size:10px;color:var(--dim)">No reporting statement detail available.</div>`;
+  }
+
+  const entries = Array.isArray(statement.entries) ? statement.entries : [];
+  return `
+    <div class="card">
+      <div class="ch"><span>📒</span><span class="ct">Reporting Statement Detail</span></div>
+      <div class="cb">
+        <div class="dr"><div class="dk">statement_id</div><div class="dv hi">${escapeHtml(statement.statement_id || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_type</div><div class="dv">${escapeHtml(statement.statement_type || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_date</div><div class="dv">${escapeHtml(statement.statement_date || '—')}</div></div>
+        <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${escapeHtml(statement.instruction_id || '—')}</div></div>
+        <div class="dr"><div class="dk">uetr</div><div class="dv">${escapeHtml(statement.uetr || '—')}</div></div>
+        <div class="dr"><div class="dk">travel_rule_record_id</div><div class="dv">${escapeHtml(statement.travel_rule_record_id || '—')}</div></div>
+        <div class="dr"><div class="dk">period</div><div class="dv">${escapeHtml(statement.period?.from || '—')} → ${escapeHtml(statement.period?.to || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_scope.derivation_basis</div><div class="dv">${escapeHtml(statement.statement_scope?.derivation_basis || '—')}</div></div>
+        <div class="dr"><div class="dk">statement_scope.source_notification_count</div><div class="dv">${escapeHtml(statement.statement_scope?.source_notification_count ?? '—')}</div></div>
+        <div class="dr"><div class="dk">closing_balance</div><div class="dv wa">${escapeHtml(statement.balance_summary?.closing_balance?.amount || '—')} ${escapeHtml(statement.balance_summary?.closing_balance?.currency || '')}</div></div>
+        <div class="dr"><div class="dk">net_total</div><div class="dv">${escapeHtml(statement.movement_summary?.net_total || '—')}</div></div>
+        <div class="dr"><div class="dk">finality_status</div><div class="dv">${escapeHtml(statement.instruction_context?.finality_status || '—')}</div></div>
+        <div class="dr"><div class="dk">transaction_hash</div><div class="dv addr">${escapeHtml(statement.transaction_hash || '—')}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><span>🧾</span><span class="ct">Statement Entries</span></div>
+      <div class="cb">
+        ${entries.length ? entries.map((entry) => renderReportingNotificationSummary(entry)).join('') : `<div style="font-size:10px;color:var(--dim)">No statement entries.</div>`}
+      </div>
+    </div>
+    ${renderTraceabilityCard(statement.traceability, 'Statement Traceability')}`;
+}
+
+function renderLiveReadResponse(referenceValue, resolved, instructionPayload, executionStatusPayload, finalityPayload, reportingBundle, elapsed) {
+  const status = executionStatusPayload?.status || instructionPayload?.status || 'UNKNOWN';
+  const finalityStatus = finalityPayload?.finality_status || executionStatusPayload?.finality_status || 'PENDING';
+  const confirmationDepth = Number(
+    finalityPayload?.confirmation_depth ?? executionStatusPayload?.confirmation_depth ?? 0
+  );
+  const requiredDepth = Number(
+    finalityPayload?.required_confirmation_depth ?? executionStatusPayload?.required_confirmation_depth ?? 0
+  );
+  const progressPct = requiredDepth > 0
+    ? Math.max(0, Math.min(100, Math.round((confirmationDepth / requiredDepth) * 100)))
+    : 0;
+  const progressClass = finalityStatus === 'FINAL' ? 'fin-final' : 'fin-prob';
+  const notApplicableReason = finalityPayload?.not_applicable_reason;
+  const hasReportingView = finalityStatus === 'FINAL' || status === 'FINAL';
+  const notificationsResponse = reportingBundle?.notificationsResponse;
+  const intradayResponse = reportingBundle?.intradayResponse;
+  const notificationDetailResponse = reportingBundle?.notificationDetailResponse;
+  const statementsResponse = reportingBundle?.statementsResponse;
+  const statementDetailResponse = reportingBundle?.statementDetailResponse;
+  const notifications = Array.isArray(notificationsResponse?.payload?.notifications)
+    ? notificationsResponse.payload.notifications
+    : [];
+  const statements = Array.isArray(statementsResponse?.payload?.statements)
+    ? statementsResponse.payload.statements
+    : [];
+  const hasReportingContent = Boolean(
+    notificationsResponse?.ok ||
+    intradayResponse?.ok ||
+    notificationDetailResponse?.ok ||
+    statementsResponse?.ok ||
+    statementDetailResponse?.ok
+  );
+  const reportingTraceability =
+    notificationDetailResponse?.payload?.traceability ||
+    statementDetailResponse?.payload?.traceability ||
+    intradayResponse?.payload?.traceability ||
+    null;
+
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge s200">200</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /execution-status + /finality-receipt + /reporting/* + /instruction</span>
+     <span class="rt">${elapsed}ms</span>`;
+
+  document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+      <div class="card" style="border-color:rgba(56,139,253,.25)">
+        <div class="ch" style="background:rgba(56,139,253,.05)">
+          <span>🧭</span><span class="ct">Live Status Read Model</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">lookup_value</div><div class="dv hi">${escapeHtml(referenceValue)}</div></div>
+          <div class="dr"><div class="dk">resolved_as</div><div class="dv">${escapeHtml(resolved.referenceType)}</div></div>
+          <div class="dr"><div class="dk">instruction_id</div><div class="dv hi">${escapeHtml(resolved.instructionId)}</div></div>
+          <div class="dr"><div class="dk">uetr</div><div class="dv">${escapeHtml(executionStatusPayload?.uetr || instructionPayload?.uetr || '—')}</div></div>
+          <div class="dr"><div class="dk">execution_mode</div><div class="dv ok">LIVE API</div></div>
+        </div>
+      </div>
+
+      ${reportingTraceability ? renderTraceabilityCard(reportingTraceability, 'End-to-End Traceability') : ''}
+
+      <div class="card" style="border-color:${status === 'FINAL' ? 'rgba(63,185,80,.3)' : 'rgba(56,139,253,.25)'}">
+        <div class="ch" style="background:${status === 'FINAL' ? 'rgba(63,185,80,.04)' : 'rgba(56,139,253,.05)'}">
+          <span>${status === 'FINAL' ? '✅' : status === 'CONFIRMING' ? '⏳' : '📍'}</span>
+          <span class="ct">Execution Status Surface</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">status</div><div class="dv"><span class="status-pill ${getStatusPillClass(status)}">${escapeHtml(status)}</span></div></div>
+          <div class="dr"><div class="dk">status_group</div><div class="dv">${escapeHtml(executionStatusPayload?.status_group || '—')}</div></div>
+          <div class="dr"><div class="dk">latest_status_at</div><div class="dv">${escapeHtml(executionStatusPayload?.latest_status_at || '—')}</div></div>
+          <div class="dr"><div class="dk">transaction_hash</div><div class="dv addr">${escapeHtml(executionStatusPayload?.transaction_hash || '—')}</div></div>
+          <div class="dr"><div class="dk">debit_timing</div><div class="dv">${escapeHtml(executionStatusPayload?.debit_timing || instructionPayload?.debit_timing || '—')}</div></div>
+          <div class="dr"><div class="dk">failure_reason</div><div class="dv">${escapeHtml(executionStatusPayload?.failure_reason || instructionPayload?.failure_reason || '—')}</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="border-color:${finalityStatus === 'FINAL' ? 'rgba(63,185,80,.3)' : 'rgba(210,153,34,.3)'}">
+        <div class="ch" style="background:${finalityStatus === 'FINAL' ? 'rgba(63,185,80,.04)' : 'rgba(210,153,34,.04)'}">
+          <span>⛓</span><span class="ct">Finality Receipt Surface</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">instruction_status</div><div class="dv">${escapeHtml(finalityPayload?.instruction_status || status)}</div></div>
+          <div class="dr"><div class="dk">finality_status</div><div class="dv">${escapeHtml(finalityStatus)}</div></div>
+          <div class="dr"><div class="dk">confirmation_depth</div><div class="dv">${requiredDepth > 0 ? `${confirmationDepth} / ${requiredDepth}` : escapeHtml(String(confirmationDepth))}</div></div>
+          <div class="dr"><div class="dk">block_number</div><div class="dv">${escapeHtml(finalityPayload?.block_number ?? '—')}</div></div>
+          <div class="dr"><div class="dk">block_timestamp</div><div class="dv">${escapeHtml(finalityPayload?.block_timestamp || '—')}</div></div>
+          <div class="dr"><div class="dk">final_at</div><div class="dv">${escapeHtml(finalityPayload?.final_at || '—')}</div></div>
+          ${notApplicableReason ? `<div class="dr"><div class="dk">not_applicable_reason</div><div class="dv wa">${escapeHtml(notApplicableReason)}</div></div>` : ''}
+          <div style="padding:8px 0 2px">
+            <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--dim);margin-bottom:4px">
+              <span>Confirmation progress</span><span>${requiredDepth > 0 ? `${confirmationDepth} / ${requiredDepth}` : 'n/a'}</span>
+            </div>
+            <div class="fin-bar-wrap">
+              <div class="fin-bar ${progressClass}" style="width:${requiredDepth > 0 ? progressPct : 0}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><span>🕓</span><span class="ct">Status History</span></div>
+        <div class="cb">
+          ${renderStatusHistory(executionStatusPayload?.status_history)}
+        </div>
+      </div>
+
+      ${hasReportingView && hasReportingContent
+        ? `
+          <div class="card">
+            <div class="ch"><span>📬</span><span class="ct">Reporting Notifications</span></div>
+            <div class="cb">
+              ${notificationsResponse?.ok ? `
+                <div class="dr"><div class="dk">total_matched</div><div class="dv ok">${escapeHtml(notificationsResponse.payload?.total_matched ?? '0')}</div></div>
+                <div class="dr"><div class="dk">page_size</div><div class="dv">${escapeHtml(notificationsResponse.payload?.page_size ?? '0')}</div></div>
+                <div class="dr"><div class="dk">generated_at</div><div class="dv">${escapeHtml(notificationsResponse.payload?.generated_at || '—')}</div></div>
+                <div class="dr"><div class="dk">next_cursor</div><div class="dv">${escapeHtml(notificationsResponse.payload?.next_cursor ?? 'null')}</div></div>
+              ` : `
+                <div class="dr"><div class="dk">notifications_status</div><div class="dv er">Reporting notifications unavailable</div></div>
+              `}
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+                ${notifications.length ? notifications.map(renderReportingNotificationSummary).join('') : `<div style="font-size:10px;color:var(--dim)">No reporting notifications returned.</div>`}
+              </div>
+            </div>
+          </div>
+          ${notificationDetailResponse?.ok ? renderReportingNotificationDetail(notificationDetailResponse.payload) : ''}
+          ${intradayResponse?.ok ? renderIntradayReportingView(intradayResponse.payload) : ''}
+          <div class="card">
+            <div class="ch"><span>📚</span><span class="ct">Reporting Statements</span></div>
+            <div class="cb">
+              ${statementsResponse?.ok ? `
+                <div class="dr"><div class="dk">total_matched</div><div class="dv ok">${escapeHtml(statementsResponse.payload?.total_matched ?? '0')}</div></div>
+                <div class="dr"><div class="dk">page_size</div><div class="dv">${escapeHtml(statementsResponse.payload?.page_size ?? '0')}</div></div>
+                <div class="dr"><div class="dk">generated_at</div><div class="dv">${escapeHtml(statementsResponse.payload?.generated_at || '—')}</div></div>
+              ` : `
+                <div class="dr"><div class="dk">statements_status</div><div class="dv er">Reporting statements unavailable</div></div>
+              `}
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+                ${statements.length ? statements.map(renderReportingStatementSummary).join('') : `<div style="font-size:10px;color:var(--dim)">No reporting statements returned.</div>`}
+              </div>
+            </div>
+          </div>
+          ${statementDetailResponse?.ok ? renderReportingStatementDetail(statementDetailResponse.payload) : ''}
+        `
+        : `
+          ${renderJsonPayloadCard('📦', 'Instruction Payload', instructionPayload)}
+          ${renderJsonPayloadCard('📦', 'Execution Status Payload', executionStatusPayload)}
+          ${renderJsonPayloadCard('📦', 'Finality Receipt Payload', finalityPayload)}
+        `}
+    </div>`;
+}
+
+function renderLiveLookupFailure(referenceValue, resolved, elapsed) {
+  const attempts = resolved.attempts || [];
+  const primaryAttempt = attempts.find(a => a.status) || { status: 404, payload: { message: 'Instruction execution status not found.' } };
+  const statusClass = primaryAttempt.status >= 400 && primaryAttempt.status < 500 ? 's400' : 's500';
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge ${statusClass}">${primaryAttempt.status}</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">GET /execution-status lookup</span>
+     <span class="rt">${elapsed}ms</span>`;
+  document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+      <div class="card" style="border-color:rgba(248,81,73,.3)">
+        <div class="ch" style="background:rgba(248,81,73,.04)">
+          <span>❌</span><span class="ct" style="color:var(--red)">Instruction Lookup Failed</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">lookup_value</div><div class="dv hi">${escapeHtml(referenceValue)}</div></div>
+          <div class="dr"><div class="dk">message</div><div class="dv er">${escapeHtml(primaryAttempt.payload?.message || 'Instruction execution status not found.')}</div></div>
+        </div>
+      </div>
+      ${attempts.map((attempt, index) => renderJsonPayloadCard(
+        '📦',
+        index === 0 ? 'Lookup Attempt — /execution-status/uetr' : 'Lookup Attempt — /execution-status/{instructionId}',
+        attempt.payload,
+        attempt.rawText
+      )).join('')}
+    </div>`;
+}
+
+function buildLiveRequest(req) {
+  const base = getApiBase();
+  if (req._type === 'QUOTE') {
+    const { _type, ...body } = req;
+    return { method:'POST', url:`${base}/instruction/quote`, body };
+  }
+  if (req._type === 'POST') {
+    const { _type, ...body } = req;
+    return { method:'POST', url:`${base}/instruction`, body };
+  }
+  if (req._type === 'GET') {
+    return { method:'GET', url:`${base}/instruction/${encodeURIComponent(req.instruction_id)}` };
+  }
+  if (req._type === 'DELETE') {
+    return { method:'DELETE', url:`${base}/instruction/${encodeURIComponent(req.instruction_id)}` };
+  }
+  if (req._type === 'SEARCH') {
+    const { _type, ...params } = req;
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k,v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    return { method:'GET', url:`${base}/instruction/search${qs.toString() ? '?' + qs.toString() : ''}` };
+  }
+  return { method:'POST', url:`${base}/instruction`, body:req };
+}
+
+function renderLiveResponse(method, url, status, elapsed, payload, rawText) {
+  const statusClass = status >= 200 && status < 300 ? 's200' : status >= 400 && status < 500 ? 's400' : 's500';
+  const pretty = payload !== undefined ? JSON.stringify(payload, null, 2) : rawText || '';
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge ${statusClass}">${status}</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${method} ${url.replace(getApiBase(),'')}</span>
+     <span class="rt">${elapsed}ms</span>`;
+  document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+      <div class="card" style="border-color:rgba(56,139,253,.25)">
+        <div class="ch" style="background:rgba(56,139,253,.05)">
+          <span>🌐</span><span class="ct">Live API Response</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">execution_mode</div><div class="dv ok">LIVE API</div></div>
+          <div class="dr"><div class="dk">api_base</div><div class="dv">${getApiBase()}</div></div>
+          <div class="dr"><div class="dk">http_status</div><div class="dv">${status}</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span>📦</span><span class="ct">Response Payload</span></div>
+        <div class="cb">
+          <pre style="white-space:pre-wrap;word-break:break-word">${highlight(pretty || 'null')}</pre>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function sendLiveRequest(req) {
+  const started = performance.now();
+
+  try {
+    if (req._type === 'GET') {
+      const resolved = await resolveInstructionReference(req.instruction_id);
+      const elapsed = Math.round(performance.now() - started);
+      if (!resolved.ok) {
+        renderLiveLookupFailure(req.instruction_id, resolved, elapsed);
+        return;
+      }
+
+      const base = getApiBase();
+      const [instructionResponse, finalityResponse] = await Promise.all([
+        requestJson(`${base}/instruction/${encodeURIComponent(resolved.instructionId)}`),
+        requestJson(`${base}/finality-receipt/${encodeURIComponent(resolved.instructionId)}`)
+      ]);
+      const instructionStatus = instructionResponse.payload?.status || resolved.executionStatus?.payload?.status || 'UNKNOWN';
+      const finalityStatus = finalityResponse.payload?.finality_status || 'PENDING';
+      const hasReportingView = instructionStatus === 'FINAL' || finalityStatus === 'FINAL';
+      let reportingBundle = null;
+
+      if (hasReportingView) {
+        const instructionIdParam = encodeURIComponent(resolved.instructionId);
+        const [notificationsResponse, intradayResponse, statementsResponse] = await Promise.all([
+          requestJson(`${base}/reporting/notifications?instruction_id=${instructionIdParam}`),
+          requestJson(`${base}/reporting/intraday?instruction_id=${instructionIdParam}`),
+          requestJson(`${base}/reporting/statements?instruction_id=${instructionIdParam}`)
+        ]);
+        const firstNotificationId = notificationsResponse.payload?.notifications?.[0]?.notification_id;
+        const firstStatementId = statementsResponse.payload?.statements?.[0]?.statement_id;
+        const notificationDetailResponse = firstNotificationId
+          ? await requestJson(`${base}/reporting/notifications/${encodeURIComponent(firstNotificationId)}`)
+          : null;
+        const statementDetailResponse = firstStatementId
+          ? await requestJson(`${base}/reporting/statements/${encodeURIComponent(firstStatementId)}`)
+          : null;
+
+        reportingBundle = {
+          notificationsResponse,
+          intradayResponse,
+          notificationDetailResponse,
+          statementsResponse,
+          statementDetailResponse,
+        };
+      }
+
+      simState.instructionId = resolved.instructionId;
+      if (resolved.executionStatus?.payload?.uetr) {
+        s('f-uetr', resolved.executionStatus.payload.uetr);
+      }
+
+      renderLiveReadResponse(
+        req.instruction_id,
+        resolved,
+        instructionResponse.payload,
+        resolved.executionStatus.payload,
+        finalityResponse.payload,
+        reportingBundle,
+        elapsed
+      );
+      return;
+    }
+
+    if (req._type === 'DELETE') {
+      const resolved = await resolveInstructionReference(req.instruction_id);
+      if (!resolved.ok) {
+        const elapsed = Math.round(performance.now() - started);
+        renderLiveLookupFailure(req.instruction_id, resolved, elapsed);
+        return;
+      }
+
+      const live = {
+        method: 'DELETE',
+        url: `${getApiBase()}/instruction/${encodeURIComponent(resolved.instructionId)}`
+      };
+      const response = await requestJson(live.url, { method: live.method });
+      const elapsed = Math.round(performance.now() - started);
+
+      if (response.payload?.instruction_id) {
+        simState.instructionId = response.payload.instruction_id;
+        s('f-uetr', response.payload.uetr || resolved.executionStatus?.payload?.uetr || response.payload.instruction_id);
+      }
+
+      renderLiveResponse(live.method, live.url, response.status, elapsed, response.payload, response.rawText);
+      return;
+    }
+
+    const live = buildLiveRequest(req);
+    const response = await requestJson(live.url, {
+      method: live.method,
+      headers: live.body ? { 'Content-Type':'application/json' } : undefined,
+      body: live.body ? JSON.stringify(live.body) : undefined
+    });
+    const elapsed = Math.round(performance.now() - started);
+
+    if (response.payload?.quote_id) {
+      simState.quoteId = response.payload.quote_id;
+      s('f-quoteid', response.payload.quote_id);
+    }
+    if (response.payload?.instruction_id) {
+      simState.instructionId = response.payload.instruction_id;
+      s('f-uetr', response.payload.uetr || response.payload.instruction_id);
+    }
+
+    renderLiveResponse(live.method, live.url, response.status, elapsed, response.payload, response.rawText);
+  } catch (error) {
+    const elapsed = Math.round(performance.now() - started);
+    renderLiveResponse('REQUEST', getApiBase(), 0, elapsed, {
+      error: 'connection_failed',
+      message: error.message
+    }, '');
+  }
+}
+
+async function sendRequest() {
   updatePreview();
   const req = buildReq();
   document.getElementById('rh').innerHTML = `<div class="ldots"><span></span><span></span><span></span></div>`;
   document.getElementById('rbody').innerHTML = `<div class="empty"><div class="ldots"><span></span><span></span><span></span></div><div class="et">Processing…</div></div>`;
+  if (getExecutionMode() === 'LIVE') {
+    await sendLiveRequest(req);
+    return;
+  }
   setTimeout(() => renderResponse(req), 620 + Math.random() * 400);
 }
 

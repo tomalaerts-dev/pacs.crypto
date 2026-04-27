@@ -14,6 +14,111 @@ The project is offered as a **community proposal**, not a finished standard. The
 
 ---
 
+## Current Direction
+
+The project is now being taken in a more execution-oriented direction: not just a family of proposal specs, but an **executable reference stack** for a bank-to-VASP blockchain payment flow. The current implementation wedge is intentionally narrow:
+
+- one asset: USDC
+- one chain family: EVM
+- one corridor: bank → sending VASP → on-chain transfer → receiving VASP
+- linked Travel Rule record + remittance information + instruction lifecycle
+
+This repo therefore has two parallel layers:
+
+- **specification layer** — the YAML specs and standalone simulators at the repo root
+- **reference implementation layer** — the live server under `reference-server/`
+
+The near-term goal is to prove that the existing specs survive real request validation, persistence, state transitions, and on-chain lifecycle handling before the family expands further.
+
+### Reference Stack Status
+
+The first executable slice lives in `reference-server/` and currently supports:
+
+- Travel Rule submit, update, callback, retrieval, search, and stats
+- instruction quote, submission, retrieval, cancellation, and search
+- pacs.002-like execution status read endpoints by `instruction_id` and `uetr`
+- camt.025-like finality receipt read endpoints by `instruction_id` and `uetr`
+- event outbox endpoints that mirror execution-status and finality-receipt payloads for webhook-style delivery
+- webhook endpoint registration, signed delivery attempts, and retry logs on top of the outbox
+- `camt.054`-like reporting notifications for booked debit and credit entries
+- `camt.052`-like intraday movement view built from the reporting notification feed
+- `camt.053`-like statement view derived from reporting notifications and instruction context
+- first-slice exception-family endpoints for `investigation_case` and `return_case`
+- live statement and reporting traceability views in the instruction simulator
+- adapter-backed mocked EVM lifecycle progression with amount-aware fee, slippage, and finality modeling:
+  `PENDING → BROADCAST → CONFIRMING → FINAL`
+- adapter metadata surfaced on quote, instruction, execution-status, and finality reads
+- webhook delivery stats and dead-letter reads for exhausted subscription attempts
+
+The two HTML simulators can still run standalone in **Demo** mode, but now also support **Live API** mode against the local reference server.
+
+### Quick Start
+
+Run the reference server:
+
+```bash
+cd reference-server
+npm install
+npm start
+```
+
+Then open either simulator locally:
+
+- `travel-rule-simulator-v3.html`
+- `instruction-simulator-v1.html`
+
+Switch **Execution Mode** to `Live API` and keep the default API base URL `http://127.0.0.1:5050`.
+
+### Roadmap And Backlog
+
+The active forward plan is now documented in:
+
+- [`docs/roadmap.md`](docs/roadmap.md) — active post-wedge roadmap for real Sepolia execution, reviewer demo, deeper exceptions, and delegated signing
+- [`docs/backlog.md`](docs/backlog.md) — prioritized post-wedge backlog with `P0/P1/P2/P3` sequencing
+- [`docs/conformance.md`](docs/conformance.md) — current spec-to-server conformance matrix
+- [`docs/spec-hardening.md`](docs/spec-hardening.md) — implementation decisions for lifecycle, failure, webhook, and reporting semantics
+- [`docs/chain-adapter.md`](docs/chain-adapter.md) — current adapter contract and swap-in boundary for later testnet work
+- [`docs/webhook-delivery.md`](docs/webhook-delivery.md) — delivery guarantees, retry model, and dead-letter handling
+- [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md) — reviewer walkthrough, sequence diagram, and live demo script
+- [`docs/architecture-note.md`](docs/architecture-note.md) — what changed architecturally once the proposal became executable
+- [`docs/demo-samples/happy-path/`](docs/demo-samples/happy-path/) — canonical happy-path payload pack
+- [`docs/exception-family.md`](docs/exception-family.md) — implemented first-slice exception-family design and runtime boundaries
+- [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
+
+### Current Baseline
+
+Implemented now:
+
+- executable reference server with persistence, state transitions, and tests
+- live simulator support for the Travel Rule and instruction flows
+- status, finality, webhook, reporting, and first-slice exception read/write surfaces
+
+Still mocked or partial:
+
+- chain lifecycle remains mocked, but now runs through an adapter-backed fee/finality policy with surfaced adapter metadata
+- webhook delivery is background-driven with retries, dead-letter handling, and operator stats, but still demo-grade rather than production-hardened
+- spec-covered conformance is explicit and tested, but still hand-authored rather than YAML-generated
+- no delegated signing implementation
+- Sepolia adapter path exists, but a funded-wallet live transaction still needs to be run and captured
+- reviewer/demo package is now present, but still built around the current mock EVM wedge
+
+Current next defaults:
+
+- first real execution target: `Ethereum Sepolia`
+- first real asset: `USDC on Sepolia`
+- first real execution mode: `FULL_CUSTODY`
+- first real-chain demo audience: Tom-facing reviewer walkthrough
+
+Explicitly deferred:
+
+- non-EVM chains
+- tokenized assets
+- CBDC
+- regulated DeFi
+- agent-driven submission
+
+---
+
 ## Released specifications
 
 ### Spec 1 — Travel Rule & Remittance Information API
@@ -192,21 +297,35 @@ Banks connecting to EBSI — or any EVM-compatible chain — via a VASP or gatew
 
 ## Roadmap — where the family goes next
 
-These are areas under active exploration. Contributions, challenges, and alternative proposals are all welcome.
+The current implementation roadmap is execution-first and narrow by design. Broader family expansion remains valuable, but the immediate credibility target is to prove one real bank-to-VASP-to-chain corridor end to end.
 
-### 1. Agent-driven submission — OpenClaw integration
+Current priority order:
+
+1. implement real `Sepolia + USDC` execution behind the existing adapter seam
+2. update the reviewer demo so one path includes real chain evidence
+3. deepen exception handling on top of real-chain outcomes
+4. add delegated signing on the same corridor
+5. keep broader expansion deferred until the Sepolia-backed wedge is proven
+
+The detailed program of record lives in [`docs/roadmap.md`](docs/roadmap.md) and [`docs/backlog.md`](docs/backlog.md).
+
+### Agent-driven submission — OpenClaw integration
 
 Personal AI agent platforms such as [OpenClaw](https://openclaw.ai) are emerging as a new kind of user interface to structured APIs — capable of assembling, validating, and dispatching API calls on behalf of a user, from natural language instructions, via any chat application.
 
 All three pacs.crypto APIs are well suited to agent-driven submission. A returning VASP customer — whose identity has already been KYC-verified — could instruct their OpenClaw agent via WhatsApp or Telegram: *"send 0.5 ETH to this address for invoice INV-042"*. The agent, holding the user's verified identity fields in its persistent memory, constructs the full pacs.crypto submission, attaches the structured remittance information, and calls the VASP's API endpoint automatically. The VASP's KYC obligation is unchanged; what changes is the quality and consistency of the data arriving at the API — pre-formatted, correctly structured, with remittance detail already attached.
 
-A reference OpenClaw skill for pacs.crypto submission is planned as a concrete deliverable.
+A reference OpenClaw skill for pacs.crypto submission is a later deliverable, after the Sepolia-backed reference flow is proven.
 
-### 2. Further family members under consideration
+### Deferred expansion candidates
 
+These remain intentionally out of the current 12-month wedge:
+
+- **Non-EVM chain profiles** — Bitcoin, Solana, XRPL, and other settlement layers once the EVM corridor is operationally proven
 - **Tokenised asset transfers** — extensions for regulated tokenised securities, CBDCs, and stablecoin issuers where additional asset-specific fields and regulatory reporting requirements apply; the `credential_attestation` field introduced in the current specs is the foundation for this work
 - **Corporate cash management primitives** — pooling, sweeping, netting, and in-house banking message flows, extending the existing camt reporting spec. Aligned with TCMAG's *Functional Equivalence* principle for tokenised corporate cash management. ISO 20022 already defines these flows for conventional cash (`camt.004` / `camt.005` for account queries, `camt.009`–`camt.015` for limit and standing order management); the work would adapt the relevant components for multi-wallet, multi-token positions with settlement finality semantics.
 - **Regulated DeFi** — how the pacs.crypto data model applies when one or both counterparties interact via smart contract rather than a custodial VASP
+- **Agent-driven submission** — practical OpenClaw or equivalent submission tooling once the core API and reference execution path are stable
 
 ### 3. Pre-execution intelligence API — later phase
 

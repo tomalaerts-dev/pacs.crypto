@@ -129,6 +129,7 @@
     .sbadge{font-family:var(--mono);font-size:12px;font-weight:700;padding:3px 10px;border-radius:4px}
     .s201,.s200{background:var(--green-bg);border:1px solid rgba(63,185,80,.35);color:var(--green)}
     .s404,.s400{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:var(--red)}
+    .s500{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:var(--amber)}
     .rt{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto}
     .rb{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
 
@@ -581,6 +582,15 @@
         <input type="text" id="f-st-lei" placeholder="20-char LEI"/></div>
     </div>
 
+    <div class="fsec">Execution Mode</div>
+    <div class="fg"><div class="fl">Mode</div>
+      <select id="f-mode" onchange="updatePreview()">
+        <option value="DEMO">DEMO — local simulator logic</option>
+        <option value="LIVE">LIVE API — call reference server</option>
+      </select></div>
+    <div class="fg"><div class="fl">API Base URL <span class="ft">used in LIVE mode</span></div>
+      <input type="text" id="f-api-base" value="http://127.0.0.1:5050" placeholder="http://127.0.0.1:5050"/></div>
+
     <button class="sbtn sp" id="sbtn" onclick="sendRequest()">
       <span id="slbl">▶ Submit Record</span>
     </button>
@@ -883,7 +893,7 @@ const SCENARIOS = {
        cname:'Marie Dupont',cctry:'BE',clei:'',
        cwallet:'3FZbgi29cpjq2GjdwV8eyHuJJnkLtktZc5',cwtype:'HOSTED',
        ovasp:'Unhosted Wallet (Self-Custody)','ovasp-lei':'',ocrypto:'','ocrypto-lei':'',
-       bvasp:'Kraken Belgium BVBA','bvasp-lei':'5299000DUFB71VFOHVB49',bcrypto:'','bcrypto-lei':'',
+       bvasp:'Kraken Belgium BVBA','bvasp-lei':'635400DUFB71VFOHVB49',bcrypto:'','bcrypto-lei':'',
        chain:'DLID/4H95J0R2X',txid:'b7e1f4a3d8c2b9f0e5a4c7d3b8f1e6a9c2d5b8e1f4a7c0d3b6f9e2a5c8d1b4',
        block:'887241',conf:'6',txstatus:'CONFIRMED',
        dstchain:'',dsttxid:'',bridge:'',bridgecontract:'',dstdti:'',dstamt:'',
@@ -957,7 +967,7 @@ const SCENARIOS = {
     method:'CALLBACK',
     info:'<strong>Callback — UNDER_REVIEW</strong><br/>Kraken Belgium: unhosted wallet triggers EU TFR Art.17 enhanced due diligence.<br/>Follow-up callback within 1 business day.',
     cb:{recordid:'7f3a2b1c-8d4e-5f6a-9b0c-1d2e3f4a5b6c',status:'UNDER_REVIEW',
-        vasp:'Kraken Belgium BVBA',lei:'5299000DUFB71VFOHVB49',ref:'KRK-BE-2025-11204',
+        vasp:'Kraken Belgium BVBA',lei:'635400DUFB71VFOHVB49',ref:'KRK-BE-2025-11204',
         field:'',code:'MISSING_MANDATORY_FIELD',desc:'',
         review:'Transfer involves an unhosted wallet (EU TFR Art.17). Enhanced due diligence review is in progress to verify ownership. Follow-up callback within 1 business day.'}
   },
@@ -1330,13 +1340,126 @@ function highlight(j) {
     });
 }
 
-function sendRequest() {
+function getExecutionMode() {
+  return g('f-mode') || 'DEMO';
+}
+
+function getApiBase() {
+  return (g('f-api-base') || 'http://127.0.0.1:5050').replace(/\/+$/, '');
+}
+
+function buildLiveRequest(req) {
+  const base = getApiBase();
+  if (req._type === 'GET') {
+    return { method:'GET', url:`${base}/travel-rule/${encodeURIComponent(req.record_id)}` };
+  }
+  if (req._type === 'SEARCH') {
+    const { _type, ...params } = req;
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k,v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    return { method:'GET', url:`${base}/travel-rule/search${qs.toString() ? '?' + qs.toString() : ''}` };
+  }
+  if (req._type === 'STATS') {
+    const { _type, ...params } = req;
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k,v]) => {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    });
+    return { method:'GET', url:`${base}/travel-rule/stats${qs.toString() ? '?' + qs.toString() : ''}` };
+  }
+  if (req._type === 'CALLBACK') {
+    const { _type, _recordId, ...body } = req;
+    return {
+      method:'POST',
+      url:`${base}/travel-rule/${encodeURIComponent(_recordId)}/callback`,
+      body
+    };
+  }
+  if (req._type === 'PUT') {
+    const { _type, ...body } = req;
+    const recordId = body.travel_rule_data?.payment_identification?.uetr || g('f-uetr');
+    return {
+      method:'PUT',
+      url:`${base}/travel-rule/${encodeURIComponent(recordId)}`,
+      body
+    };
+  }
+
+  const { _type, ...body } = req;
+  return {
+    method:'POST',
+    url:`${base}/travel-rule`,
+    body
+  };
+}
+
+function renderLiveResponse(method, url, status, elapsed, payload, rawText) {
+  const statusClass = status >= 200 && status < 300 ? 's200' : status >= 400 && status < 500 ? 's400' : 's500';
+  const pretty = payload !== undefined ? JSON.stringify(payload, null, 2) : rawText || '';
+  document.getElementById('rh').innerHTML =
+    `<span class="sbadge ${statusClass}">${status}</span>
+     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${method} ${url.replace(getApiBase(),'')}</span>
+     <span class="rt">${elapsed}ms</span>`;
+  document.getElementById('rbody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;padding:16px" class="ani">
+      <div class="card" style="border-color:rgba(56,139,253,.25)">
+        <div class="ch" style="background:rgba(56,139,253,.05)">
+          <span>🌐</span><span class="ct">Live API Response</span>
+        </div>
+        <div class="cb">
+          <div class="dr"><div class="dk">execution_mode</div><div class="dv ok">LIVE API</div></div>
+          <div class="dr"><div class="dk">api_base</div><div class="dv">${getApiBase()}</div></div>
+          <div class="dr"><div class="dk">http_status</div><div class="dv">${status}</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ch"><span>📦</span><span class="ct">Response Payload</span></div>
+        <div class="cb">
+          <pre style="white-space:pre-wrap;word-break:break-word">${highlight(pretty || 'null')}</pre>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function sendLiveRequest(req) {
+  const started = performance.now();
+  const live = buildLiveRequest(req);
+  const init = {
+    method: live.method,
+    headers: live.body ? { 'Content-Type':'application/json' } : undefined,
+    body: live.body ? JSON.stringify(live.body) : undefined
+  };
+
+  try {
+    const response = await fetch(live.url, init);
+    const text = await response.text();
+    const payload = text ? JSON.parse(text) : null;
+    const elapsed = Math.round(performance.now() - started);
+
+    if (payload?.record_id) s('f-uetr', payload.record_id);
+    renderLiveResponse(live.method, live.url, response.status, elapsed, payload, text);
+  } catch (error) {
+    const elapsed = Math.round(performance.now() - started);
+    renderLiveResponse(live.method, live.url, 0, elapsed, {
+      error: 'connection_failed',
+      message: error.message
+    }, '');
+  }
+}
+
+async function sendRequest() {
   updatePreview();
   const req = buildReq();
   document.getElementById('rh').innerHTML =
     `<div class="ldots"><span></span><span></span><span></span></div>
      <span style="font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:8px">Connecting…</span>`;
   document.getElementById('rbody').innerHTML = '';
+  if (getExecutionMode() === 'LIVE') {
+    await sendLiveRequest(req);
+    return;
+  }
   setTimeout(() => renderResponse(req), 600 + Math.random()*300);
 }
 
@@ -1469,7 +1592,7 @@ function renderResponse(req) {
         status:'UNDER_REVIEW', submission_timing:'POST_TX', primary_chain_id:'DLID/4H95J0R2X',
         is_bridge:false,
         debtor_name:'Marie Dupont', debtor_vasp_lei:'',
-        creditor_name:'Marie Dupont', creditor_vasp_lei:'5299000DUFB71VFOHVB49',
+        creditor_name:'Marie Dupont', creditor_vasp_lei:'635400DUFB71VFOHVB49',
         settlement_amount:'0.03150000', settlement_currency:'XXX',
         token_identification:{ dti:'DTID/4H95J0R2X', ticker:'BTC' },
         debtor_wallet_type:'UNHOSTED', creditor_wallet_type:'HOSTED',
@@ -1595,7 +1718,7 @@ function renderResponse(req) {
       { dimension_value:'7245007VX57GR4IUVZ79', dimension_label:'Bitvavo B.V.',
         record_count:89, rejection_count:3, rejection_rate_pct:3.37,
         volumes:[{ currency:'EUR', total_amount:'4200000.00', record_count:89 }] },
-      { dimension_value:'5299000DUFB71VFOHVB49', dimension_label:'Kraken Belgium BVBA',
+      { dimension_value:'635400DUFB71VFOHVB49', dimension_label:'Kraken Belgium BVBA',
         record_count:76, rejection_count:11, rejection_rate_pct:14.47,
         volumes:[{ currency:'EUR', total_amount:'1850000.00', record_count:41 },
                  { currency:'XXX', token_identification:{ dti:'DTID/4H95J0R2X', ticker:'BTC' }, total_amount:'4.82350000', record_count:35 }] },
