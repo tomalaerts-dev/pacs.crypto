@@ -1173,10 +1173,9 @@ components:
       maxLength: 130
       description: |
         Blockchain wallet or contract address. Carried in ISO 20022 fields using
-        the `CashAccount40/proxy` convention: `proxy/type/code = EWAL`,
-        `proxy/identification` = wallet address string, `type/proprietary = DIGT`
-        for digital asset accounts. This convention is consistent across the
-        pacs.crypto family.
+        the `CashAccount40/proxy` convention: `proxy/type/code = EWAL` and
+        `proxy/identification` = wallet address string. This convention is
+        consistent across the pacs.crypto family.
 
         Address format is chain-specific:
         - EVM chains: `0x` followed by 40 hex characters

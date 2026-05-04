@@ -2557,7 +2557,9 @@ components:
       description: |
         Nature or use of the account.
         Source: pacs.008.001.14 CashAccountType2Choice.
-        Use proprietary = "DIGT" to indicate a digital asset wallet account.
+        For blockchain wallets, the registered ExternalProxyAccountType1Code
+        `EWAL` carried in `proxy/type/code` identifies the account as an
+        electronic wallet — no proprietary code is needed in this field.
       oneOf:
         - type: object
           required: [code]
@@ -2574,8 +2576,11 @@ components:
             proprietary:
               type: string
               maxLength: 35
-              description: Use "DIGT" for digital asset / blockchain wallet accounts
-              example: "DIGT"
+              description: |
+                Optional implementer-specific account-type identifier.
+                For blockchain wallets, the registered `EWAL` code in
+                `proxy/type/code` is the standard way to identify the
+                account; no proprietary code is needed.
 
     ProxyAccountIdentification1:
       type: object
@@ -4297,8 +4302,6 @@ components:
                 lei: "529900T8BM49AURSDO55"
             country_of_residence: "DE"
           debtor_account:
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"
@@ -4331,8 +4334,6 @@ components:
                 lei: "724500QHKL6MVSQQ1Z17"
             country_of_residence: "NL"
           creditor_account:
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"
@@ -4455,8 +4456,6 @@ components:
                     issuer: "Belgian National Register"
             country_of_residence: "BE"
           debtor_account:
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"
@@ -4486,8 +4485,6 @@ components:
                 scheme_name:
                   proprietary: "CUST"
                 issuer: "Kraken Belgium BVBA"
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"
@@ -4584,8 +4581,6 @@ components:
                     issuer: "IRS"
             country_of_residence: "US"
           debtor_account:
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"
@@ -4622,8 +4617,6 @@ components:
                     issuer: "ACRA Singapore"
             country_of_residence: "SG"
           creditor_account:
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"
@@ -4772,8 +4765,6 @@ components:
                 lei: "549300QBPBOVMEMXP943"
             country_of_residence: "DE"
           debtor_account:
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"
@@ -4829,8 +4820,6 @@ components:
                 lei: "2138003RKXL87BMQVB27"
             country_of_residence: "GB"
           creditor_account:
-            type:
-              proprietary: "DIGT"
             proxy:
               type:
                 code: "EWAL"

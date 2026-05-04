@@ -1242,7 +1242,6 @@ function buildReq() {
             }} : undefined
       },
       debtor_account: {
-        type: { proprietary: 'DIGT' },
         proxy: g('f-dwallet') ? { type: { code: 'EWAL' }, identification: g('f-dwallet') } : undefined
       },
       debtor_wallet_type: g('f-dwtype'),
@@ -1255,7 +1254,6 @@ function buildReq() {
         identification: g('f-clei') ? { organisation_identification: { lei: g('f-clei') } } : undefined
       },
       creditor_account: {
-        type: { proprietary: 'DIGT' },
         proxy: g('f-cwallet') ? { type: { code: 'EWAL' }, identification: g('f-cwallet') } : undefined
       },
       creditor_wallet_type: g('f-cwtype'),
