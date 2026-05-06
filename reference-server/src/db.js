@@ -1762,6 +1762,32 @@ const RETURN_CASE_ALLOWED_TRANSITIONS = {
   CANCELLED: new Set([]),
 };
 
+const TOM_RETURN_TERMINAL_NON_BLOCKING_STATUSES = new Set([
+  'DECLINED',
+  'CANCELLED',
+]);
+
+const TOM_REVERSAL_TERMINAL_NON_BLOCKING_STATUSES = new Set([
+  'DECLINED',
+  'CANCELLED',
+  'WITHDRAWN',
+  'REJECTED',
+]);
+
+function isTomReturnCaseBlocking(record) {
+  if (!record || record.exception_type !== 'RETURN' || record.origin !== 'TOM') {
+    return false;
+  }
+  return !TOM_RETURN_TERMINAL_NON_BLOCKING_STATUSES.has(record.return_status);
+}
+
+function isTomReversalCaseBlocking(record) {
+  if (!record || record.exception_type !== 'REVERSAL') {
+    return false;
+  }
+  return !TOM_REVERSAL_TERMINAL_NON_BLOCKING_STATUSES.has(record.reversal_status);
+}
+
 function buildExceptionDomainError(code, message) {
   const error = new Error(message);
   error.code = code;
@@ -2077,6 +2103,240 @@ function buildReturnCaseSummary(record) {
         returnCaseId: record.return_case_id,
       }),
   };
+}
+
+function deriveTomReturnTypeFromCode(code) {
+  if (code === 'CANC' || code === 'AC04' || code === 'AM05') {
+    return 'CUSTOMER_REFUND';
+  }
+  if (code === 'AC01' || code === 'BE04' || code === 'RC03' || code === 'RR04') {
+    return 'BENEFICIARY_REJECTED';
+  }
+  if (code === 'FRAD') {
+    return 'COMPLIANCE_REMEDIATION';
+  }
+  if (code === 'TECH') {
+    return 'SETTLEMENT_CORRECTION';
+  }
+  return 'CUSTOMER_REFUND';
+}
+
+function buildTomReturnCaseRecord({
+  instruction,
+  body,
+  compensatingInstruction,
+}) {
+  const openedAt = nowIso();
+  const returnCaseId = randomUUID();
+  const returnIdentification = body.return_identification ?? null;
+  const returnType = deriveTomReturnTypeFromCode(body.return_reason?.code);
+  const additionalNarrative =
+    Array.isArray(body.return_reason?.additional_information) &&
+    body.return_reason.additional_information.length > 0
+      ? body.return_reason.additional_information.join(' | ')
+      : null;
+  return {
+    return_case_id: returnCaseId,
+    exception_case_id: returnCaseId,
+    exception_type: 'RETURN',
+    origin: 'TOM',
+    return_type: returnType,
+    return_method: 'ON_CHAIN_COMPENSATING_TRANSFER',
+    return_status: 'APPROVED',
+    return_identification: returnIdentification,
+    reason_code: body.return_reason?.code ?? null,
+    return_reason: body.return_reason ?? null,
+    narrative:
+      additionalNarrative ?? `Tom v1.2 return for ${body.return_reason?.code ?? 'UNSPECIFIED'} reason.`,
+    resolution_summary: 'Tom v1.2 compensating instruction issued.',
+    opened_by: null,
+    current_owner: null,
+    assigned_team: 'EXCEPTIONS_OPERATIONS',
+    next_action_due_at: null,
+    counterparty_reference: null,
+    reporting_follow_up_required: false,
+    affected_notification_ids: [],
+    affected_statement_ids: [],
+    counterparty: null,
+    opened_at: openedAt,
+    updated_at: openedAt,
+    settled_at: null,
+    related_instruction_id: instruction.instruction_id,
+    related_uetr: instruction.uetr,
+    related_travel_rule_record_id: instruction.travel_rule_record_id ?? null,
+    related_transaction_hash:
+      instruction.on_chain_settlement?.transaction_hash ?? null,
+    original_instruction_id: instruction.instruction_id,
+    original_uetr: instruction.uetr,
+    original_transaction_hash:
+      instruction.on_chain_settlement?.transaction_hash ?? null,
+    end_to_end_identification:
+      instruction.payment_identification?.end_to_end_identification ?? null,
+    return_amount: body.returned_amount,
+    returned_amount: body.returned_amount,
+    return_asset: instruction.blockchain_instruction?.token ?? null,
+    linked_investigation_case_id: null,
+    compensating_instruction_id: compensatingInstruction.instruction_id,
+    compensating_uetr: compensatingInstruction.uetr,
+    off_chain_reference: null,
+    original_instruction_status: instruction.status,
+    chain_dli: instruction.blockchain_instruction?.chain_dli ?? null,
+    traceability: buildExceptionTraceability({
+      instructionId: instruction.instruction_id,
+      uetr: instruction.uetr,
+      endToEndIdentification:
+        instruction.payment_identification?.end_to_end_identification ?? null,
+      travelRuleRecordId: instruction.travel_rule_record_id ?? null,
+      transactionHash:
+        instruction.on_chain_settlement?.transaction_hash ?? null,
+      investigationCaseId: null,
+      returnCaseId,
+    }),
+    status_history: [
+      buildExceptionCaseActivity({
+        status: 'APPROVED',
+        updatedAt: openedAt,
+        summary: 'Tom v1.2 return accepted and compensating instruction created.',
+      }),
+    ],
+  };
+}
+
+function buildTomReversalCaseRecord({ instruction, body }) {
+  const openedAt = nowIso();
+  const reversalCaseId = randomUUID();
+  const reversalIdentification =
+    body.reversal_identification ?? `REV-${reversalCaseId}`;
+  const receiverResponseExpectedBy = new Date(
+    Date.parse(openedAt) + 48 * 60 * 60 * 1000,
+  ).toISOString();
+  const additionalNarrative =
+    Array.isArray(body.reversal_reason?.additional_information) &&
+    body.reversal_reason.additional_information.length > 0
+      ? body.reversal_reason.additional_information.join(' | ')
+      : null;
+  return {
+    return_case_id: reversalCaseId,
+    exception_case_id: reversalCaseId,
+    reversal_request_id: reversalCaseId,
+    reversal_identification: reversalIdentification,
+    exception_type: 'REVERSAL',
+    origin: 'TOM',
+    reversal_status: 'REQUESTED',
+    return_status: 'REQUESTED',
+    reason_code: body.reversal_reason?.code ?? null,
+    reversal_reason: body.reversal_reason ?? null,
+    narrative:
+      additionalNarrative ??
+      `Tom v1.2 reversal request for ${body.reversal_reason?.code ?? 'UNSPECIFIED'} reason.`,
+    resolution_summary: null,
+    webhook_url: typeof body.webhook_url === 'string' ? body.webhook_url : null,
+    opened_by: null,
+    current_owner: null,
+    assigned_team: 'EXCEPTIONS_OPERATIONS',
+    requested_at: openedAt,
+    receiver_response_expected_by: receiverResponseExpectedBy,
+    next_action_due_at: receiverResponseExpectedBy,
+    affected_notification_ids: [],
+    affected_statement_ids: [],
+    counterparty: null,
+    opened_at: openedAt,
+    updated_at: openedAt,
+    related_instruction_id: instruction.instruction_id,
+    related_uetr: instruction.uetr,
+    related_travel_rule_record_id: instruction.travel_rule_record_id ?? null,
+    related_transaction_hash:
+      instruction.on_chain_settlement?.transaction_hash ?? null,
+    original_instruction_id: instruction.instruction_id,
+    original_uetr: instruction.uetr,
+    original_transaction_hash:
+      instruction.on_chain_settlement?.transaction_hash ?? null,
+    end_to_end_identification:
+      instruction.payment_identification?.end_to_end_identification ?? null,
+    reversed_amount: body.reversed_amount,
+    return_amount: body.reversed_amount,
+    return_asset: instruction.blockchain_instruction?.token ?? null,
+    linked_investigation_case_id: null,
+    compensating_instruction_id: null,
+    compensating_instruction_status: null,
+    off_chain_reference: null,
+    original_instruction_status: instruction.status,
+    chain_dli: instruction.blockchain_instruction?.chain_dli ?? null,
+    traceability: buildExceptionTraceability({
+      instructionId: instruction.instruction_id,
+      uetr: instruction.uetr,
+      endToEndIdentification:
+        instruction.payment_identification?.end_to_end_identification ?? null,
+      travelRuleRecordId: instruction.travel_rule_record_id ?? null,
+      transactionHash:
+        instruction.on_chain_settlement?.transaction_hash ?? null,
+      investigationCaseId: null,
+      returnCaseId: reversalCaseId,
+    }),
+    status_history: [
+      buildExceptionCaseActivity({
+        status: 'REQUESTED',
+        updatedAt: openedAt,
+        summary: 'Tom v1.2 reversal request received.',
+      }),
+    ],
+  };
+}
+
+function buildTomReturnResponse(record) {
+  const response = {
+    compensating_instruction_id: record.compensating_instruction_id,
+    compensating_uetr: record.compensating_uetr,
+    original_instruction_id: record.original_instruction_id,
+    status: 'PENDING',
+    accepted_at: record.opened_at,
+  };
+  if (record.return_identification) {
+    response.return_identification = record.return_identification;
+  }
+  return response;
+}
+
+function buildTomReversalResponse(record) {
+  return {
+    reversal_request_id: record.reversal_request_id ?? record.return_case_id,
+    original_instruction_id: record.original_instruction_id,
+    reversal_identification: record.reversal_identification,
+    status: record.reversal_status,
+    requested_at: record.requested_at ?? record.opened_at,
+    receiver_response_expected_by: record.receiver_response_expected_by ?? null,
+  };
+}
+
+function buildTomReversalStatusResponse(record) {
+  if (!record) {
+    return null;
+  }
+  const status = record.reversal_status ?? 'REQUESTED';
+  const response = {
+    reversal_request_id: record.reversal_request_id ?? record.return_case_id,
+    original_instruction_id: record.original_instruction_id,
+    status,
+    requested_at: record.requested_at ?? record.opened_at,
+  };
+  if (record.responded_at) {
+    response.responded_at = record.responded_at;
+  }
+  if (record.rejection_reason_code) {
+    response.rejection_reason_code = record.rejection_reason_code;
+  }
+  if (record.rejection_reason) {
+    response.rejection_reason = record.rejection_reason;
+  }
+  if (
+    ['ACCEPTED', 'COMPLETED'].includes(status) &&
+    record.compensating_instruction_id
+  ) {
+    response.compensating_instruction_id = record.compensating_instruction_id;
+    response.compensating_instruction_status =
+      record.compensating_instruction_status ?? null;
+  }
+  return response;
 }
 
 function buildOutboxEvent({
@@ -3514,16 +3774,31 @@ export class ReferenceStore {
     return event;
   }
 
-  getReturnCase(returnCaseId) {
+  getReturnCaseRecord(returnCaseId) {
     const row = this.getReturnCaseStmt.get(returnCaseId);
     return row ? parseJson(row.case_json, null) : null;
   }
 
-  listReturnCaseRecords() {
-    return this.listReturnCasesStmt
+  getReturnCase(returnCaseId) {
+    const record = this.getReturnCaseRecord(returnCaseId);
+    if (!record) {
+      return null;
+    }
+    if (record.exception_type === 'REVERSAL') {
+      return null;
+    }
+    return record;
+  }
+
+  listReturnCaseRecords({ includeReversals = false } = {}) {
+    const records = this.listReturnCasesStmt
       .all()
       .map((row) => parseJson(row.case_json, null))
       .filter(Boolean);
+    if (includeReversals) {
+      return records;
+    }
+    return records.filter((record) => record.exception_type !== 'REVERSAL');
   }
 
   filterReturnCaseRecords(filters = {}) {
@@ -3687,6 +3962,163 @@ export class ReferenceStore {
     );
     this.appendReturnCaseOutboxEvent(updated);
     return updated;
+  }
+
+  findActiveTomCaseForInstruction(instructionId) {
+    if (!instructionId) {
+      return null;
+    }
+    const records = this.listReturnCaseRecords({ includeReversals: true })
+      .filter((record) => record.original_instruction_id === instructionId);
+    for (const record of records) {
+      if (record.exception_type === 'RETURN' && record.origin === 'TOM' && isTomReturnCaseBlocking(record)) {
+        return record;
+      }
+      if (record.exception_type === 'REVERSAL' && isTomReversalCaseBlocking(record)) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  getLatestReversalForInstruction(instructionId) {
+    if (!instructionId) {
+      return null;
+    }
+    const records = this.listReturnCaseRecords({ includeReversals: true })
+      .filter(
+        (record) =>
+          record.exception_type === 'REVERSAL' &&
+          record.original_instruction_id === instructionId,
+      )
+      .sort(
+        (a, b) =>
+          Date.parse(b.requested_at ?? b.opened_at) -
+          Date.parse(a.requested_at ?? a.opened_at),
+      );
+    return records[0] ?? null;
+  }
+
+  async createTomCompensatingInstructionAsync(originalInstruction, returnedAmount) {
+    const createdAt = nowIso();
+    const compensatingId = randomUUID();
+    const compensatingUetr = randomUUID();
+    const interbankAmount = {
+      amount: returnedAmount.amount,
+      currency: returnedAmount.currency,
+    };
+    const fallbackFeeRequest = {
+      amount: interbankAmount.amount,
+      ramp_type: originalInstruction.blockchain_instruction?.ramp_instruction?.ramp_type,
+    };
+    const feeEstimate = await this.chainAdapter.buildFeeEstimate(fallbackFeeRequest);
+    const onChainSettlement = await this.chainAdapter.normalizeOnChainSettlement(
+      null,
+      interbankAmount.amount,
+      originalInstruction,
+    );
+    const originalE2e =
+      originalInstruction.payment_identification?.end_to_end_identification ?? null;
+    const record = {
+      instruction_id: compensatingId,
+      uetr: compensatingUetr,
+      status: 'PENDING',
+      custody_model: originalInstruction.custody_model,
+      debit_timing: originalInstruction.debit_timing ?? 'ON_BROADCAST',
+      payment_identification: {
+        end_to_end_identification: `RETURN-${compensatingId}`,
+        uetr: compensatingUetr,
+        compensates_end_to_end_identification: originalE2e,
+      },
+      settlement_information: originalInstruction.settlement_information,
+      payment_type_information: originalInstruction.payment_type_information,
+      debtor: originalInstruction.creditor,
+      debtor_account: originalInstruction.creditor_account,
+      debtor_agent: originalInstruction.creditor_agent,
+      creditor: originalInstruction.debtor,
+      creditor_account: originalInstruction.debtor_account,
+      creditor_agent: originalInstruction.debtor_agent,
+      charge_bearer: originalInstruction.charge_bearer,
+      interbank_settlement_amount: interbankAmount,
+      instructed_amount: interbankAmount,
+      instruction_for_next_agent: null,
+      purpose: originalInstruction.purpose,
+      remittance_information: originalInstruction.remittance_information,
+      blockchain_instruction: originalInstruction.blockchain_instruction,
+      fee_estimate: feeEstimate,
+      on_chain_settlement: onChainSettlement,
+      travel_rule_record_id: null,
+      created_at: createdAt,
+      updated_at: createdAt,
+      expiry_date_time: null,
+      failure_reason: null,
+      compensates_instruction_id: originalInstruction.instruction_id,
+      origin: 'TOM_RETURN',
+      status_history: [
+        buildInstructionStatusEvent({
+          status: 'PENDING',
+          statusAt: createdAt,
+        }),
+      ],
+    };
+
+    this.insertInstructionStmt.run(
+      record.instruction_id,
+      record.status,
+      record.created_at,
+      record.updated_at,
+      serialize(record),
+    );
+    this.appendInstructionOutboxEvents(record, null);
+    return record;
+  }
+
+  async createTomReturnAsync(originalInstruction, body) {
+    const compensatingInstruction = await this.createTomCompensatingInstructionAsync(
+      originalInstruction,
+      body.returned_amount,
+    );
+    const record = buildTomReturnCaseRecord({
+      instruction: originalInstruction,
+      body,
+      compensatingInstruction,
+    });
+    this.insertReturnCaseStmt.run(
+      record.return_case_id,
+      record.related_instruction_id,
+      record.opened_at,
+      record.updated_at,
+      serialize(record),
+    );
+    this.appendReturnCaseOutboxEvent(record);
+    return { record, compensatingInstruction };
+  }
+
+  createTomReversalRequest(originalInstruction, body) {
+    const record = buildTomReversalCaseRecord({
+      instruction: originalInstruction,
+      body,
+    });
+    this.insertReturnCaseStmt.run(
+      record.return_case_id,
+      record.related_instruction_id,
+      record.opened_at,
+      record.updated_at,
+      serialize(record),
+    );
+    return record;
+  }
+
+  toTomReturnResponse(record) {
+    return buildTomReturnResponse(record);
+  }
+
+  toTomReversalResponse(record) {
+    return buildTomReversalResponse(record);
+  }
+
+  toTomReversalStatusResponse(record) {
+    return buildTomReversalStatusResponse(record);
   }
 
   createWebhookSubscription(submission) {

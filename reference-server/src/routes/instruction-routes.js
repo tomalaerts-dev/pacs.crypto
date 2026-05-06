@@ -3,7 +3,12 @@ import {
   validateInstructionSearchQuery,
   validateInstructionSubmission,
   validateQuoteRequest,
+  validateTomReturnRequest,
+  validateTomReversalRequest,
 } from '../validators.js';
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function sendValidationError(reply, errors) {
   return reply.code(400).send({
@@ -11,6 +16,15 @@ function sendValidationError(reply, errors) {
     code: 'INVALID_REQUEST',
     message: 'Request validation failed.',
     details: formatValidationErrors(errors),
+  });
+}
+
+function sendInvalidPathUuid(reply, field) {
+  return reply.code(400).send({
+    error: 'invalid_request',
+    code: 'INVALID_REQUEST',
+    message: `${field} must be a UUID.`,
+    details: [{ field, issue: `${field} must be a UUID.` }],
   });
 }
 
@@ -133,5 +147,123 @@ export function registerInstructionRoutes(app) {
     }
 
     return app.store.searchInstructionsAsync(request.query);
+  });
+
+  app.post('/instruction/:instructionId/return', async (request, reply) => {
+    const { instructionId } = request.params;
+    if (!UUID_PATTERN.test(instructionId)) {
+      return sendInvalidPathUuid(reply, 'instructionId');
+    }
+
+    const errors = validateTomReturnRequest(request.body);
+    if (errors.length) {
+      return sendValidationError(reply, errors);
+    }
+
+    const instruction = await app.store.getInstructionAsync(instructionId);
+    if (!instruction) {
+      return reply.code(404).send({
+        error: 'not_found',
+        code: 'INSTRUCTION_NOT_FOUND',
+        message: 'Instruction not found.',
+      });
+    }
+
+    if (instruction.status !== 'FINAL') {
+      return reply.code(409).send({
+        error: 'invalid_state',
+        code: 'INSTRUCTION_NOT_FINAL',
+        message: 'Return can only be requested for instructions in FINAL status.',
+        current_status: instruction.status,
+      });
+    }
+
+    const existing = app.store.findActiveTomCaseForInstruction(instructionId);
+    if (existing) {
+      return reply.code(409).send({
+        error: 'invalid_state',
+        code: 'ALREADY_RETURNED',
+        message:
+          'An active Tom-origin return or reversal already exists for this instruction.',
+        existing_exception_type: existing.exception_type,
+        existing_exception_case_id: existing.return_case_id,
+      });
+    }
+
+    const { record } = await app.store.createTomReturnAsync(instruction, request.body);
+    return reply.code(202).send(app.store.toTomReturnResponse(record));
+  });
+
+  app.post('/instruction/:instructionId/reverse', async (request, reply) => {
+    const { instructionId } = request.params;
+    if (!UUID_PATTERN.test(instructionId)) {
+      return sendInvalidPathUuid(reply, 'instructionId');
+    }
+
+    const errors = validateTomReversalRequest(request.body);
+    if (errors.length) {
+      return sendValidationError(reply, errors);
+    }
+
+    const instruction = await app.store.getInstructionAsync(instructionId);
+    if (!instruction) {
+      return reply.code(404).send({
+        error: 'not_found',
+        code: 'INSTRUCTION_NOT_FOUND',
+        message: 'Instruction not found.',
+      });
+    }
+
+    if (instruction.status !== 'FINAL') {
+      return reply.code(409).send({
+        error: 'invalid_state',
+        code: 'INSTRUCTION_NOT_FINAL',
+        message:
+          'Reversal can only be requested for instructions in FINAL status.',
+        current_status: instruction.status,
+      });
+    }
+
+    const existing = app.store.findActiveTomCaseForInstruction(instructionId);
+    if (existing) {
+      return reply.code(409).send({
+        error: 'invalid_state',
+        code: 'ALREADY_RETURNED',
+        message:
+          'An active Tom-origin return or reversal already exists for this instruction.',
+        existing_exception_type: existing.exception_type,
+        existing_exception_case_id: existing.return_case_id,
+      });
+    }
+
+    const record = app.store.createTomReversalRequest(instruction, request.body);
+    return reply.code(202).send(app.store.toTomReversalResponse(record));
+  });
+
+  app.get('/instruction/:instructionId/reversal-status', async (request, reply) => {
+    const { instructionId } = request.params;
+    if (!UUID_PATTERN.test(instructionId)) {
+      return sendInvalidPathUuid(reply, 'instructionId');
+    }
+
+    const instruction = await app.store.getInstructionAsync(instructionId);
+    if (!instruction) {
+      return reply.code(404).send({
+        error: 'not_found',
+        code: 'INSTRUCTION_NOT_FOUND',
+        message: 'Instruction not found.',
+      });
+    }
+
+    const reversal = app.store.getLatestReversalForInstruction(instructionId);
+    if (!reversal) {
+      return reply.code(404).send({
+        error: 'not_found',
+        code: 'REVERSAL_NOT_FOUND',
+        message: 'No reversal request exists for this instruction.',
+      });
+    }
+
+    return reply.code(200).send(app.store.toTomReversalStatusResponse(reversal));
   });
 }

@@ -129,6 +129,15 @@ Recommended message analogue:
 
 - `pacs.004`-like return or compensation object
 
+Tom v1.2 instruction façade:
+
+- `POST /instruction/{instructionId}/return` is implemented as a public v1.2 path
+  backed by this return-case model. It creates a real compensating instruction
+  and keeps the original instruction `FINAL`.
+- The response follows Tom's `CompensatingInstructionResponse` shape, while the
+  internal exception-family record retains traceability and operator workflow
+  fields.
+
 ### 5. Investigation and dispute handling
 
 Definition:
@@ -168,9 +177,14 @@ It should **not** become the container for:
 
 Current first-slice runtime:
 
-- `return_case` (`pacs.004` analogue)
+- `return_case` (`pacs.004` analogue), including Tom v1.2 `/return`
+  requests backed by real compensating instructions
+- `reversal` request records (`pacs.007`-like Tom v1.2 `/reverse` façade) stored
+  as exception-family cases while the original on-chain instruction remains
+  final
 - `investigation_case` (`camt.029` analogue)
-- optional later `cancellation_case` (`camt.056` / `057` / `058` analogue)
+- optional later `cancellation_case` (`camt.056` / `057` / `058` analogue),
+  including any broader `status-request` surface if Tom's direction calls for it
 
 ## Proposed Object Model
 
@@ -278,6 +292,9 @@ This is the single most important design rule in the family.
 
 Implemented now:
 
+- `POST /instruction/{instructionId}/return` (Tom v1.2 façade over return cases)
+- `POST /instruction/{instructionId}/reverse` (Tom v1.2 reversal request façade)
+- `GET /instruction/{instructionId}/reversal-status` (Tom v1.2 reversal status read)
 - `POST /exceptions/returns`
 - `GET /exceptions/returns/:returnCaseId`
 - `GET /exceptions/returns`

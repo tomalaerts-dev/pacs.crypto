@@ -21,6 +21,9 @@ Current scope:
 - `GET /instruction/:instructionId`
 - `DELETE /instruction/:instructionId`
 - `GET /instruction/search`
+- `POST /instruction/:instructionId/return` (Tom v1.2)
+- `POST /instruction/:instructionId/reverse` (Tom v1.2)
+- `GET /instruction/:instructionId/reversal-status` (Tom v1.2)
 - `GET /execution-status/:instructionId`
 - `GET /execution-status/uetr/:uetr`
 - `GET /finality-receipt/:instructionId`
@@ -199,6 +202,7 @@ Artifacts include:
 - `POST /report/query` with `STATEMENT + callback_url` now queues a raw camt-style statement callback through the same retrying delivery engine instead of inventing a separate callback subsystem.
 - `exceptions/investigations` is the first exception-family runtime slice: a `camt.029`-like investigation case object linked to instruction, finality, reporting, and Travel Rule references without rewriting the original payment state.
 - `exceptions/returns` is the second exception-family runtime slice: a `pacs.004`-like remediation object for post-settlement return or refund handling, again linked to rather than overwriting the original payment.
+- Tom v1.2 return/reversal reconciliation is layered on top of the existing exception family. `POST /instruction/{instructionId}/return` materializes a real compensating instruction (retrievable via `GET /instruction/{instructionId}`) and a Tom-origin return case (`exception_type=RETURN`, `origin=TOM`, `return_status=APPROVED`) while returning the v1.2 `CompensatingInstructionResponse` shape (`status=PENDING`, `accepted_at`, `compensating_uetr`). `POST /instruction/{instructionId}/reverse` records a reversal request as an exception-family case with `exception_type=REVERSAL` and `status=REQUESTED` only — no compensating instruction is created at REQUESTED. `GET /instruction/{instructionId}/reversal-status` returns the most recent REVERSAL case for the original instruction. On-chain final transfers are compensated, not literally unwound. `webhook_url` is only accepted on `ReversalRequest`. Reversal cases are filtered out of the legacy `/exceptions/returns` list and detail surfaces.
 - Exception-family changes are emitted as `investigation_case.updated` and `return_case.updated` through the same outbox and webhook delivery pipeline.
 - Delegated signing is intentionally not implemented in this first slice.
 - The root HTML simulators support both `Demo` mode and `Live API` mode against this server.

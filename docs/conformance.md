@@ -25,6 +25,9 @@ Status meanings:
 | `DELETE /instruction/{instructionId}` | `instruction-api-v1.yaml` | n/a | `CancellationResponse` | Implemented | The route now returns the narrow cancellation receipt defined in the spec. |
 | `POST /instruction/{instructionId}/signed-transaction` | `instruction-api-v1.yaml` | `SignedTransactionSubmission` | delegated-signing response | Out of scope | Delegated signing is intentionally not implemented in the current wedge. |
 | `GET /instruction/search` | `instruction-api-v1.yaml` | query params | `InstructionSearchResponse` | Implemented | Search envelope, compact summaries, and query validation for status, DLI/DTI, pagination, and time range are present. |
+| `POST /instruction/{instructionId}/return` | Tom upstream `instruction-api-v1.2.yaml` | `ReturnRequest` | `CompensatingInstructionResponse` | Implemented | Materializes a real compensating instruction and stores a Tom-origin `RETURN` exception-family case without rewriting the original final instruction. |
+| `POST /instruction/{instructionId}/reverse` | Tom upstream `instruction-api-v1.2.yaml` | `ReversalRequest` | `ReversalRequestResponse` | Implemented | Records a Tom-origin `REVERSAL` exception-family request in `REQUESTED` state; no compensating instruction is created at request time. |
+| `GET /instruction/{instructionId}/reversal-status` | Tom upstream `instruction-api-v1.2.yaml` | n/a | `ReversalRequestStatus` | Implemented | Returns the latest reversal request for the original instruction and only exposes compensating-instruction fields after a later accepted/completed outcome. |
 | `POST /report/query` | `camt-crypto-reporting-v1.yaml` | `ReportQuery` | `QueryResponse` | Partial | Supports synchronous balance and intraday responses, synchronous or async statement delivery, and wallet-scoped notification subscribe/unsubscribe flows on top of the current webhook subsystem. Notification subscriptions now deliver raw camt.054-style bodies and async statements are queued through the retrying delivery engine. The route remains partial because the bank-side callback endpoint and full request idempotency window are still out of scope. |
 | `GET /report/intraday` | `camt-crypto-reporting-v1.yaml` | query params | `IntradayReport` | Implemented | The route now returns a root-spec camt.052-style wrapper with `group_header`, `report`, paginated `entries`, and per-token balance lines built from the reference-server reporting records. |
 | `GET /report/statement` | `camt-crypto-reporting-v1.yaml` | query params | `WalletStatement` | Implemented | The route now returns a root-spec camt.053-style wrapper with `group_header`, `statement`, paginated booked entries, and statement-period balance lines for the current wallet/date filters. |
@@ -43,6 +46,14 @@ These routes are real, but they are outside the current root YAML specs and ther
 - `GET /finality-receipt/uetr/:uetr`
 - `GET /event-outbox`
 - `GET /event-outbox/:eventId`
+- `POST /exceptions/investigations`
+- `PATCH /exceptions/investigations/:caseId`
+- `GET /exceptions/investigations`
+- `GET /exceptions/investigations/:caseId`
+- `POST /exceptions/returns`
+- `PATCH /exceptions/returns/:returnCaseId`
+- `GET /exceptions/returns`
+- `GET /exceptions/returns/:returnCaseId`
 - `POST /webhook-endpoints`
 - `GET /webhook-endpoints`
 - `GET /webhook-endpoints/:subscriptionId`
@@ -67,6 +78,7 @@ The current conformance work is intentionally limited to the bank-to-VASP wedge 
 - stricter request validation for the spec-covered write routes
 - stricter query validation for the spec-covered search and stats routes
 - response-shape coverage for the core spec-covered read and search routes
+- Tom upstream v1.2 return/reverse/reversal-status alignment using the existing exception-family model as the backing store
 - reporting path-family alignment against `camt-crypto-reporting-v1.yaml`
 - wallet-scoped notification subscription support on top of the webhook subsystem
 - explicit documentation of the current out-of-scope spec surface:
@@ -74,7 +86,7 @@ The current conformance work is intentionally limited to the bank-to-VASP wedge 
   - bank-side reporting callback endpoint
 
 Delegated signing, non-EVM flows, richer exception families, bank-side callback
-endpoint implementation, and full request idempotency-window semantics remain
-outside the current conformance target. The current conformance layer is
-hand-authored in code for the implemented wedge rather than generated directly
-from the YAML.
+endpoint implementation, `status-request`, and full request idempotency-window
+semantics remain outside the current conformance target. The current conformance
+layer is hand-authored in code for the implemented wedge rather than generated
+directly from the YAML.

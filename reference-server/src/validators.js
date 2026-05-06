@@ -202,6 +202,29 @@ const RETURN_CASE_STATUSES = new Set([
   'CANCELLED',
 ]);
 
+const TOM_RETURN_REASON_CODES = new Set([
+  'CANC',
+  'AC01',
+  'AC04',
+  'AM05',
+  'BE04',
+  'RC03',
+  'RR04',
+  'FRAD',
+  'TECH',
+  'NARR',
+]);
+
+const TOM_REVERSAL_REASON_CODES = new Set([
+  'DUPL',
+  'FRAD',
+  'TECH',
+  'CUST',
+  'UPAY',
+  'CANC',
+  'NARR',
+]);
+
 const STATS_DIRECTIONS = new Set([
   'OUTGOING',
   'INCOMING',
@@ -1867,5 +1890,203 @@ export function validateReturnCaseSearchQuery(query) {
   validateDateRange(errors, query.opened_from, query.opened_to, 'opened_from', 'opened_to');
   validateIntegerRangeField(errors, query.page_size, 'page_size', { min: 1, max: 200 });
   validateCursorField(errors, query.cursor, 'cursor');
+  return errors;
+}
+
+function validateTomAmountObject(errors, value, field) {
+  validateRequiredField(
+    errors,
+    isObject(value),
+    field,
+    `${field} is required and must be an object.`,
+  );
+  if (!isObject(value)) {
+    return;
+  }
+
+  if (typeof value.amount !== 'string' || value.amount.length === 0) {
+    pushError(errors, `${field}.amount`, `${field}.amount is required and must be a string.`);
+  } else if (value.amount.length > 30) {
+    pushError(errors, `${field}.amount`, `${field}.amount must be at most 30 characters.`);
+  } else if (!/^(0|[1-9]\d*)(\.\d+)?$/.test(value.amount)) {
+    pushError(errors, `${field}.amount`, `${field}.amount must be a decimal string.`);
+  }
+
+  if (typeof value.currency !== 'string' || value.currency.length === 0) {
+    pushError(
+      errors,
+      `${field}.currency`,
+      `${field}.currency is required and must be a string.`,
+    );
+  } else if (value.currency.length > 20) {
+    pushError(
+      errors,
+      `${field}.currency`,
+      `${field}.currency must be at most 20 characters.`,
+    );
+  }
+}
+
+function validateTomReasonObject(errors, value, field, allowedCodes) {
+  validateRequiredField(
+    errors,
+    isObject(value),
+    field,
+    `${field} is required and must be an object.`,
+  );
+  if (!isObject(value)) {
+    return;
+  }
+
+  if (!hasText(value.code)) {
+    pushError(errors, `${field}.code`, `${field}.code is required.`);
+  } else if (!allowedCodes.has(value.code)) {
+    pushError(
+      errors,
+      `${field}.code`,
+      `${field}.code must be one of: ${Array.from(allowedCodes).join(', ')}.`,
+    );
+  }
+
+  const additionalInformation = value.additional_information;
+  const isNarr = value.code === 'NARR';
+
+  if (additionalInformation === undefined || additionalInformation === null) {
+    if (isNarr) {
+      pushError(
+        errors,
+        `${field}.additional_information`,
+        `${field}.additional_information is required when code is NARR.`,
+      );
+    }
+    return;
+  }
+
+  if (!Array.isArray(additionalInformation)) {
+    pushError(
+      errors,
+      `${field}.additional_information`,
+      `${field}.additional_information must be an array of strings.`,
+    );
+    return;
+  }
+
+  if (additionalInformation.length < 1 || additionalInformation.length > 5) {
+    pushError(
+      errors,
+      `${field}.additional_information`,
+      `${field}.additional_information must contain between 1 and 5 entries.`,
+    );
+  }
+
+  additionalInformation.forEach((entry, index) => {
+    if (typeof entry !== 'string' || entry.length === 0) {
+      pushError(
+        errors,
+        `${field}.additional_information[${index}]`,
+        `${field}.additional_information[${index}] must be a non-empty string.`,
+      );
+      return;
+    }
+    if (entry.length > 105) {
+      pushError(
+        errors,
+        `${field}.additional_information[${index}]`,
+        `${field}.additional_information[${index}] must be at most 105 characters.`,
+      );
+    }
+  });
+}
+
+function validateTomOptionalString(errors, value, field, maxLength) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (typeof value !== 'string' || value.length === 0) {
+    pushError(errors, field, `${field} must be a non-empty string when provided.`);
+    return;
+  }
+  if (value.length > maxLength) {
+    pushError(errors, field, `${field} must be at most ${maxLength} characters.`);
+  }
+}
+
+function validateTomOptionalAmountObject(errors, value, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  validateTomAmountObject(errors, value, field);
+}
+
+function validateTomWebhookUrl(errors, value, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (typeof value !== 'string' || value.length === 0) {
+    pushError(errors, field, `${field} must be a non-empty string when provided.`);
+    return;
+  }
+
+  if (value.length > 500) {
+    pushError(errors, field, `${field} must be at most 500 characters.`);
+    return;
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      pushError(errors, field, `${field} must be an http or https URI.`);
+    }
+  } catch {
+    pushError(errors, field, `${field} must be a valid URI.`);
+  }
+}
+
+export function validateTomReturnRequest(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateTomReasonObject(
+    errors,
+    body.return_reason,
+    'return_reason',
+    TOM_RETURN_REASON_CODES,
+  );
+  validateTomAmountObject(errors, body.returned_amount, 'returned_amount');
+  validateTomOptionalAmountObject(errors, body.compensation_amount, 'compensation_amount');
+  validateTomOptionalString(errors, body.return_identification, 'return_identification', 35);
+  validateTomOptionalString(errors, body.instruction_for_creditor, 'instruction_for_creditor', 210);
+  if (body.webhook_url !== undefined && body.webhook_url !== null) {
+    pushError(
+      errors,
+      'webhook_url',
+      'webhook_url is only accepted on ReversalRequest.',
+    );
+  }
+  return errors;
+}
+
+export function validateTomReversalRequest(body) {
+  const errors = [];
+  validateRequiredField(errors, isObject(body), 'body', 'Request body must be a JSON object.');
+  if (errors.length) {
+    return errors;
+  }
+
+  validateTomReasonObject(
+    errors,
+    body.reversal_reason,
+    'reversal_reason',
+    TOM_REVERSAL_REASON_CODES,
+  );
+  validateTomAmountObject(errors, body.reversed_amount, 'reversed_amount');
+  validateTomOptionalAmountObject(errors, body.compensation_amount, 'compensation_amount');
+  validateTomOptionalString(errors, body.reversal_identification, 'reversal_identification', 35);
+  validateTomOptionalString(errors, body.request_narrative, 'request_narrative', 500);
+  validateTomWebhookUrl(errors, body.webhook_url, 'webhook_url');
   return errors;
 }

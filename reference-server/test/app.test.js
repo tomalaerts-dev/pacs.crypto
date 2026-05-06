@@ -4129,3 +4129,417 @@ test('return cases reject instructions that have not reached final settlement', 
 
   await app.close();
 });
+
+async function createFinalInstruction(app, endToEndId) {
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: endToEndId,
+      },
+    }),
+  });
+  assert.equal(createResponse.statusCode, 201);
+  const instruction = createResponse.json();
+  const agedTimestamp = new Date(Date.now() - 12000).toISOString();
+  const currentRecord = app.store.getInstruction(instruction.instruction_id);
+  app.store.saveInstruction({
+    ...currentRecord,
+    created_at: agedTimestamp,
+    updated_at: agedTimestamp,
+  });
+  await waitFor(() => {
+    const record = app.store.getInstruction(instruction.instruction_id);
+    assert.equal(record.status, 'FINAL');
+    return record;
+  });
+  return instruction;
+}
+
+test('Tom v1.2 /return materializes a real compensating instruction and Tom-origin return case', async () => {
+  const app = await buildApp();
+  const instruction = await createFinalInstruction(app, 'INV-TOM-RETURN-001');
+
+  const returnResponse = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_identification: 'RET-TOM-001',
+      return_reason: { code: 'AC04' },
+      returned_amount: { amount: '250000.00', currency: 'USD' },
+    },
+  });
+
+  assert.equal(returnResponse.statusCode, 202);
+  const body = returnResponse.json();
+  assert.deepEqual(Object.keys(body).sort(), [
+    'accepted_at',
+    'compensating_instruction_id',
+    'compensating_uetr',
+    'original_instruction_id',
+    'return_identification',
+    'status',
+  ]);
+  assertUuid(body.compensating_instruction_id);
+  assertUuid(body.compensating_uetr);
+  assert.equal(body.original_instruction_id, instruction.instruction_id);
+  assert.equal(body.return_identification, 'RET-TOM-001');
+  assert.equal(body.status, 'PENDING');
+  assertIsoDateTime(body.accepted_at);
+
+  const compensating = await app.inject({
+    method: 'GET',
+    url: `/instruction/${body.compensating_instruction_id}`,
+  });
+  assert.equal(compensating.statusCode, 200);
+  assert.equal(
+    compensating.json().instruction_id,
+    body.compensating_instruction_id,
+  );
+  assert.equal(
+    compensating.json().compensates_instruction_id,
+    instruction.instruction_id,
+  );
+
+  const list = await app.inject({
+    method: 'GET',
+    url: `/exceptions/returns?original_instruction_id=${instruction.instruction_id}`,
+  });
+  assert.equal(list.statusCode, 200);
+  assert.equal(list.json().total_matched, 1);
+  assert.equal(list.json().return_cases[0].return_status, 'APPROVED');
+  assert.equal(
+    list.json().return_cases[0].compensating_instruction_id,
+    body.compensating_instruction_id,
+  );
+  const returnCaseId = list.json().return_cases[0].return_case_id;
+
+  const detail = await app.inject({
+    method: 'GET',
+    url: `/exceptions/returns/${returnCaseId}`,
+  });
+  assert.equal(detail.statusCode, 200);
+  assert.equal(detail.json().exception_type, 'RETURN');
+  assert.equal(detail.json().origin, 'TOM');
+
+  await app.close();
+});
+
+test('Tom v1.2 /reverse records REQUESTED case and reversal-status returns it without compensating fields', async () => {
+  const app = await buildApp();
+  const instruction = await createFinalInstruction(app, 'INV-TOM-REVERSE-001');
+
+  const reverseResponse = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/reverse`,
+    payload: {
+      reversal_reason: { code: 'DUPL' },
+      reversed_amount: { amount: '250000.00', currency: 'USD' },
+      webhook_url: 'https://example.com/reversal-webhook',
+    },
+  });
+
+  assert.equal(reverseResponse.statusCode, 202);
+  const body = reverseResponse.json();
+  assert.deepEqual(Object.keys(body).sort(), [
+    'original_instruction_id',
+    'receiver_response_expected_by',
+    'requested_at',
+    'reversal_identification',
+    'reversal_request_id',
+    'status',
+  ]);
+  assertUuid(body.reversal_request_id);
+  assert.equal(body.original_instruction_id, instruction.instruction_id);
+  assert.equal(body.status, 'REQUESTED');
+  assert.ok(typeof body.reversal_identification === 'string' && body.reversal_identification.length > 0);
+  assertIsoDateTime(body.requested_at);
+  assertIsoDateTime(body.receiver_response_expected_by);
+  assert.equal(body.compensating_instruction_id, undefined);
+
+  const statusResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${instruction.instruction_id}/reversal-status`,
+  });
+  assert.equal(statusResponse.statusCode, 200);
+  const status = statusResponse.json();
+  assert.deepEqual(Object.keys(status).sort(), [
+    'original_instruction_id',
+    'requested_at',
+    'reversal_request_id',
+    'status',
+  ]);
+  assert.equal(status.status, 'REQUESTED');
+  assert.equal(status.original_instruction_id, instruction.instruction_id);
+  assert.equal(status.compensating_instruction_id, undefined);
+  assert.equal(status.compensating_instruction_status, undefined);
+
+  await app.close();
+});
+
+test('Tom v1.2 reversal cases are excluded from /exceptions/returns list and detail', async () => {
+  const app = await buildApp();
+  const instruction = await createFinalInstruction(app, 'INV-TOM-REVERSE-EXCL-001');
+
+  const reverseResponse = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/reverse`,
+    payload: {
+      reversal_reason: { code: 'CUST' },
+      reversed_amount: { amount: '250000.00', currency: 'USD' },
+    },
+  });
+  assert.equal(reverseResponse.statusCode, 202);
+  const reversalRequestId = reverseResponse.json().reversal_request_id;
+
+  const listResponse = await app.inject({
+    method: 'GET',
+    url: `/exceptions/returns?original_instruction_id=${instruction.instruction_id}`,
+  });
+  assert.equal(listResponse.statusCode, 200);
+  assert.equal(listResponse.json().total_matched, 0);
+
+  const detailResponse = await app.inject({
+    method: 'GET',
+    url: `/exceptions/returns/${reversalRequestId}`,
+  });
+  assert.equal(detailResponse.statusCode, 404);
+
+  await app.close();
+});
+
+test('Tom v1.2 routes return 404 INSTRUCTION_NOT_FOUND for unknown instruction', async () => {
+  const app = await buildApp();
+  const missingId = '00000000-0000-4000-8000-000000000000';
+
+  const returnResponse = await app.inject({
+    method: 'POST',
+    url: `/instruction/${missingId}/return`,
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(returnResponse.statusCode, 404);
+  assert.equal(returnResponse.json().code, 'INSTRUCTION_NOT_FOUND');
+
+  const reverseResponse = await app.inject({
+    method: 'POST',
+    url: `/instruction/${missingId}/reverse`,
+    payload: {
+      reversal_reason: { code: 'DUPL' },
+      reversed_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(reverseResponse.statusCode, 404);
+  assert.equal(reverseResponse.json().code, 'INSTRUCTION_NOT_FOUND');
+
+  const reversalStatusResponse = await app.inject({
+    method: 'GET',
+    url: `/instruction/${missingId}/reversal-status`,
+  });
+  assert.equal(reversalStatusResponse.statusCode, 404);
+  assert.equal(reversalStatusResponse.json().code, 'INSTRUCTION_NOT_FOUND');
+
+  await app.close();
+});
+
+test('Tom v1.2 routes reject invalid path UUID and malformed body', async () => {
+  const app = await buildApp();
+
+  const invalidPath = await app.inject({
+    method: 'POST',
+    url: '/instruction/not-a-uuid/return',
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(invalidPath.statusCode, 400);
+  assert.equal(invalidPath.json().code, 'INVALID_REQUEST');
+
+  const reversalInvalidPath = await app.inject({
+    method: 'GET',
+    url: '/instruction/not-a-uuid/reversal-status',
+  });
+  assert.equal(reversalInvalidPath.statusCode, 400);
+  assert.equal(reversalInvalidPath.json().code, 'INVALID_REQUEST');
+
+  const instruction = await createFinalInstruction(app, 'INV-TOM-VAL-001');
+
+  const malformedAmount = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: {
+        amount: 'not-a-number',
+        currency: 'USD',
+      },
+    },
+  });
+  assert.equal(malformedAmount.statusCode, 400);
+  assert.equal(malformedAmount.json().code, 'INVALID_REQUEST');
+
+  const longCurrency = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: {
+        amount: '1.00',
+        currency: 'X'.repeat(21),
+      },
+    },
+  });
+  assert.equal(longCurrency.statusCode, 400);
+
+  const returnWebhook = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+      webhook_url: 'https://example.com/not-allowed-on-return',
+    },
+  });
+  assert.equal(returnWebhook.statusCode, 400);
+  assert.equal(returnWebhook.json().code, 'INVALID_REQUEST');
+  assert.ok(
+    returnWebhook.json().details.some((detail) => detail.field === 'webhook_url'),
+  );
+
+  const narrMissingInfo = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_reason: { code: 'NARR' },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(narrMissingInfo.statusCode, 400);
+
+  const narrTooMany = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_reason: {
+        code: 'NARR',
+        additional_information: ['a', 'b', 'c', 'd', 'e', 'f'],
+      },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(narrTooMany.statusCode, 400);
+
+  const narrTooLong = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/reverse`,
+    payload: {
+      reversal_reason: {
+        code: 'NARR',
+        additional_information: ['x'.repeat(106)],
+      },
+      reversed_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(narrTooLong.statusCode, 400);
+
+  await app.close();
+});
+
+test('Tom v1.2 /return rejects non-FINAL original instructions', async () => {
+  const app = await buildApp();
+
+  const createInstructionResponse = await app.inject({
+    method: 'POST',
+    url: '/instruction',
+    payload: buildInstructionPayload({
+      payment_identification: {
+        end_to_end_identification: 'INV-TOM-NOT-FINAL-001',
+      },
+    }),
+  });
+  assert.equal(createInstructionResponse.statusCode, 201);
+
+  const returnResponse = await app.inject({
+    method: 'POST',
+    url: `/instruction/${createInstructionResponse.json().instruction_id}/return`,
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(returnResponse.statusCode, 409);
+  assert.equal(returnResponse.json().code, 'INSTRUCTION_NOT_FINAL');
+
+  await app.close();
+});
+
+test('Tom v1.2 /return rejects duplicate active Tom-origin RETURN with ALREADY_RETURNED', async () => {
+  const app = await buildApp();
+  const instruction = await createFinalInstruction(app, 'INV-TOM-DUP-RETURN-001');
+
+  const first = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(first.statusCode, 202);
+
+  const second = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/return`,
+    payload: {
+      return_reason: { code: 'AC04' },
+      returned_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(second.statusCode, 409);
+  assert.equal(second.json().code, 'ALREADY_RETURNED');
+
+  const reverseAttempt = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/reverse`,
+    payload: {
+      reversal_reason: { code: 'DUPL' },
+      reversed_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(reverseAttempt.statusCode, 409);
+  assert.equal(reverseAttempt.json().code, 'ALREADY_RETURNED');
+
+  await app.close();
+});
+
+test('Tom v1.2 /reverse rejects duplicate active reversal with ALREADY_RETURNED', async () => {
+  const app = await buildApp();
+  const instruction = await createFinalInstruction(app, 'INV-TOM-DUP-REVERSAL-001');
+
+  const first = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/reverse`,
+    payload: {
+      reversal_reason: { code: 'DUPL' },
+      reversed_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(first.statusCode, 202);
+
+  const second = await app.inject({
+    method: 'POST',
+    url: `/instruction/${instruction.instruction_id}/reverse`,
+    payload: {
+      reversal_reason: { code: 'DUPL' },
+      reversed_amount: { amount: '1.00', currency: 'USD' },
+    },
+  });
+  assert.equal(second.statusCode, 409);
+  assert.equal(second.json().code, 'ALREADY_RETURNED');
+
+  await app.close();
+});
