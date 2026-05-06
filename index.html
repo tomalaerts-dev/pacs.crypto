@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>pacs.crypto Demo Console</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1f2630;
+    --border: #30363d;
+    --border-strong: #4b5563;
+    --text: #e6edf3;
+    --muted: #9aa6b2;
+    --accent: #58a6ff;
+    --accent-strong: #79b8ff;
+    --good: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+    --focus: #f0f6fc;
+    --radius: 10px;
+    --gap: 1rem;
+    --maxw: 1080px;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --surface-2: #eef2f6;
+      --border: #d0d7de;
+      --border-strong: #8c959f;
+      --text: #1f2328;
+      --muted: #57606a;
+      --accent: #0550ae;
+      --accent-strong: #0a3069;
+      --good: #1a7f37;
+      --warn: #9a6700;
+      --bad: #b62324;
+      --focus: #0550ae;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.55;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  code, kbd, pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.92em;
+  }
+  code { background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 4px; }
+
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--surface);
+    color: var(--text);
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    z-index: 100;
+  }
+  .skip:focus { left: 0.75rem; top: 0.75rem; }
+
+  .wrap {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  header.site {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  header.site .wrap { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+
+  h1 { font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.05rem); margin: 0 0 0.5rem; line-height: 1.2; }
+  h2 { font-size: clamp(1.15rem, 0.95rem + 0.9vw, 1.4rem); margin: 0 0 0.6rem; line-height: 1.25; }
+  h3 { font-size: 1rem; margin: 0 0 0.35rem; line-height: 1.3; }
+  p { margin: 0.5rem 0; color: var(--text); }
+  .muted { color: var(--muted); }
+
+  section.block { margin-top: 2rem; }
+  section.block > p { max-width: 70ch; }
+
+  .grid {
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 640px) {
+    .grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  }
+  @media (min-width: 880px) {
+    .grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .card h3 { display: flex; align-items: baseline; gap: 0.5rem; }
+  .card .step {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .card ul { margin: 0.5rem 0 0; padding-left: 1.1rem; }
+  .card ul li { margin: 0.2rem 0; }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.85rem;
+    min-height: 28px;
+  }
+  .pill.flow {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+
+  .lifecycle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lifecycle li {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.3rem 0.65rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+  .lifecycle .arrow { background: transparent; border: 0; padding: 0; color: var(--muted); }
+
+  .button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .btn, a.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn:hover, a.btn:hover { border-color: var(--accent); text-decoration: none; }
+  .btn[aria-busy="true"] { opacity: 0.7; cursor: progress; }
+
+  .status-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+  }
+  .status-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.25rem 0 0;
+  }
+  .dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset;
+  }
+  .dot.idle    { background: var(--muted); }
+  .dot.checking { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  .dot.ok      { background: var(--good); }
+  .dot.warn    { background: var(--warn); }
+  .dot.fail    { background: var(--bad); }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dot.checking { animation: none; }
+  }
+  .status-detail {
+    margin-top: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .status-detail code { color: var(--text); }
+  .probe-error {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+  }
+  .status-flows {
+    margin-top: 0.6rem;
+  }
+
+  details.disclosure {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 0.4rem 0.9rem;
+  }
+  details.disclosure + details.disclosure { margin-top: 0.6rem; }
+  details.disclosure summary {
+    cursor: pointer;
+    padding: 0.5rem 0;
+    font-weight: 600;
+    list-style: none;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  details.disclosure summary::-webkit-details-marker { display: none; }
+  details.disclosure summary::before {
+    content: "›";
+    display: inline-block;
+    transition: transform 120ms ease;
+    color: var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    details.disclosure summary::before { transition: none; }
+  }
+  details.disclosure[open] summary::before { transform: rotate(90deg); }
+  details.disclosure ul { margin: 0.4rem 0 0.7rem; padding-left: 1.2rem; }
+
+  footer.site {
+    margin-top: 3rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  footer.site .wrap { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+
+  .lede {
+    color: var(--muted);
+    max-width: 70ch;
+  }
+  .eyebrow {
+    margin: 0 0 0.25rem;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .section-grid { margin-top: 1.25rem; }
+  .server-disclosure { margin-top: 0.9rem; }
+  .command-block {
+    margin: 0.4rem 0 0.8rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.7rem 0.9rem;
+    overflow-x: auto;
+  }
+  .narrow { max-width: 70ch; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+
+<header class="site">
+  <div class="wrap">
+    <p class="muted eyebrow">pacs.crypto</p>
+    <h1>pacs.crypto Demo Console</h1>
+    <p class="lede">
+      A reviewer-facing index for the local <code>pacs.crypto</code> wedge: bank → sending VASP →
+      EVM USDC transfer → receiving VASP → finality and reporting evidence. Everything below
+      links to local simulators, OpenAPI specs, or design docs in this repository.
+    </p>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+
+  <section class="block" aria-labelledby="lifecycle-heading">
+    <h2 id="lifecycle-heading">End-to-end lifecycle</h2>
+    <p class="narrow">
+      The current wedge is intentionally narrow: one asset (<code>USDC</code>), one chain
+      family (<code>EVM</code>), one custody model (<code>FULL_CUSTODY</code>), one corridor
+      (bank → sending VASP → on-chain transfer → receiving VASP).
+    </p>
+    <ol class="lifecycle">
+      <li>PENDING</li><li class="arrow" aria-hidden="true">→</li>
+      <li>BROADCAST</li><li class="arrow" aria-hidden="true">→</li>
+      <li>CONFIRMING</li><li class="arrow" aria-hidden="true">→</li>
+      <li>FINAL</li>
+    </ol>
+
+    <div class="grid cols-3 section-grid">
+      <article class="card">
+        <h3><span class="step">Step 1</span> Travel Rule</h3>
+        <p class="muted">Originator and beneficiary VASP exchange compliance data before execution.</p>
+        <ul>
+          <li><a href="travel-rule-simulator-v3.html">Travel Rule simulator (v3)</a></li>
+          <li><a href="travel-rule-api-v3.yaml">OpenAPI: travel-rule-api-v3.yaml</a></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3><span class="step">Step 2</span> Quote</h3>
+        <p class="muted">Pre-execution price, fee, and slippage discovery from the chain adapter.</p>
+        <ul>
+          <li><a href="instruction-simulator-v1.html">Instruction simulator (v1)</a></li>
+          <li><a href="docs/chain-adapter.md">Chain adapter contract</a></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3><span class="step">Step 3</span> Instruction</h3>
+        <p class="muted">Submission and lifecycle progression backed by the EVM USDC adapter.</p>
+        <ul>
+          <li><a href="instruction-simulator-v1.html">Instruction simulator (v1)</a></li>
+          <li><a href="instruction-api-v1.yaml">OpenAPI: instruction-api-v1.yaml</a></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3><span class="step">Step 4</span> Finality</h3>
+        <p class="muted">camt.025-like finality receipt with tx hash and confirmation depth.</p>
+        <ul>
+          <li><a href="docs/spec-hardening.md">Spec hardening decisions</a></li>
+          <li><a href="reference-server/README.md">Reference server endpoints</a></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3><span class="step">Step 5</span> Reporting</h3>
+        <p class="muted">camt.054 notifications, camt.052 intraday, camt.053 statements.</p>
+        <ul>
+          <li><a href="camt-simulator-v1.html">camt simulator (v1)</a></li>
+          <li><a href="camt-crypto-reporting-v1.yaml">OpenAPI: camt-crypto-reporting-v1.yaml</a></li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h3><span class="step">Walkthrough</span></h3>
+        <p class="muted">Recorded happy-path artifact pack from a single canonical run.</p>
+        <ul>
+          <li><a href="docs/demo-bank-to-vasp.md">Bank-to-VASP demo guide</a></li>
+          <li><a href="docs/demo-samples/happy-path/README.md">Happy-path sample pack</a></li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="spec-heading">
+    <h2 id="spec-heading">Spec layers</h2>
+    <p class="narrow">
+      Three OpenAPI documents form the current specification surface. Each ships with a
+      standalone HTML simulator that runs in <em>Demo</em> mode out of the box and in
+      <em>Live API</em> mode against the local reference server.
+    </p>
+    <div class="grid cols-3">
+      <article class="card">
+        <h3>Travel Rule v3</h3>
+        <p class="muted">FATF Travel Rule submission, callback, search, and stats.</p>
+        <div class="button-row">
+          <a class="btn" href="travel-rule-simulator-v3.html">Open simulator</a>
+          <a class="btn" href="travel-rule-api-v3.yaml">View OpenAPI</a>
+        </div>
+      </article>
+      <article class="card">
+        <h3>Instruction v1</h3>
+        <p class="muted">Quote, submission, status, and finality reads.</p>
+        <div class="button-row">
+          <a class="btn" href="instruction-simulator-v1.html">Open simulator</a>
+          <a class="btn" href="instruction-api-v1.yaml">View OpenAPI</a>
+        </div>
+      </article>
+      <article class="card">
+        <h3>camt crypto reporting v1</h3>
+        <p class="muted">camt.054 / camt.052 / camt.053 reporting analogues.</p>
+        <div class="button-row">
+          <a class="btn" href="camt-simulator-v1.html">Open simulator</a>
+          <a class="btn" href="camt-crypto-reporting-v1.yaml">View OpenAPI</a>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="server-heading">
+    <h2 id="server-heading">Local reference server</h2>
+    <p class="narrow">
+      A live status probe of <code id="server-url">http://127.0.0.1:5050/health</code>.
+      Nothing on this page depends on the server being up — the simulators above also work
+      in their bundled <em>Demo</em> mode.
+    </p>
+
+    <div class="status-panel">
+      <div class="status-line">
+        <span id="server-dot" class="dot idle" aria-hidden="true"></span>
+        <strong id="server-state" aria-live="polite">Idle</strong>
+        <button id="server-retry" class="btn" type="button" aria-controls="server-detail">
+          Check server
+        </button>
+        <a class="btn" href="reference-server/README.md">How to start it</a>
+      </div>
+      <p id="server-detail" class="status-detail" aria-live="polite">
+        Click <em>Check server</em> to probe the local reference server.
+      </p>
+      <div id="server-flows" class="status-flows pill-row" hidden></div>
+    </div>
+
+    <details class="disclosure server-disclosure">
+      <summary>Start command</summary>
+      <p class="muted">
+        From the repository root:
+      </p>
+      <pre class="command-block"><code>cd reference-server
+npm ci
+npm start</code></pre>
+      <p class="muted">
+        Defaults to <code>http://127.0.0.1:5050</code>. <code>npm ci</code> uses the tracked
+        lockfile for a clean local install; see
+        <a href="reference-server/README.md">reference-server/README.md</a> for the full set of
+        environment overrides, including the optional Sepolia + USDC broadcast path.
+      </p>
+    </details>
+  </section>
+
+  <section class="block" aria-labelledby="reviewer-heading">
+    <h2 id="reviewer-heading">Reviewer documentation</h2>
+    <p class="narrow">
+      Background reading for what is in the wedge today and what is not.
+    </p>
+
+    <div class="grid cols-2">
+      <details class="disclosure" open>
+        <summary>Direction and scope</summary>
+        <ul>
+          <li><a href="docs/roadmap.md">Roadmap</a> — post-wedge direction and locked defaults.</li>
+          <li><a href="docs/backlog.md">Backlog</a> — prioritized work queue.</li>
+          <li><a href="docs/architecture-note.md">Architecture note</a> — why there are two layers.</li>
+          <li><a href="docs/demo-bank-to-vasp.md">Bank-to-VASP demo guide</a> — reviewer walkthrough.</li>
+        </ul>
+      </details>
+
+      <details class="disclosure" open>
+        <summary>Conformance and semantics</summary>
+        <ul>
+          <li><a href="docs/conformance.md">Conformance matrix</a> — server vs. spec coverage.</li>
+          <li><a href="docs/spec-hardening.md">Spec hardening decisions</a> — explicit lifecycle rules.</li>
+          <li><a href="docs/chain-adapter.md">Chain adapter contract</a> — the seam between API and chain.</li>
+          <li><a href="docs/webhook-delivery.md">Webhook delivery model</a> — at-least-once best-effort.</li>
+        </ul>
+      </details>
+
+      <details class="disclosure">
+        <summary>Sample evidence</summary>
+        <ul>
+          <li><a href="docs/demo-samples/happy-path/README.md">Happy-path sample pack</a> — canonical request/response set from one run.</li>
+        </ul>
+      </details>
+
+      <details class="disclosure">
+        <summary>Reference server</summary>
+        <ul>
+          <li><a href="reference-server/README.md">reference-server/README.md</a> — endpoints, run instructions, Sepolia workflow.</li>
+        </ul>
+      </details>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <p>
+      pacs.crypto is offered as a community proposal. This page is a static index and links
+      only to local files in this repository.
+    </p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  var HEALTH_URL = "http://127.0.0.1:5050/health";
+  var btn = document.getElementById("server-retry");
+  var dot = document.getElementById("server-dot");
+  var state = document.getElementById("server-state");
+  var detail = document.getElementById("server-detail");
+  var flows = document.getElementById("server-flows");
+
+  function setDot(cls) {
+    dot.className = "dot " + cls;
+  }
+
+  function renderFlows(list) {
+    flows.textContent = "";
+    if (!Array.isArray(list) || list.length === 0) {
+      flows.hidden = true;
+      return;
+    }
+    list.forEach(function (name) {
+      var span = document.createElement("span");
+      span.className = "pill flow";
+      span.textContent = String(name);
+      flows.appendChild(span);
+    });
+    flows.hidden = false;
+  }
+
+  function setState(label, message, dotCls) {
+    state.textContent = label;
+    detail.textContent = message;
+    setDot(dotCls);
+  }
+
+  function probe() {
+    btn.setAttribute("aria-busy", "true");
+    btn.disabled = true;
+    setState("Checking…", "Probing " + HEALTH_URL + " …", "checking");
+    flows.hidden = true;
+    flows.textContent = "";
+
+    var controller = ("AbortController" in window) ? new AbortController() : null;
+    var timeoutId = setTimeout(function () {
+      if (controller) controller.abort();
+    }, 4000);
+
+    var opts = { method: "GET", cache: "no-store", mode: "cors" };
+    if (controller) opts.signal = controller.signal;
+
+    fetch(HEALTH_URL, opts)
+      .then(function (response) {
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          setState(
+            "Unexpected response",
+            "Server replied with HTTP " + response.status + " from " + HEALTH_URL + ".",
+            "warn"
+          );
+          return null;
+        }
+        return response.json().then(function (body) { return body; }, function () { return {}; });
+      })
+      .then(function (body) {
+        if (!body) return;
+        var service = body && body.service ? String(body.service) : "reference server";
+        var status = body && body.status ? String(body.status) : "ok";
+        setState(
+          "Reachable",
+          service + " reports status: " + status + ".",
+          "ok"
+        );
+        if (body && Array.isArray(body.supported_flows)) {
+          renderFlows(body.supported_flows);
+        }
+      })
+      .catch(function (err) {
+        clearTimeout(timeoutId);
+        var hint =
+          "Not reachable from this page. The server may be stopped, " +
+          "running on a different port, or blocking this origin (file://). " +
+          "See ‘How to start it’ below.";
+        setState("Not reachable from this page", hint, "fail");
+        // Surface the error string for debuggers without breaking the layout.
+        var raw = (err && err.message) ? String(err.message) : String(err);
+        var note = document.createElement("span");
+        note.className = "muted probe-error";
+        note.textContent = "Probe error: " + raw;
+        detail.appendChild(note);
+      })
+      .then(function () {
+        btn.removeAttribute("aria-busy");
+        btn.disabled = false;
+      });
+  }
+
+  btn.addEventListener("click", probe);
+})();
+</script>
+</body>
+</html>
