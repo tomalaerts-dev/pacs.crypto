@@ -80,6 +80,7 @@ The active forward plan is now documented in:
 - [`docs/chain-adapter.md`](docs/chain-adapter.md) — current adapter contract and swap-in boundary for later testnet work
 - [`docs/webhook-delivery.md`](docs/webhook-delivery.md) — delivery guarantees, retry model, and dead-letter handling
 - [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md) — reviewer walkthrough, sequence diagram, and live demo script
+- [`docs/visual-flow-map.md`](docs/visual-flow-map.md) — visual lifecycle map for Travel Rule, instruction, status, returns/reversals, and draft investigation flows
 - [`docs/architecture-note.md`](docs/architecture-note.md) — what changed architecturally once the proposal became executable
 - [`docs/demo-samples/happy-path/`](docs/demo-samples/happy-path/) — canonical happy-path payload pack
 - [`docs/exception-family.md`](docs/exception-family.md) — implemented first-slice exception-family design and runtime boundaries

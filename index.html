@@ -287,6 +287,45 @@
     text-transform: uppercase;
   }
   .section-grid { margin-top: 1.25rem; }
+
+  .visual-map {
+    margin-top: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .visual-map svg {
+    display: block;
+    min-width: 920px;
+    width: 100%;
+    height: auto;
+  }
+  .flow-node rect { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1.5; }
+  .flow-node text { fill: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .flow-node .sub { fill: var(--muted); font-size: 10px; }
+  .flow-node.implemented rect { stroke: var(--good); }
+  .flow-node.partial rect { stroke: var(--warn); }
+  .flow-node.draft rect { stroke: var(--bad); stroke-dasharray: 5 4; }
+  .flow-line { fill: none; stroke: var(--border-strong); stroke-width: 2; marker-end: url(#arrow); }
+  .flow-line.dashed { stroke-dasharray: 6 5; }
+  .flow-line.return { stroke: var(--warn); }
+  .flow-line.draft { stroke: var(--bad); stroke-dasharray: 6 5; }
+  .flow-label { fill: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .legend i { width: 0.8rem; height: 0.8rem; border-radius: 50%; display: inline-block; }
+  .legend .implemented { background: var(--good); }
+  .legend .partial { background: var(--warn); }
+  .legend .draft { background: var(--bad); }
   .server-disclosure { margin-top: 0.9rem; }
   .command-block {
     margin: 0.4rem 0 0.8rem;
@@ -387,6 +426,116 @@
     </div>
   </section>
 
+  <section class="block" aria-labelledby="visual-map-heading">
+    <h2 id="visual-map-heading">Visual flow map</h2>
+    <p class="narrow">
+      A reviewer-facing map for Tom's design questions: what is implemented now, where
+      <code>pacs.004</code>, <code>pacs.007</code>, and <code>camt.056</code> fit, and where
+      richer investigation flows stay draft until the spec design matures.
+    </p>
+
+    <div class="visual-map" role="img" aria-label="pacs.crypto lifecycle from Travel Rule through instruction, chain finality, reporting, return, reversal, cancellation, and draft investigation flows">
+      <svg viewBox="0 0 1080 520" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+          </marker>
+        </defs>
+
+        <path class="flow-line" d="M 165 80 H 275"></path>
+        <path class="flow-line" d="M 425 80 H 535"></path>
+        <path class="flow-line" d="M 685 80 H 795"></path>
+        <path class="flow-line" d="M 870 120 V 185"></path>
+        <path class="flow-line" d="M 795 225 H 685"></path>
+        <path class="flow-line" d="M 535 225 H 425"></path>
+        <path class="flow-line" d="M 275 225 H 165"></path>
+
+        <path class="flow-line return" d="M 350 265 V 335 H 520"></path>
+        <path class="flow-line return" d="M 670 375 H 795"></path>
+        <path class="flow-line dashed" d="M 610 120 V 335 H 520"></path>
+        <path class="flow-line draft" d="M 870 265 V 335 H 795"></path>
+
+        <g class="flow-node implemented" transform="translate(40 40)">
+          <rect width="125" height="80" rx="10"></rect>
+          <text x="16" y="30">Travel Rule</text>
+          <text class="sub" x="16" y="50">pacs.008 data</text>
+        </g>
+        <g class="flow-node implemented" transform="translate(275 40)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Quote</text>
+          <text class="sub" x="16" y="50">fees + slippage</text>
+        </g>
+        <g class="flow-node implemented" transform="translate(535 40)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Instruction</text>
+          <text class="sub" x="16" y="50">linked record</text>
+        </g>
+        <g class="flow-node implemented" transform="translate(795 40)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Chain lifecycle</text>
+          <text class="sub" x="16" y="50">PENDING → FINAL</text>
+        </g>
+
+        <g class="flow-node implemented" transform="translate(795 185)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Finality</text>
+          <text class="sub" x="16" y="50">camt.025-like</text>
+        </g>
+        <g class="flow-node implemented" transform="translate(535 185)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Status reads</text>
+          <text class="sub" x="16" y="50">GET /instruction</text>
+        </g>
+        <g class="flow-node implemented" transform="translate(275 185)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Reporting</text>
+          <text class="sub" x="16" y="50">camt.054/052/053</text>
+        </g>
+        <g class="flow-node implemented" transform="translate(40 185)">
+          <rect width="125" height="80" rx="10"></rect>
+          <text x="16" y="30">Evidence pack</text>
+          <text class="sub" x="16" y="50">reviewer demo</text>
+        </g>
+
+        <g class="flow-node implemented" transform="translate(520 335)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Return case</text>
+          <text class="sub" x="16" y="50">pacs.004</text>
+        </g>
+        <g class="flow-node implemented" transform="translate(795 335)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Reverse path</text>
+          <text class="sub" x="16" y="50">pacs.007</text>
+        </g>
+        <g class="flow-node partial" transform="translate(275 335)">
+          <rect width="150" height="80" rx="10"></rect>
+          <text x="16" y="30">Cancel</text>
+          <text class="sub" x="16" y="50">camt.056 window</text>
+        </g>
+        <g class="flow-node draft" transform="translate(795 430)">
+          <rect width="190" height="70" rx="10"></rect>
+          <text x="16" y="28">Investigation family</text>
+          <text class="sub" x="16" y="48">camt.026/027/087 TBD</text>
+        </g>
+
+        <text class="flow-label" x="425" y="354">post-settlement remediation</text>
+        <text class="flow-label" x="618" y="326">pre-broadcast only</text>
+        <text class="flow-label" x="895" y="316">draft input</text>
+      </svg>
+    </div>
+
+    <div class="legend" aria-label="Flow map legend">
+      <span><i class="implemented"></i>Implemented reference-server or demo surface</span>
+      <span><i class="partial"></i>Limited to a narrow lifecycle window</span>
+      <span><i class="draft"></i>Useful draft machinery, not locked into the spec</span>
+    </div>
+
+    <div class="button-row">
+      <a class="btn" href="docs/visual-flow-map.md">Open visual flow map note</a>
+      <a class="btn" href="docs/exception-family.md">Review exception-family boundary</a>
+    </div>
+  </section>
+
   <section class="block" aria-labelledby="spec-heading">
     <h2 id="spec-heading">Spec layers</h2>
     <p class="narrow">
@@ -476,6 +625,7 @@ npm start</code></pre>
           <li><a href="docs/backlog.md">Backlog</a> — prioritized work queue.</li>
           <li><a href="docs/architecture-note.md">Architecture note</a> — why there are two layers.</li>
           <li><a href="docs/demo-bank-to-vasp.md">Bank-to-VASP demo guide</a> — reviewer walkthrough.</li>
+          <li><a href="docs/visual-flow-map.md">Visual flow map</a> — lifecycle, return/reversal, and investigation boundaries.</li>
         </ul>
       </details>
 

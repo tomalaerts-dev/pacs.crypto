@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>pacs.crypto visual reference — review showcase</title>
+<style>
+  :root {
+    --bg: #07101f;
+    --bg-2: #0a172b;
+    --panel: #0e1d36;
+    --panel-2: #122443;
+    --border: #1f3252;
+    --border-soft: #18294a;
+    --text: #e6edf6;
+    --muted: #93a6c2;
+    --dim: #6c7f9a;
+    --cyan: #5ad3ff;
+    --cyan-soft: rgba(90, 211, 255, 0.14);
+    --green: #5ee6a8;
+    --green-soft: rgba(94, 230, 168, 0.14);
+    --amber: #f5c466;
+    --amber-soft: rgba(245, 196, 102, 0.14);
+    --rose: #ff8aa8;
+    --rose-soft: rgba(255, 138, 168, 0.14);
+    --focus: #79e7ff;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --maxw: 1080px;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background:
+      radial-gradient(1100px 600px at 80% -10%, rgba(90, 211, 255, 0.08), transparent 60%),
+      radial-gradient(800px 500px at -10% 30%, rgba(94, 230, 168, 0.05), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(90, 211, 255, 0.25);
+    transition: border-color 120ms ease, color 120ms ease;
+  }
+  a:hover { border-bottom-color: var(--cyan); }
+  a:focus-visible, button:focus-visible, summary:focus-visible, video:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  code, kbd, pre, .mono { font-family: var(--mono); font-size: 0.92em; }
+  code {
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 0.08em 0.4em;
+    border-radius: 4px;
+    border: 1px solid var(--border-soft);
+  }
+
+  .wrap {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 1.25rem 1.25rem 4rem;
+  }
+
+  /* --- header --- */
+  header.site {
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(18, 36, 67, 0.5), rgba(10, 23, 43, 0.0));
+  }
+  header.site .wrap {
+    padding-top: 2.4rem;
+    padding-bottom: 2.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--cyan);
+  }
+  h1 {
+    font-size: clamp(1.7rem, 1.1rem + 2.4vw, 2.4rem);
+    line-height: 1.15;
+    margin: 0;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  h1 .accent { color: var(--cyan); }
+  .lede {
+    color: var(--muted);
+    max-width: 64ch;
+    margin: 0;
+    font-size: 1.02rem;
+  }
+  .pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.25rem;
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--panel);
+  }
+  .pill.cyan  { color: var(--cyan);  border-color: rgba(90,211,255,0.35);  background: var(--cyan-soft); }
+  .pill.green { color: var(--green); border-color: rgba(94,230,168,0.35); background: var(--green-soft); }
+  .pill.amber { color: var(--amber); border-color: rgba(245,196,102,0.4);  background: var(--amber-soft); }
+  .pill.rose  { color: var(--rose);  border-color: rgba(255,138,168,0.4);  background: var(--rose-soft); }
+
+  /* --- sections --- */
+  section { margin-top: 3rem; }
+  section > h2 {
+    font-size: clamp(1.15rem, 0.95rem + 0.8vw, 1.35rem);
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.005em;
+    font-weight: 600;
+  }
+  section > .section-lede {
+    color: var(--muted);
+    margin: 0 0 1.2rem;
+    max-width: 70ch;
+  }
+  .section-mark {
+    font-family: var(--mono);
+    font-size: 0.74rem;
+    color: var(--dim);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 0.4rem;
+  }
+
+  /* --- video --- */
+  .video-card {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset, 0 20px 60px -30px rgba(0,0,0,0.6);
+  }
+  .video-card video {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    background: #000;
+    border: 1px solid var(--border-soft);
+  }
+  .video-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.2rem;
+    margin-top: 0.85rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.82rem;
+  }
+  .video-meta strong { color: var(--text); font-weight: 500; }
+
+  details.alt-video {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+    padding: 0;
+    overflow: hidden;
+  }
+  details.alt-video > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.95rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: var(--text);
+  }
+  details.alt-video > summary::-webkit-details-marker { display: none; }
+  details.alt-video > summary::after {
+    content: "▸";
+    margin-left: auto;
+    color: var(--dim);
+    transition: transform 150ms ease;
+  }
+  details.alt-video[open] > summary::after { transform: rotate(90deg); color: var(--cyan); }
+  details.alt-video .alt-body {
+    padding: 0 1.1rem 1.1rem;
+    border-top: 1px solid var(--border-soft);
+  }
+  details.alt-video video {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: 1rem;
+    border-radius: var(--radius);
+    background: #000;
+    border: 1px solid var(--border-soft);
+  }
+
+  /* --- lifecycle map --- */
+  .lifecycle {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+    padding: 1.1rem;
+  }
+  .lifecycle ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.6rem;
+    counter-reset: step;
+  }
+  .lifecycle li {
+    position: relative;
+    counter-increment: step;
+    background: var(--bg-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 0.75rem 0.85rem 0.75rem 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-height: 84px;
+  }
+  .lifecycle li .step-num {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+  .lifecycle li .step-num::before {
+    content: counter(step, decimal-leading-zero);
+    margin-right: 0.4em;
+    color: var(--cyan);
+  }
+  .lifecycle li .step-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+    line-height: 1.25;
+  }
+  .lifecycle li .step-note {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-family: var(--mono);
+  }
+  .lifecycle li .step-status {
+    margin-top: auto;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .lifecycle li.s-impl   .step-status { color: var(--green); }
+  .lifecycle li.s-part   .step-status { color: var(--amber); }
+  .lifecycle li.s-draft  .step-status { color: var(--rose); }
+  .lifecycle li.s-impl   { border-left: 2px solid var(--green); }
+  .lifecycle li.s-part   { border-left: 2px solid var(--amber); }
+  .lifecycle li.s-draft  { border-left: 2px solid var(--rose); }
+
+  /* --- alignment cards --- */
+  .grid-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.85rem;
+  }
+  .card {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.05rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    position: relative;
+  }
+  .card .card-id {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    color: var(--cyan);
+  }
+  .card.green .card-id { color: var(--green); }
+  .card.amber .card-id { color: var(--amber); }
+  .card.rose  .card-id { color: var(--rose); }
+  .card h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+  .card .card-tag {
+    margin-top: auto;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    align-self: flex-start;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .card.green .card-tag { color: var(--green); border-color: rgba(94,230,168,0.35); background: var(--green-soft); }
+  .card.amber .card-tag { color: var(--amber); border-color: rgba(245,196,102,0.4);  background: var(--amber-soft); }
+  .card.rose  .card-tag { color: var(--rose);  border-color: rgba(255,138,168,0.4);  background: var(--rose-soft); }
+
+  /* --- legend --- */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.9rem;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 0.75rem 0.9rem;
+  }
+  .legend dt {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .legend dt::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .legend dt.impl  { color: var(--green); }
+  .legend dt.part  { color: var(--amber); }
+  .legend dt.draft { color: var(--rose); }
+  .legend dd {
+    margin: 0 1.2rem 0 0.3rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+
+  /* --- review questions --- */
+  .questions {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.6rem;
+  }
+  .questions li {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem 0.85rem 2.4rem;
+    position: relative;
+    color: var(--text);
+  }
+  .questions li::before {
+    content: "?";
+    position: absolute;
+    left: 0.9rem;
+    top: 0.85rem;
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 50%;
+    background: var(--cyan-soft);
+    color: var(--cyan);
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    line-height: 1.2rem;
+    font-weight: 700;
+  }
+  .questions li .qmeta {
+    display: block;
+    margin-top: 0.3rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+
+  /* --- sources --- */
+  .sources {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.7rem;
+  }
+  .source-link {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+  }
+  .source-link:hover {
+    border-color: rgba(90, 211, 255, 0.45);
+    background: var(--panel-2);
+  }
+  .source-link .src-path {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--cyan);
+  }
+  .source-link .src-note {
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+
+  /* --- footer --- */
+  footer.foot {
+    margin-top: 4rem;
+    border-top: 1px solid var(--border);
+    color: var(--dim);
+    font-size: 0.85rem;
+  }
+  footer.foot .wrap {
+    padding-top: 1.2rem;
+    padding-bottom: 1.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.2rem;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  footer.foot .mono { color: var(--muted); }
+
+  .skip {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--panel);
+    color: var(--text);
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    z-index: 100;
+  }
+  .skip:focus { left: 0.75rem; top: 0.75rem; }
+
+  @media (max-width: 540px) {
+    .wrap { padding: 1rem 1rem 3rem; }
+    header.site .wrap { padding-top: 1.8rem; padding-bottom: 1.6rem; }
+    section { margin-top: 2.2rem; }
+    .lifecycle ol { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+
+<header class="site">
+  <div class="wrap">
+    <span class="eyebrow">pacs.crypto · reference review</span>
+    <h1><span class="accent">pacs.crypto</span> visual reference — review showcase</h1>
+    <p class="lede">
+      A discussion artifact for Tom and spec reviewers: a single lifecycle view of the reference
+      stack, paired with the visual flow video. This page is not normative spec content — it is a
+      reading aid for the implemented reference server and the still-draft investigation family.
+    </p>
+    <div class="pill-row" aria-label="Artifact tags">
+      <span class="pill cyan">discussion artifact</span>
+      <span class="pill">non-normative</span>
+      <span class="pill">reviewer-facing</span>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="wrap">
+
+  <section aria-labelledby="video-heading">
+    <span class="section-mark">01 · Primary cut</span>
+    <h2 id="video-heading">Visual flow video — clean cut</h2>
+    <p class="section-lede">
+      The non-narrated preview rendered for Tom. Captions are baked in as scene subtitles, so the
+      cut reads on its own without audio.
+    </p>
+    <figure class="video-card">
+      <video
+        controls
+        preload="metadata"
+        playsinline
+        aria-label="pacs.crypto visual flow — clean preview"
+        src="../videos/visual-flow-map/renders/pacs-crypto-visual-flow-tom-preview.mp4">
+        Your browser cannot play this video. The file is at
+        <code>videos/visual-flow-map/renders/pacs-crypto-visual-flow-tom-preview.mp4</code>.
+      </video>
+      <figcaption class="video-meta">
+        <span><strong>Source:</strong> videos/visual-flow-map/renders/pacs-crypto-visual-flow-tom-preview.mp4</span>
+        <span><strong>Build:</strong> <code>scripts/create-visual-flow-video.mjs</code></span>
+        <span><strong>Audio:</strong> background track only · no narration</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <section aria-labelledby="alt-heading">
+    <span class="section-mark">01b · Alternate cut</span>
+    <h2 id="alt-heading">Narrated cut (optional)</h2>
+    <p class="section-lede">
+      Same composition with a narration track. Useful if you would rather listen than read the
+      baked-in captions.
+    </p>
+    <details class="alt-video">
+      <summary>Show narrated preview</summary>
+      <div class="alt-body">
+        <video
+          controls
+          preload="none"
+          playsinline
+          aria-label="pacs.crypto visual flow — narrated preview"
+          src="../videos/visual-flow-map-narrated/renders/pacs-crypto-visual-flow-tom-preview-narrated.mp4">
+          Narrated cut at
+          <code>videos/visual-flow-map-narrated/renders/pacs-crypto-visual-flow-tom-preview-narrated.mp4</code>.
+        </video>
+        <p class="video-meta">
+          <span><strong>Source:</strong> videos/visual-flow-map-narrated/renders/pacs-crypto-visual-flow-tom-preview-narrated.mp4</span>
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <section aria-labelledby="lifecycle-heading">
+    <span class="section-mark">02 · Lifecycle map</span>
+    <h2 id="lifecycle-heading">One end-to-end lifecycle, at a glance</h2>
+    <p class="section-lede">
+      The same path the video walks through: bank instruction enters via Travel Rule, the sending
+      VASP quotes and broadcasts, the chain settles, the receiving VASP confirms, and reporting and
+      remediation hang off the end.
+    </p>
+    <div class="lifecycle">
+      <ol>
+        <li class="s-impl">
+          <span class="step-num">Bank</span>
+          <span class="step-title">Originating bank / treasury</span>
+          <span class="step-note">submits travel-rule + instruction</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">SVASP</span>
+          <span class="step-title">Sending VASP</span>
+          <span class="step-note">/travel-rule, /instruction</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">Travel Rule</span>
+          <span class="step-title">Travel Rule record</span>
+          <span class="step-note">pacs.008-aligned identity + remittance</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">Quote</span>
+          <span class="step-title">Instruction quote</span>
+          <span class="step-note">POST /instruction/quote</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">Instruction</span>
+          <span class="step-title">Instruction submit</span>
+          <span class="step-note">linked travel_rule_record_id</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">Chain</span>
+          <span class="step-title">Chain / finality</span>
+          <span class="step-note">PENDING → BROADCAST → CONFIRMING → FINAL</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">RVASP</span>
+          <span class="step-title">Receiving VASP</span>
+          <span class="step-note">Travel Rule callback / ack</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">Status</span>
+          <span class="step-title">Status / reporting / evidence</span>
+          <span class="step-note">camt.054 / camt.052 / camt.053 / camt.025-like</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">Return</span>
+          <span class="step-title">Return case</span>
+          <span class="step-note">pacs.004 vocabulary preserved</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-impl">
+          <span class="step-num">Reverse</span>
+          <span class="step-title">Reversal path</span>
+          <span class="step-note">pacs.007-aligned</span>
+          <span class="step-status">implemented</span>
+        </li>
+        <li class="s-part">
+          <span class="step-num">Cancel</span>
+          <span class="step-title">Pre-broadcast cancel</span>
+          <span class="step-note">camt.056 analogue only</span>
+          <span class="step-status">partial</span>
+        </li>
+        <li class="s-draft">
+          <span class="step-num">E&amp;I</span>
+          <span class="step-title">Investigation family</span>
+          <span class="step-note">camt.026 / camt.027 / camt.087 — TBD</span>
+          <span class="step-status">draft / not locked</span>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section aria-labelledby="legend-heading">
+    <span class="section-mark">03 · Legend</span>
+    <h2 id="legend-heading">Status legend</h2>
+    <p class="section-lede">Used on the lifecycle steps above and the alignment cards below.</p>
+    <dl class="legend">
+      <dt class="impl">implemented</dt>
+      <dd>concrete in the reference server</dd>
+      <dt class="part">partial</dt>
+      <dd>scoped narrower than the ISO 20022 namesake</dd>
+      <dt class="draft">draft / TBD</dt>
+      <dd>reference-server input, future spec shape kept open</dd>
+    </dl>
+  </section>
+
+  <section aria-labelledby="alignment-heading">
+    <span class="section-mark">04 · ISO 20022 alignment</span>
+    <h2 id="alignment-heading">Where the ISO 20022 vocabulary lands</h2>
+    <p class="section-lede">
+      Industry vocabulary is preserved where it helps reviewers recognise intent quickly, and
+      deliberately narrowed where the public-chain context makes the namesake misleading.
+    </p>
+    <div class="grid-cards">
+      <article class="card green">
+        <span class="card-id">pacs.004</span>
+        <h3>Return vocabulary</h3>
+        <p>
+          Post-settlement return cases keep <code>pacs.004</code> wording. It is recognised
+          industry terminology and reads the way reviewers already expect.
+        </p>
+        <span class="card-tag">implemented</span>
+      </article>
+
+      <article class="card green">
+        <span class="card-id">pacs.007</span>
+        <h3>Reversal / remediation path</h3>
+        <p>
+          <code>/return-cases/{id}/reverse</code> is the realistic blockchain remediation route
+          once a public-chain transfer is final.
+        </p>
+        <span class="card-tag">implemented</span>
+      </article>
+
+      <article class="card amber">
+        <span class="card-id">camt.056</span>
+        <h3>Pre-broadcast cancellation only</h3>
+        <p>
+          Treated strictly as a pre-broadcast cancellation analogue. After broadcast the
+          cancellation window is essentially zero on a public chain.
+        </p>
+        <span class="card-tag">partial</span>
+      </article>
+
+      <article class="card rose">
+        <span class="card-id">camt.026 / .027 / .087</span>
+        <h3>Investigation family — draft</h3>
+        <p>
+          Future investigation / exceptions &amp; investigations analogues. Kept as reference-server
+          draft machinery; the spec shape stays open until the design is clearer.
+        </p>
+        <span class="card-tag">draft / TBD</span>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="questions-heading">
+    <span class="section-mark">05 · Review questions</span>
+    <h2 id="questions-heading">For Tom</h2>
+    <p class="section-lede">
+      Two questions to orient feedback — small enough to answer in a reply, useful enough to steer
+      the next pass.
+    </p>
+    <ol class="questions">
+      <li>
+        Does this visual reference help orient spec discussion — i.e. is the
+        implemented-vs-draft boundary readable in a single pass?
+        <span class="qmeta">If yes, we keep the lifecycle / alignment split as the standing review shape.</span>
+      </li>
+      <li>
+        Should the next pass focus on the Exceptions &amp; Investigations family, or on liquidity
+        management around the chain adapter?
+        <span class="qmeta">Both are listed as draft / open. We will go where you point.</span>
+      </li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="sources-heading">
+    <span class="section-mark">06 · Sources in this repo</span>
+    <h2 id="sources-heading">Where the substance lives</h2>
+    <p class="section-lede">
+      This page summarises; the source notes and console below are the real artifacts.
+    </p>
+    <div class="sources">
+      <a class="source-link" href="./visual-flow-map.md">
+        <span class="src-path">docs/visual-flow-map.md</span>
+        <span class="src-note">The lifecycle note with Mermaid diagrams and alignment table.</span>
+      </a>
+      <a class="source-link" href="../index.html">
+        <span class="src-path">index.html</span>
+        <span class="src-note">The visual console at the repo root.</span>
+      </a>
+      <a class="source-link" href="../videos/visual-flow-map/renders/pacs-crypto-visual-flow-tom-preview.mp4">
+        <span class="src-path">videos/visual-flow-map/renders/pacs-crypto-visual-flow-tom-preview.mp4</span>
+        <span class="src-note">Clean preview cut, captions baked in.</span>
+      </a>
+      <a class="source-link" href="../videos/visual-flow-map-narrated/renders/pacs-crypto-visual-flow-tom-preview-narrated.mp4">
+        <span class="src-path">videos/visual-flow-map-narrated/renders/pacs-crypto-visual-flow-tom-preview-narrated.mp4</span>
+        <span class="src-note">Narrated alternate cut.</span>
+      </a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>pacs.crypto reference review · discussion artifact, not normative spec content</span>
+    <span class="mono">docs/visual-showcase.html</span>
+  </div>
+</footer>
+
+</body>
+</html>

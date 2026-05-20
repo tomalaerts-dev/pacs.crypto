@@ -1,0 +1,8 @@
+pacs.crypto is a visual reference for a narrow bank to VASP payment flow.
+It starts with Travel Rule identity and remittance data, then a quote, then an executable instruction linked to that record.
+The chain adapter moves the instruction from pending, to broadcast, to confirming, to final.
+From there, the reference stack exposes status, finality, reporting, and an evidence pack for reviewers.
+For returns and reversals, the visual keeps pacs dot zero zero four and pacs dot zero zero seven terminology, because those names are meaningful to payment practitioners.
+Cancellation stays limited to the pre-broadcast camt dot zero fifty six window.
+The richer investigation family remains useful draft machinery, not a locked standard shape.
+The question for Tom is simple: does this make the spec discussion easier?
