@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>pacs.crypto Control Room demo video</title>
+<style>
+  :root{
+    --canvas:#06080D; --panel:#0A0E16; --raised:#0D1220; --bd:#1C2434;
+    --hi:#F2F5FB; --body:#C6D2E4; --muted:#8B96AB; --dim:#576175;
+    --blue:#4D9DF6; --green:#3DD68C; --cyan:#67D3E0; --amber:#E0A83D;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;width:100%;height:100%;background:var(--canvas);overflow:hidden}
+  #stage{
+    width:1920px;height:1080px;position:relative;overflow:hidden;background:
+      radial-gradient(circle at 22% 12%, rgba(77,157,246,.18), transparent 34%),
+      radial-gradient(circle at 82% 88%, rgba(61,214,140,.10), transparent 32%),
+      linear-gradient(135deg,#05070B 0%,#0A0E16 58%,#06080D 100%);
+    color:var(--body);font-family:var(--sans);
+  }
+  #stage:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);background-size:42px 42px;opacity:.52}
+  .clip{visibility:hidden}
+  .topbar{position:absolute;left:72px;right:72px;top:34px;height:52px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+  .brand{display:flex;align-items:center;gap:14px;color:var(--hi);font:700 26px/1 var(--sans);letter-spacing:.01em}
+  .brand i{width:13px;height:13px;border-radius:50%;background:var(--blue);box-shadow:0 0 24px rgba(77,157,246,.75)}
+  .subbrand{font:600 12px/1 var(--mono);letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-left:10px}
+  .gate{font:700 13px/1 var(--mono);letter-spacing:.08em;color:var(--cyan);padding:12px 16px;border:1px solid rgba(103,211,224,.32);border-radius:999px;background:rgba(10,18,28,.72);box-shadow:0 14px 50px rgba(0,0,0,.25)}
+  .frame{position:absolute;left:80px;top:98px;width:1760px;height:954px;border:1px solid rgba(198,210,228,.16);border-radius:26px;overflow:hidden;background:#0A0E16;box-shadow:0 34px 110px rgba(0,0,0,.62),0 0 0 1px rgba(77,157,246,.08) inset;z-index:1}
+  .frame video{width:100%;height:100%;object-fit:fill;display:block;filter:saturate(1.06) contrast(1.03)}
+  .shine{position:absolute;left:80px;top:98px;width:1760px;height:954px;border-radius:26px;pointer-events:none;z-index:2;background:linear-gradient(110deg,rgba(255,255,255,.10),transparent 21%,transparent 78%,rgba(103,211,224,.07));mix-blend-mode:screen;opacity:.55}
+  .lower{position:absolute;left:118px;right:118px;bottom:44px;min-height:118px;z-index:6;display:grid;grid-template-columns:1fr 470px;gap:24px;align-items:end;pointer-events:none}
+  .caption-card{border:1px solid rgba(198,210,228,.18);background:rgba(7,10,16,.76);backdrop-filter:blur(12px);border-radius:18px;padding:20px 24px;box-shadow:0 24px 70px rgba(0,0,0,.45)}
+  .kicker{font:800 12px/1 var(--mono);letter-spacing:.16em;color:var(--blue);text-transform:uppercase;margin-bottom:9px}
+  #section-title{font:700 31px/1.08 var(--sans);color:var(--hi);margin-bottom:8px;letter-spacing:-.015em}
+  #section-copy{font:500 18px/1.45 var(--sans);color:var(--body);max-width:1060px}
+  .metrics{border:1px solid rgba(61,214,140,.24);background:rgba(7,18,18,.72);border-radius:18px;padding:18px 22px;display:grid;gap:12px}
+  .metric-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;font-family:var(--mono)}
+  .metric-row span:first-child{font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+  .metric-row span:last-child{font:700 17px/1 var(--mono);color:var(--green);text-align:right}
+  .progress-wrap{position:absolute;left:118px;right:118px;bottom:26px;height:3px;background:rgba(198,210,228,.12);z-index:7;border-radius:999px;overflow:hidden}
+  #progress{width:0;height:100%;background:linear-gradient(90deg,var(--blue),var(--green));box-shadow:0 0 18px rgba(77,157,246,.72)}
+  .watermark{position:absolute;right:82px;top:970px;z-index:7;color:rgba(198,210,228,.72);font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.75)}
+  .title-slate{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,rgba(77,157,246,.18),transparent 34%),rgba(6,8,13,.90)}
+  .title-box{text-align:center;width:1120px}
+  .title-eyebrow{font:800 15px/1 var(--mono);letter-spacing:.18em;color:var(--cyan);text-transform:uppercase;margin-bottom:24px}
+  .title-main{font:800 78px/.94 var(--sans);letter-spacing:-.045em;color:var(--hi);margin-bottom:24px}
+  .title-copy{font:500 27px/1.35 var(--sans);color:var(--body)}
+</style>
+</head>
+<body>
+  <div id="stage" data-composition-id="root" data-start="0" data-duration="106" data-width="1920" data-height="1080">
+    <audio id="narration" data-start="0" data-duration="103.04" data-track-index="0" src="assets/narration.wav"></audio>
+    <div class="frame" id="app-frame">
+      <video id="demo-video" data-layout-allow-occlusion data-layout-allow-overlap data-start="0" data-duration="104.52" data-track-index="1" src="assets/control-room-real-demo-capture-timed.mp4" muted playsinline></video>
+    </div>
+    <div class="shine clip" id="shine" data-start="0" data-duration="106" data-track-index="2"></div>
+    <div class="topbar clip" id="topbar" data-start="0" data-duration="106" data-track-index="3">
+      <div class="brand"><i></i><span>pacs.crypto</span><span class="subbrand">Bank → VASP Control Room</span></div>
+      <div class="gate">MOCK WALKTHROUGH → LOCAL LIVE API · NO FUNDED CHAIN</div>
+    </div>
+    <div class="lower clip" id="lower" data-layout-allow-occlusion data-layout-allow-overlap data-start="0" data-duration="106" data-track-index="4">
+      <div class="caption-card">
+        <div class="kicker" id="section-kicker">REVIEWER DEMO</div>
+        <div id="section-title">One payment, end to end</div>
+        <div id="section-copy">A guided walkthrough of compliance context, quote, instruction, lifecycle, finality, and reporting evidence.</div>
+      </div>
+      <div class="metrics">
+        <div class="metric-row"><span>Mode</span><span id="mode-metric">MOCK payloads</span></div>
+        <div class="metric-row"><span>Path</span><span id="path-metric">USDC · EVM · FULL_CUSTODY</span></div>
+        <div class="metric-row"><span>Gate</span><span id="gate-metric">local review only</span></div>
+      </div>
+    </div>
+    <div class="progress-wrap clip" id="progress-wrap" data-start="0" data-duration="106" data-track-index="5"><div id="progress"></div></div>
+    <div class="watermark clip" id="watermark" data-layout-allow-overlap data-start="0" data-duration="106" data-track-index="6">review artifact · no production claim</div>
+    <div class="title-slate clip" id="title-slate" data-start="0" data-duration="106" data-track-index="7">
+      <div class="title-box">
+        <div class="title-eyebrow">pacs.crypto execution wedge</div>
+        <div class="title-main">Bank-to-VASP Control Room</div>
+        <div class="title-copy">A professional walkthrough of the reviewer demo shell, with mock payloads and local LIVE API mode.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+    const labels = [
+      [0.2,'REVIEWER DEMO','One payment, end to end','Compliance, execution, finality, and reporting stay linked without becoming one oversized response.','MOCK payloads','USDC · EVM · FULL_CUSTODY','local review only'],
+      [8,'TRAVEL RULE','Step 1 — Travel Rule submitted','The bank starts with compliance context and payment identity before any execution happens.','MOCK mode','Travel Rule record','no server needed'],
+      [17,'BENEFICIARY CALLBACK','Step 2 — VASP accepts context','The receiving side callback records that the beneficiary VASP has accepted the Travel Rule context.','MOCK mode','callback accepted','sample payloads'],
+      [25,'QUOTE SURFACE','Step 3 — economics before execution','The quote separates fee, token, chain, and custody terms before the instruction is submitted.','MOCK mode','quote id visible','request/response'],
+      [34,'INSTRUCTION','Step 4 — submit the payment instruction','The commercial payment identifiers remain visible while execution moves to the chain adapter.','MOCK mode','instruction + UETR','full custody wedge'],
+      [43,'LIFECYCLE','Steps 5 to 8 — pending, broadcast, confirming, final','Execution state is explicit and inspectable, from broadcast evidence to final confirmation.','MOCK mode','tx hash + block','lifecycle evidence'],
+      [59,'FINALITY RECEIPT','Step 9 — finality evidence','Finality is a separate read surface with transaction hash, block reference, and confirmation depth.','MOCK mode','camt.025-like receipt','not overpacked'],
+      [69,'REPORTING','Steps 10 and 11 — creditor notification and statement','The reporting views close the loop with camt-style notification and statement data from the same payment.','MOCK mode','camt.054 + camt.053','traceable IDs'],
+      [82,'PRESENTER CONTROLS','Payload, SAY toggle, and traceability spine','The presenter can flip request and response payloads, control speaking notes, and reveal identifiers as they become real.','MOCK mode','review controls','auditable walkthrough'],
+      [90,'LOCAL LIVE API','Switching to local reference-server mode','The same shell can call localhost and exercise real validation and lifecycle handling through the mock adapter.','LIVE local API','127.0.0.1:5050','no funded chain'],
+      [101,'CLOSED GATES','Narrow, reviewer-friendly, and explicit','This video shows a demo wedge only: no production system, no publication, and no funded Sepolia broadcast.','local artifact','review ready','next gate only']
+    ];
+    function setLabel(row){
+      document.getElementById('section-kicker').textContent=row[1];
+      document.getElementById('section-title').textContent=row[2];
+      document.getElementById('section-copy').textContent=row[3];
+      document.getElementById('mode-metric').textContent=row[4];
+      document.getElementById('path-metric').textContent=row[5];
+      document.getElementById('gate-metric').textContent=row[6];
+    }
+    labels.forEach(row => tl.call(setLabel, [row], row[0]));
+    tl.from('#topbar', { opacity:0, y:-18, duration:.8, ease:'power3.out' }, .2);
+    tl.from('#app-frame', { opacity:0, y:34, scale:.985, duration:1.1, ease:'expo.out' }, .35);
+    tl.from('#lower', { opacity:0, y:28, duration:.9, ease:'power2.out' }, 4.2);
+    tl.to('#title-slate', { opacity:0, duration:1.1, ease:'power2.inOut', pointerEvents:'none' }, 5.4);
+    tl.from('#shine', { opacity:0, duration:1.2, ease:'sine.out' }, .9);
+    tl.to('#progress', { width:'100%', duration:106, ease:'none' }, 0);
+    for (let i=1; i<labels.length; i++) {
+      const t = labels[i][0];
+      tl.fromTo('#section-title', {opacity:.25, y:10}, {opacity:1, y:0, duration:.45, ease:'power2.out'}, t+.05);
+      tl.fromTo('#section-copy', {opacity:.25, y:8}, {opacity:1, y:0, duration:.45, ease:'power2.out'}, t+.12);
+      tl.fromTo('.metrics', {borderColor:'rgba(77,157,246,.42)'}, {borderColor:'rgba(61,214,140,.24)', duration:.8, ease:'sine.out'}, t+.05);
+    }
+    tl.to('#stage', { opacity:0, duration:.8, ease:'power2.inOut' }, 105.1);
+    window.__timelines['root'] = tl;
+  </script>
+</body>
+</html>

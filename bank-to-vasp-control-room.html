@@ -1,0 +1,1687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bank → VASP Control Room – pacs.crypto (happy path v1.3)</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  /* ---- Dark design tokens (handoff 1c) ---- */
+  :root{
+    --canvas:#06080D; --panel:#0A0E16; --raised:#0D1220; --inset:#10151F;
+    --code:#0B0F18; --rail:#0C111C; --corridor:#0B101B;
+    --bd:#1C2434; --bd-card:#1F2735; --bd-sub:#232B3A;
+    --hi:#F2F5FB; --body:#C6D2E4; --body2:#B9C4D6; --muted:#8B96AB; --dim:#576175; --dimmer:#3A4358;
+    --acc:#4D9DF6; --green:#3DD68C; --amber:#E0A83D; --blue:#4D9DF6; --violet:#9B8CFF; --cyan:#67D3E0; --red:#F0616D;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--canvas);color:#E8EDF6;font-family:var(--sans)}
+  body{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:0;overflow:auto}
+  @media (max-width:1659px){body{justify-content:flex-start;min-width:1660px}}
+  a{color:var(--cyan);text-decoration:none}
+  button{font-family:var(--mono)}
+  .noscript{max-width:640px;margin:80px auto;padding:24px 28px;background:var(--raised);
+    border:1px solid var(--bd-card);border-radius:12px;color:var(--body);font:400 13px/1.7 var(--sans)}
+  .noscript b{color:var(--hi)}
+
+  /* fixed console canvas */
+  #stage{width:1660px;height:900px;flex:none;display:flex;flex-direction:column;
+    background:var(--panel);overflow:hidden}
+
+  @keyframes dashmove{to{background-position:24px 0}}
+  @keyframes pulseglow{0%,100%{box-shadow:0 0 0 0 rgba(77,157,246,.32)}50%{box-shadow:0 0 13px 2px rgba(77,157,246,.4)}}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  ::-webkit-scrollbar{width:7px;height:7px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#232B3A;border-radius:4px}
+  ::-webkit-scrollbar-thumb:hover{background:#2E384A}
+  .fadein{animation:fadein .25s ease}
+  .fadein2{animation:fadein .3s ease}
+  .rail-step:hover{background:rgba(148,163,184,.05)!important}
+  .hbtn:hover{border-color:#3A4358!important}
+</style>
+</head>
+<body>
+
+<noscript>
+  <div class="noscript">
+    <b>pacs.crypto — Bank → VASP Control Room</b><br><br>
+    This guided demo shell is JavaScript-driven. Enable JavaScript to walk the
+    11-step happy path (Travel Rule → settlement → camt.053 statement).
+    All payloads are embedded from <code>docs/demo-samples/happy-path/</code>;
+    no server or network connection is required in MOCK mode.
+  </div>
+</noscript>
+
+<!-- ============================================================= -->
+<!-- Embedded happy-path payloads (copied from                      -->
+<!-- docs/demo-samples/happy-path/*.json). Read at runtime via      -->
+<!-- textContent; MOCK mode never performs a network fetch.         -->
+<!-- ============================================================= -->
+
+<script type="application/json" id="p01-req">
+{
+  "submission_timing": "PRE_TX",
+  "travel_rule_data": {
+    "payment_identification": {
+      "end_to_end_identification": "E2E-DEMO-2026-0001"
+    },
+    "interbank_settlement_amount": {
+      "amount": "125000.00",
+      "currency": "USD"
+    },
+    "charge_bearer": "SHAR",
+    "debtor": {
+      "name": "Acme Trading GmbH",
+      "postal_address": {
+        "country": "DE"
+      }
+    },
+    "debtor_account": {
+      "proxy": {
+        "identification": "0xdebtordemo000000000000000000000000000001"
+      }
+    },
+    "debtor_agent": {
+      "name": "Bankhaus Example AG",
+      "lei": "7245007VX57GR4IUVZ79"
+    },
+    "creditor": {
+      "name": "Bravo Supplies B.V.",
+      "postal_address": {
+        "country": "NL"
+      }
+    },
+    "creditor_account": {
+      "proxy": {
+        "identification": "0xcreditordemo0000000000000000000000000001"
+      }
+    },
+    "creditor_agent": {
+      "name": "Kraken Belgium BVBA",
+      "lei": "635400DUFB71VFOHVB49"
+    },
+    "debtor_wallet_type": "HOSTED",
+    "creditor_wallet_type": "HOSTED",
+    "blockchain_settlement": {
+      "primary_chain_id": "DLID/X9J9XDMTD",
+      "legs": [
+        {
+          "leg_type": "ORIGINATION"
+        }
+      ]
+    }
+  }
+}
+</script>
+
+<script type="application/json" id="p02-res">
+{
+  "record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "submitted_at": "2026-04-22T13:48:23.341Z",
+  "last_updated_at": "2026-04-22T13:48:23.341Z",
+  "submission_timing": "PRE_TX",
+  "status": "SUBMITTED",
+  "travel_rule_data": {
+    "payment_identification": {
+      "end_to_end_identification": "E2E-DEMO-2026-0001"
+    },
+    "interbank_settlement_amount": {
+      "amount": "125000.00",
+      "currency": "USD"
+    },
+    "charge_bearer": "SHAR",
+    "debtor": {
+      "name": "Acme Trading GmbH",
+      "postal_address": {
+        "country": "DE"
+      }
+    },
+    "debtor_account": {
+      "proxy": {
+        "identification": "0xdebtordemo000000000000000000000000000001"
+      }
+    },
+    "debtor_agent": {
+      "name": "Bankhaus Example AG",
+      "lei": "7245007VX57GR4IUVZ79"
+    },
+    "creditor": {
+      "name": "Bravo Supplies B.V.",
+      "postal_address": {
+        "country": "NL"
+      }
+    },
+    "creditor_account": {
+      "proxy": {
+        "identification": "0xcreditordemo0000000000000000000000000001"
+      }
+    },
+    "creditor_agent": {
+      "name": "Kraken Belgium BVBA",
+      "lei": "635400DUFB71VFOHVB49"
+    },
+    "debtor_wallet_type": "HOSTED",
+    "creditor_wallet_type": "HOSTED",
+    "blockchain_settlement": {
+      "primary_chain_id": "DLID/X9J9XDMTD",
+      "legs": [
+        {
+          "leg_type": "ORIGINATION"
+        }
+      ]
+    }
+  },
+  "submitting_vasp": {
+    "name": "Bankhaus Example AG",
+    "lei": "7245007VX57GR4IUVZ79"
+  },
+  "callbacks": [],
+  "correction_of_callback_ref": null
+}
+</script>
+
+<script type="application/json" id="p03-req">
+{
+  "callback_status": "ACCEPTED",
+  "receiving_vasp": {
+    "name": "Kraken Belgium BVBA",
+    "lei": "635400DUFB71VFOHVB49"
+  },
+  "callback_timestamp": "2026-04-22T13:48:23.343Z",
+  "description": "Travel Rule payload accepted for beneficiary-side intake."
+}
+</script>
+
+<script type="application/json" id="p04-res">
+{
+  "record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "callback_recorded_at": "2026-04-22T13:48:23.343Z",
+  "current_status": "ACCEPTED",
+  "previous_status": "SUBMITTED"
+}
+</script>
+
+<script type="application/json" id="p05-req">
+{
+  "token": {
+    "token_symbol": "USDC",
+    "token_dti": "T9B3X8H2K"
+  },
+  "chain_dli": "X9J9XDMTD",
+  "amount": "125000.00",
+  "currency": "USD",
+  "custody_model": "FULL_CUSTODY"
+}
+</script>
+
+<script type="application/json" id="p06-res">
+{
+  "quote_id": "79c52f2e-de14-48c6-b975-18b01c1ce8a0",
+  "valid_until": "2026-04-22T13:53:23.344Z",
+  "fee_lock_type": "CAPPED",
+  "fee_estimate": {
+    "gas_cost_native": {
+      "amount": "0.001505",
+      "currency": "ETH"
+    },
+    "gas_cost_fiat": {
+      "amount": "5.70",
+      "currency": "USD"
+    },
+    "vasp_service_fee": {
+      "amount": "24.50",
+      "currency": "USD"
+    },
+    "ramp_spread_bps": 0,
+    "slippage_estimate_bps": 7,
+    "total_cost_fiat": {
+      "amount": "30.20",
+      "currency": "USD"
+    }
+  },
+  "estimated_confirmation_seconds": 144,
+  "chain_conditions": {
+    "congestion_level": "MEDIUM",
+    "current_base_fee_gwei": "19.8",
+    "average_block_time_seconds": 12
+  },
+  "adapter_metadata": {
+    "adapter_id": "mock-evm",
+    "adapter_mode": "SIMULATED",
+    "chain_family": "EVM",
+    "chain_dli": "X9J9XDMTD",
+    "settlement_model": "PROBABILISTIC_TO_THRESHOLD_FINALITY",
+    "simulated": true,
+    "congestion_level": "MEDIUM",
+    "network_profile": {
+      "native_currency": "ETH",
+      "native_usd_price": 3785,
+      "reference_block_base_number": 22190456
+    },
+    "lifecycle_policy": {
+      "ramp_type": "NONE",
+      "maximum_slippage_rate": "0.0000",
+      "required_confirmation_depth": 12,
+      "estimated_confirmation_seconds": 144,
+      "block_time_seconds": 12,
+      "confirmation_interval_ms": 250,
+      "broadcast_delay_ms": 850,
+      "inclusion_delay_ms": 1800,
+      "finality_delay_ms": 4800
+    },
+    "fee_model": {
+      "gas_limit": 70000,
+      "base_fee_gwei": "19.8",
+      "priority_fee_gwei": "1.7",
+      "service_fee_usd": "24.50",
+      "ramp_spread_bps": 0,
+      "slippage_estimate_bps": 7
+    }
+  },
+  "created_at": "2026-04-22T13:48:23.344Z"
+}
+</script>
+
+<script type="application/json" id="p07-req">
+{
+  "payment_identification": {
+    "end_to_end_identification": "E2E-DEMO-2026-0001",
+    "quote_id": "79c52f2e-de14-48c6-b975-18b01c1ce8a0"
+  },
+  "charge_bearer": "DEBT",
+  "debtor": {
+    "name": "Acme Trading GmbH",
+    "lei": "529900T8BM49AURSDO55"
+  },
+  "debtor_account": {
+    "proxy": {
+      "identification": "0xdebtordemo000000000000000000000000000001"
+    }
+  },
+  "debtor_agent": {
+    "name": "Bankhaus Example AG",
+    "lei": "7245007VX57GR4IUVZ79"
+  },
+  "creditor": {
+    "name": "Bravo Supplies B.V.",
+    "lei": "724500QHKL6MVSQQ1Z17"
+  },
+  "creditor_account": {
+    "proxy": {
+      "identification": "0xcreditordemo0000000000000000000000000001"
+    }
+  },
+  "creditor_agent": {
+    "name": "Kraken Belgium BVBA",
+    "lei": "635400DUFB71VFOHVB49"
+  },
+  "interbank_settlement_amount": {
+    "amount": "125000.00",
+    "currency": "USD"
+  },
+  "remittance_information": {
+    "unstructured": "Invoice 78452 / Germany to Netherlands treasury settlement"
+  },
+  "blockchain_instruction": {
+    "token": {
+      "token_symbol": "USDC",
+      "token_dti": "T9B3X8H2K"
+    },
+    "chain_dli": "X9J9XDMTD",
+    "custody_model": "FULL_CUSTODY"
+  },
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3"
+}
+</script>
+
+<script type="application/json" id="p08-res">
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "status": "PENDING",
+  "custody_model": "FULL_CUSTODY",
+  "fee_estimate": {
+    "gas_cost_native": {
+      "amount": "0.001505",
+      "currency": "ETH"
+    },
+    "gas_cost_fiat": {
+      "amount": "5.70",
+      "currency": "USD"
+    },
+    "vasp_service_fee": {
+      "amount": "24.50",
+      "currency": "USD"
+    },
+    "ramp_spread_bps": 0,
+    "slippage_estimate_bps": 7,
+    "total_cost_fiat": {
+      "amount": "30.20",
+      "currency": "USD"
+    }
+  },
+  "expiry_date_time": "2026-04-22T14:18:23.344Z",
+  "debit_timing": "ON_BROADCAST",
+  "adapter_metadata": {
+    "adapter_id": "mock-evm",
+    "adapter_mode": "SIMULATED",
+    "chain_family": "EVM",
+    "chain_dli": "X9J9XDMTD",
+    "settlement_model": "PROBABILISTIC_TO_THRESHOLD_FINALITY",
+    "simulated": true,
+    "congestion_level": "MEDIUM",
+    "network_profile": {
+      "native_currency": "ETH",
+      "native_usd_price": 3785,
+      "reference_block_base_number": 22190456
+    },
+    "lifecycle_policy": {
+      "ramp_type": "NONE",
+      "maximum_slippage_rate": "0.0010",
+      "required_confirmation_depth": 12,
+      "estimated_confirmation_seconds": 144,
+      "block_time_seconds": 12,
+      "confirmation_interval_ms": 250,
+      "broadcast_delay_ms": 850,
+      "inclusion_delay_ms": 1800,
+      "finality_delay_ms": 4800
+    },
+    "fee_model": {
+      "gas_limit": 70000,
+      "base_fee_gwei": "19.8",
+      "priority_fee_gwei": "1.7",
+      "service_fee_usd": "24.50",
+      "ramp_spread_bps": 0,
+      "slippage_estimate_bps": 7
+    }
+  },
+  "created_at": "2026-04-22T13:48:23.344Z"
+}
+</script>
+
+<script type="application/json" id="p05-lc">
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "status": "BROADCAST",
+  "reason_code": "BROADCAST_TO_CHAIN",
+  "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e"
+}
+</script>
+
+<script type="application/json" id="p06-lc">
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "status": "CONFIRMING",
+  "reason_code": "BLOCK_INCLUDED",
+  "confirmation_depth": 6,
+  "required_confirmation_depth": 12
+}
+</script>
+
+<script type="application/json" id="p07-lc">
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "status": "FINAL",
+  "reason_code": "FINALITY_THRESHOLD_REACHED",
+  "confirmation_depth": 12,
+  "required_confirmation_depth": 12
+}
+</script>
+
+<script type="application/json" id="p09-res">
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "end_to_end_identification": "E2E-DEMO-2026-0001",
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "status": "FINAL",
+  "status_group": "SETTLED",
+  "latest_status_at": "2026-04-22T13:48:23.347Z",
+  "failure_reason": null,
+  "chain_dli": "X9J9XDMTD",
+  "token": {
+    "token_symbol": "USDC",
+    "token_dti": "T9B3X8H2K"
+  },
+  "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+  "finality_status": "FINAL",
+  "confirmation_depth": 12,
+  "required_confirmation_depth": 12,
+  "transfer_verification": null,
+  "debit_timing": "ON_BROADCAST",
+  "expiry_date_time": "2026-04-22T14:18:23.344Z",
+  "created_at": "2026-04-22T13:48:16.347Z",
+  "updated_at": "2026-04-22T13:48:23.347Z",
+  "adapter_metadata": {
+    "adapter_id": "mock-evm",
+    "adapter_mode": "SIMULATED",
+    "chain_family": "EVM",
+    "chain_dli": "X9J9XDMTD",
+    "settlement_model": "PROBABILISTIC_TO_THRESHOLD_FINALITY",
+    "simulated": true,
+    "congestion_level": "MEDIUM",
+    "network_profile": {
+      "native_currency": "ETH",
+      "native_usd_price": 3785,
+      "reference_block_base_number": 22190456
+    },
+    "lifecycle_policy": {
+      "ramp_type": "NONE",
+      "maximum_slippage_rate": "0.0010",
+      "required_confirmation_depth": 12,
+      "estimated_confirmation_seconds": 144,
+      "block_time_seconds": 12,
+      "confirmation_interval_ms": 250,
+      "broadcast_delay_ms": 850,
+      "inclusion_delay_ms": 1800,
+      "finality_delay_ms": 4800
+    },
+    "fee_model": {
+      "gas_limit": 70000,
+      "base_fee_gwei": "19.8",
+      "priority_fee_gwei": "1.7",
+      "service_fee_usd": "24.50",
+      "ramp_spread_bps": 0,
+      "slippage_estimate_bps": 7
+    }
+  },
+  "status_history": [
+    {
+      "sequence": 1,
+      "event_id": "9dc153f0-97ea-478f-9d17-47df6a60bf42",
+      "status": "PENDING",
+      "status_at": "2026-04-22T13:48:23.344Z",
+      "reason_code": "ACCEPTED_FOR_EXECUTION",
+      "description": "Instruction accepted and queued for execution."
+    },
+    {
+      "sequence": 2,
+      "event_id": "50f246a4-6f3d-4c7c-ac97-bc05f12c0e34",
+      "status": "BROADCAST",
+      "status_at": "2026-04-22T13:48:23.345Z",
+      "reason_code": "BROADCAST_TO_CHAIN",
+      "description": "Transaction submitted to the blockchain network."
+    },
+    {
+      "sequence": 3,
+      "event_id": "b261bf85-b811-4bac-ba8e-5c8c8469a80b",
+      "status": "CONFIRMING",
+      "status_at": "2026-04-22T13:48:23.346Z",
+      "reason_code": "BLOCK_INCLUDED",
+      "description": "Transaction included in a block and accumulating confirmations."
+    },
+    {
+      "sequence": 4,
+      "event_id": "9ee45cac-5fd4-45df-be82-fe1efddb6927",
+      "status": "FINAL",
+      "status_at": "2026-04-22T13:48:23.347Z",
+      "reason_code": "FINALITY_THRESHOLD_REACHED",
+      "description": "Transaction reached the required finality threshold."
+    }
+  ]
+}
+</script>
+
+<script type="application/json" id="p10-res">
+{
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "end_to_end_identification": "E2E-DEMO-2026-0001",
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "instruction_status": "FINAL",
+  "chain_dli": "X9J9XDMTD",
+  "token": {
+    "token_symbol": "USDC",
+    "token_dti": "T9B3X8H2K"
+  },
+  "settlement_amount": {
+    "amount": "125000.00",
+    "currency": "USD"
+  },
+  "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+  "broadcast_at": "2026-04-22T13:48:23.345Z",
+  "included_at": "2026-04-22T13:48:23.346Z",
+  "block_number": 22274289,
+  "block_timestamp": "2026-04-22T13:48:18.147Z",
+  "confirmation_depth": 12,
+  "required_confirmation_depth": 12,
+  "finality_status": "FINAL",
+  "transfer_verification": null,
+  "observed_at": "2026-04-22T13:48:23.347Z",
+  "final_at": "2026-04-22T13:48:23.347Z",
+  "not_applicable_reason": null,
+  "adapter_metadata": {
+    "adapter_id": "mock-evm",
+    "adapter_mode": "SIMULATED",
+    "chain_family": "EVM",
+    "chain_dli": "X9J9XDMTD",
+    "settlement_model": "PROBABILISTIC_TO_THRESHOLD_FINALITY",
+    "simulated": true,
+    "congestion_level": "MEDIUM",
+    "network_profile": {
+      "native_currency": "ETH",
+      "native_usd_price": 3785,
+      "reference_block_base_number": 22190456
+    },
+    "lifecycle_policy": {
+      "ramp_type": "NONE",
+      "maximum_slippage_rate": "0.0010",
+      "required_confirmation_depth": 12,
+      "estimated_confirmation_seconds": 144,
+      "block_time_seconds": 12,
+      "confirmation_interval_ms": 250,
+      "broadcast_delay_ms": 850,
+      "inclusion_delay_ms": 1800,
+      "finality_delay_ms": 4800
+    },
+    "fee_model": {
+      "gas_limit": 70000,
+      "base_fee_gwei": "19.8",
+      "priority_fee_gwei": "1.7",
+      "service_fee_usd": "24.50",
+      "ramp_spread_bps": 0,
+      "slippage_estimate_bps": 7
+    }
+  }
+}
+</script>
+
+<script type="application/json" id="p11-res">
+{
+  "notification_id": "8774d448-8d1f-463f-b758-cd90e57e5c7b",
+  "message_family": "camt.054_analogue",
+  "notification_type": "BOOKED_ENTRY",
+  "entry_type": "CREDIT",
+  "account_role": "CREDITOR",
+  "booking_status": "BOOKED",
+  "booking_date_time": "2026-04-22T13:48:23.347Z",
+  "value_date_time": "2026-04-22T13:48:23.347Z",
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "end_to_end_identification": "E2E-DEMO-2026-0001",
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "status_reference": {
+    "trigger_status": "FINAL",
+    "debit_timing": "ON_BROADCAST",
+    "current_instruction_status": "FINAL"
+  },
+  "party": {
+    "name": "Bravo Supplies B.V.",
+    "lei": "724500QHKL6MVSQQ1Z17",
+    "wallet_address": "0xcreditordemo0000000000000000000000000001"
+  },
+  "counterparty": {
+    "name": "Acme Trading GmbH",
+    "lei": "529900T8BM49AURSDO55",
+    "wallet_address": "0xdebtordemo000000000000000000000000000001"
+  },
+  "servicing_agent": {
+    "name": "Kraken Belgium BVBA",
+    "lei": "635400DUFB71VFOHVB49",
+    "bic": null
+  },
+  "counterparty_agent": {
+    "name": "Bankhaus Example AG",
+    "lei": "7245007VX57GR4IUVZ79",
+    "bic": null
+  },
+  "settlement_amount": {
+    "amount": "125000.00",
+    "currency": "USD"
+  },
+  "chain_dli": "X9J9XDMTD",
+  "token": {
+    "token_symbol": "USDC",
+    "token_dti": "T9B3X8H2K"
+  },
+  "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+  "remittance_information": {
+    "unstructured": "Invoice 78452 / Germany to Netherlands treasury settlement"
+  },
+  "traceability": {
+    "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+    "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+    "end_to_end_identification": "E2E-DEMO-2026-0001",
+    "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+    "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+    "account_role": "CREDITOR",
+    "notification_id": "8774d448-8d1f-463f-b758-cd90e57e5c7b",
+    "resource_paths": {
+      "instruction": "/instruction/a6eef166-256b-459e-a8e1-4e525021137e",
+      "execution_status": "/execution-status/a6eef166-256b-459e-a8e1-4e525021137e",
+      "finality_receipt": "/finality-receipt/a6eef166-256b-459e-a8e1-4e525021137e",
+      "reporting_notifications": "/reporting/notifications?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+      "reporting_statements": "/reporting/statements?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+      "reporting_notification": "/reporting/notifications/8774d448-8d1f-463f-b758-cd90e57e5c7b",
+      "travel_rule_record": "/travel-rule/af814c5f-a44c-40ea-b4c3-b764fb023ab3"
+    }
+  },
+  "created_at": "2026-04-22T13:48:23.347Z"
+}
+</script>
+
+<script type="application/json" id="p12-res">
+{
+  "statement_id": "db2452bd-62fa-44d5-986e-c5864aa2cf1a",
+  "statement_key": "{\"instruction_id\":\"a6eef166-256b-459e-a8e1-4e525021137e\",\"account_role\":\"CREDITOR\"}",
+  "message_family": "camt.053_analogue",
+  "statement_type": "ACCOUNT_STATEMENT",
+  "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+  "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+  "account_role": "CREDITOR",
+  "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+  "statement_date": "2026-04-22",
+  "period": {
+    "from": "2026-04-22T13:48:23.347Z",
+    "to": "2026-04-22T13:48:23.347Z"
+  },
+  "statement_scope": {
+    "derivation_basis": "BOOKED_NOTIFICATIONS",
+    "account_role": "CREDITOR",
+    "source_notification_count": 1,
+    "source_notification_ids": [
+      "8774d448-8d1f-463f-b758-cd90e57e5c7b"
+    ],
+    "booking_date_time_from": "2026-04-22T13:48:23.347Z",
+    "booking_date_time_to": "2026-04-22T13:48:23.347Z"
+  },
+  "party": {
+    "name": "Bravo Supplies B.V.",
+    "lei": "724500QHKL6MVSQQ1Z17",
+    "wallet_address": "0xcreditordemo0000000000000000000000000001"
+  },
+  "counterparty": {
+    "name": "Acme Trading GmbH",
+    "lei": "529900T8BM49AURSDO55",
+    "wallet_address": "0xdebtordemo000000000000000000000000000001"
+  },
+  "chain_dli": "X9J9XDMTD",
+  "token": {
+    "token_symbol": "USDC",
+    "token_dti": "T9B3X8H2K"
+  },
+  "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+  "instruction_context": {
+    "status": "FINAL",
+    "finality_status": "FINAL",
+    "debit_timing": "ON_BROADCAST",
+    "end_to_end_identification": "E2E-DEMO-2026-0001",
+    "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+    "related_notification_count": 1
+  },
+  "balance_summary": {
+    "opening_balance": {
+      "amount": "0",
+      "currency": "USD",
+      "credit_debit_indicator": "CRDT"
+    },
+    "closing_balance": {
+      "amount": "125000",
+      "currency": "USD",
+      "credit_debit_indicator": "CRDT"
+    },
+    "available_balance": {
+      "amount": "125000",
+      "currency": "USD",
+      "credit_debit_indicator": "CRDT"
+    }
+  },
+  "movement_summary": {
+    "entry_count": 1,
+    "debit_total": "0",
+    "credit_total": "125000",
+    "net_total": "125000",
+    "net_credit_debit_indicator": "CRDT"
+  },
+  "entries": [
+    {
+      "notification_id": "8774d448-8d1f-463f-b758-cd90e57e5c7b",
+      "entry_type": "CREDIT",
+      "account_role": "CREDITOR",
+      "booking_status": "BOOKED",
+      "booking_date_time": "2026-04-22T13:48:23.347Z",
+      "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+      "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+      "end_to_end_identification": "E2E-DEMO-2026-0001",
+      "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+      "party_name": "Bravo Supplies B.V.",
+      "counterparty_name": "Acme Trading GmbH",
+      "wallet_address": "0xcreditordemo0000000000000000000000000001",
+      "counterparty_wallet_address": "0xdebtordemo000000000000000000000000000001",
+      "amount": "125000.00",
+      "currency": "USD",
+      "token_symbol": "USDC",
+      "chain_dli": "X9J9XDMTD",
+      "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+      "traceability": {
+        "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+        "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+        "end_to_end_identification": "E2E-DEMO-2026-0001",
+        "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+        "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+        "account_role": "CREDITOR",
+        "notification_id": "8774d448-8d1f-463f-b758-cd90e57e5c7b",
+        "resource_paths": {
+          "instruction": "/instruction/a6eef166-256b-459e-a8e1-4e525021137e",
+          "execution_status": "/execution-status/a6eef166-256b-459e-a8e1-4e525021137e",
+          "finality_receipt": "/finality-receipt/a6eef166-256b-459e-a8e1-4e525021137e",
+          "reporting_notifications": "/reporting/notifications?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+          "reporting_statements": "/reporting/statements?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+          "reporting_notification": "/reporting/notifications/8774d448-8d1f-463f-b758-cd90e57e5c7b",
+          "travel_rule_record": "/travel-rule/af814c5f-a44c-40ea-b4c3-b764fb023ab3"
+        }
+      }
+    }
+  ],
+  "traceability": {
+    "instruction_id": "a6eef166-256b-459e-a8e1-4e525021137e",
+    "uetr": "433bb2fb-37a8-46cc-b6de-20b1474a7854",
+    "end_to_end_identification": "E2E-DEMO-2026-0001",
+    "travel_rule_record_id": "af814c5f-a44c-40ea-b4c3-b764fb023ab3",
+    "transaction_hash": "0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e",
+    "account_role": "CREDITOR",
+    "statement_id": "db2452bd-62fa-44d5-986e-c5864aa2cf1a",
+    "source_notification_ids": [
+      "8774d448-8d1f-463f-b758-cd90e57e5c7b"
+    ],
+    "resource_paths": {
+      "instruction": "/instruction/a6eef166-256b-459e-a8e1-4e525021137e",
+      "execution_status": "/execution-status/a6eef166-256b-459e-a8e1-4e525021137e",
+      "finality_receipt": "/finality-receipt/a6eef166-256b-459e-a8e1-4e525021137e",
+      "reporting_notifications": "/reporting/notifications?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+      "reporting_statements": "/reporting/statements?instruction_id=a6eef166-256b-459e-a8e1-4e525021137e&account_role=CREDITOR",
+      "reporting_statement": "/reporting/statements/db2452bd-62fa-44d5-986e-c5864aa2cf1a",
+      "travel_rule_record": "/travel-rule/af814c5f-a44c-40ea-b4c3-b764fb023ab3"
+    }
+  },
+  "created_at": "2026-04-22T13:48:23.347Z",
+  "updated_at": "2026-04-22T13:48:23.347Z"
+}
+</script>
+
+<div id="stage"><div class="noscript" style="margin:80px auto">Loading Control Room…</div></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ------- color tokens (mirror handoff 1c) ------- */
+  var ACC='#4D9DF6', HI='#F2F5FB', BODY='#C6D2E4', BODY2='#B9C4D6', MUTED='#8B96AB',
+      DIM='#576175', DIMMER='#3A4358', GREEN='#3DD68C', AMBER='#E0A83D', BLUE='#4D9DF6',
+      VIOLET='#9B8CFF', CYAN='#67D3E0';
+  var HASH='0x7e29497a68701f463fffc852ca769e4e6d5324eab2d1c296ba522ec20172669e';
+
+  function rgba(hex,a){
+    var h=hex.replace('#','');
+    if(h.length===3){h=h.split('').map(function(c){return c+c;}).join('');}
+    var n=parseInt(h,16);
+    return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+  }
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+  /* raw JSON pulled from embedded <script type=application/json> blocks */
+  function raw(id){
+    var el=document.getElementById(id);
+    return el ? el.textContent.trim() : '';
+  }
+
+  /* JSON syntax highlighter — first line is a dim header (handoff tokens) */
+  function hlJSON(src){
+    if(!src) return '';
+    var P={key:'#7C8BA6', str:'#8FD4B4', num:'#C7A6E8', head:'#5A6B84'};
+    var nl=src.indexOf('\n'), head='', body=src;
+    if(nl>=0){head=src.slice(0,nl);body=src.slice(nl+1);}
+    var e=function(c){return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c;};
+    var out='', i=0, n=body.length;
+    while(i<n){
+      var ch=body[i];
+      if(ch==='"'){
+        var j=i+1, s='"';
+        while(j<n){ s+=body[j]; if(body[j]==='"'&&body[j-1]!=='\\'){j++;break;} j++; }
+        var k=j; while(k<n&&(body[k]===' '||body[k]==='\t'))k++;
+        var isKey=body[k]===':';
+        var escd=s.split('').map(e).join('');
+        out+='<span style="color:'+(isKey?P.key:P.str)+'">'+escd+'</span>';
+        i=j; continue;
+      }
+      var prev=body[i-1]||'';
+      if(ch>='0'&&ch<='9'&&!/[a-zA-Z_0-9.]/.test(prev)){
+        var j2=i, num=''; while(j2<n&&/[0-9.]/.test(body[j2])){num+=body[j2];j2++;}
+        out+='<span style="color:'+P.num+'">'+num+'</span>'; i=j2; continue;
+      }
+      var m=/^(true|false|null)/.exec(body.slice(i));
+      if(m&&!/[a-zA-Z_]/.test(prev)){out+='<span style="color:'+P.num+'">'+m[0]+'</span>';i+=m[0].length;continue;}
+      out+=e(ch); i++;
+    }
+    var headHtml=head?'<span style="color:'+P.head+'">'+esc(head)+'</span>\n':'';
+    return headHtml+out;
+  }
+  function payloadPre(src){
+    return '<pre style="margin:0;font-family:var(--mono);font-size:11.5px;line-height:1.7;'+
+           'white-space:pre;color:#9FB4CE">'+hlJSON(src)+'</pre>';
+  }
+
+  /* ------- 11-step data model (handoff 1c) ------- */
+  var STEPS=[
+    { phase:'COMPLIANCE', nav:'Travel Rule submitted', method:'POST', path:'/travel-rule',
+      status:'201 CREATED', stKind:'ok', msMock:'38 ms', msLive:'486 ms',
+      corridor:{n:[1,1,0,0], s:[1,0,0], h:['pacs.008 → travel-rule','','']},
+      title:'Travel Rule filed before the money moves',
+      plain:'The instructing bank files the pacs.008-shaped compliance record pre-transaction. It returns a record_id that every later surface references — the compliance context is linked once, never duplicated into each downstream call.',
+      say:'We submit the Travel Rule first, pre-transaction. This record_id becomes the single compliance anchor for the entire payment.',
+      facts:[
+        {k:'record_id', v:'af814c5f-a44c-40ea-b4c3-b764fb023ab3', acc:1, span:2},
+        {k:'status', v:'SUBMITTED', span:1},
+        {k:'submission_timing', v:'PRE_TX', span:1},
+        {k:'debtor', v:'Acme Trading GmbH · DE', span:1},
+        {k:'creditor', v:'Bravo Supplies B.V. · NL', span:1},
+        {k:'settlement amount', v:'125,000.00 USD', span:2}
+      ],
+      reqHead:'POST /travel-rule', reqId:'p01-req',
+      resHead:'201 Created', resId:'p02-res' },
+
+    { phase:'COMPLIANCE', nav:'Beneficiary callback', method:'POST', path:'/travel-rule/{record_id}/callback',
+      status:'200 OK', stKind:'ok', msMock:'41 ms', msLive:'512 ms',
+      corridor:{n:[0,1,0,1], s:[0,0,1], h:['','','callback · ACCEPTED']},
+      title:'Receiving VASP accepts on the same record',
+      plain:'Kraken Belgium responds against the identical record_id. The handshake mutates one linked object — the beneficiary side is not handed a fresh copy of the payload to reconcile.',
+      say:'The receiving VASP accepts on the same record. This is the linked-context discipline: one record, many readers, zero duplication.',
+      facts:[
+        {k:'callback status', v:'ACCEPTED', ok:1, span:1},
+        {k:'record_id', v:'af814c5f… (unchanged)', span:1},
+        {k:'submitting vasp', v:'Bankhaus Example AG', span:1},
+        {k:'responding vasp', v:'Kraken Belgium BVBA', span:1}
+      ],
+      reqHead:'POST /travel-rule/af814c5f-.../callback', reqId:'p03-req',
+      resHead:'200 OK', resId:'p04-res' },
+
+    { phase:'INSTRUCT', nav:'Fee quote', method:'POST', path:'/instruction/quote',
+      status:'200 OK', stKind:'ok', msMock:'44 ms', msLive:'398 ms',
+      corridor:{n:[1,1,0,0], s:[1,0,0], h:['quote request','','']},
+      title:'Pre-execution quote locks the economics',
+      plain:'Before instructing, the bank gets a capped fee quote — gas, service fee, slippage, and an ETA — as its own surface. The economics live here, not stuffed into the instruction response.',
+      say:'The quote is a separate surface. Fee model and chain conditions belong here; the instruction stays a clean command.',
+      facts:[
+        {k:'quote_id', v:'79c52f2e-de14-48c6-b975-18b01c1ce8a0', acc:1, span:2},
+        {k:'total cost', v:'30.20 USD', ok:1, span:1},
+        {k:'fee lock', v:'CAPPED', span:1},
+        {k:'gas cost', v:'0.001505 ETH · 5.70 USD', span:1},
+        {k:'service fee', v:'24.50 USD', span:1},
+        {k:'slippage estimate', v:'7 bps', span:1},
+        {k:'est. confirmation', v:'144 s', span:1},
+        {k:'congestion', v:'MEDIUM', span:2}
+      ],
+      reqHead:'POST /instruction/quote', reqId:'p05-req',
+      resHead:'200 OK', resId:'p06-res' },
+
+    { phase:'INSTRUCT', nav:'Instruction submit', method:'POST', path:'/instruction',
+      status:'201 CREATED', stKind:'ok', msMock:'52 ms', msLive:'610 ms',
+      corridor:{n:[1,1,0,0], s:[1,0,0], h:['instruction (record + quote refs)','','']},
+      title:'One instruction, two references',
+      plain:'The instruction carries the travel_rule_record_id and quote_id — nothing is copied forward. It returns instruction_id + uetr and enters PENDING. This is the command layer; lifecycle detail is exposed elsewhere.',
+      say:'The instruction references the record and the quote by id. It is a thin command — not an oversized object that tries to own the whole payment.',
+      facts:[
+        {k:'instruction_id', v:'a6eef166-256b-459e-a8e1-4e525021137e', acc:1, span:2},
+        {k:'uetr', v:'433bb2fb-37a8-46cc-b6de-20b1474a7854', acc:1, span:2},
+        {k:'status', v:'PENDING', span:1},
+        {k:'custody_model', v:'FULL_CUSTODY', span:1},
+        {k:'debit_timing', v:'ON_BROADCAST', span:1},
+        {k:'references', v:'record_id + quote_id', span:1}
+      ],
+      reqHead:'POST /instruction', reqId:'p07-req',
+      resHead:'201 Created', resId:'p08-res' },
+
+    { phase:'SETTLE', nav:'Broadcast to chain', method:'EVENT', path:'adapter · mock-evm → broadcast',
+      status:'BROADCAST', stKind:'broadcast', msMock:'+0.85 s', msLive:'+1.2 s', life:true,
+      corridor:{n:[0,1,1,0], s:[0,1,0], h:['','broadcast tx','']},
+      title:'Adapter broadcasts to the chain',
+      plain:'The EVM adapter submits the transfer and the debit fires ON_BROADCAST. A transaction hash now exists. Lifecycle is the adapter’s concern — the instruction surface is not polled for it.',
+      say:'Lifecycle progression is the adapter’s job, not the instruction’s. Watch the status advance on its own surface.',
+      facts:[
+        {k:'lifecycle status', v:'BROADCAST', info:1, span:1},
+        {k:'debit', v:'fired ON_BROADCAST', span:1},
+        {k:'transaction_hash', v:'0x7e29…172669e', span:2},
+        {k:'adapter', v:'mock-evm · SIMULATED', span:2}
+      ],
+      resHead:'lifecycle event', resId:'p05-lc' },
+
+    { phase:'SETTLE', nav:'Confirming (depth)', method:'EVENT', path:'adapter · mock-evm → confirming',
+      status:'CONFIRMING 6/12', stKind:'confirming', msMock:'+72 s', msLive:'+72 s', life:true,
+      corridor:{n:[0,0,1,0], s:[0,1,0], h:['','confirming 6 / 12','']},
+      title:'Accumulating confirmations toward threshold',
+      plain:'Included in a block, the transfer gathers depth toward the required threshold of 12. The finality model is explicit: PROBABILISTIC → THRESHOLD_FINALITY — we do not call it done early.',
+      say:'Depth-based finality is a first-class, auditable claim — not a vibe. It is not FINAL until it crosses the threshold.',
+      facts:[
+        {k:'lifecycle status', v:'CONFIRMING', warn:1, span:1},
+        {k:'confirmation_depth', v:'6 / 12', span:1},
+        {k:'reason_code', v:'BLOCK_INCLUDED', span:2}
+      ],
+      resHead:'lifecycle event', resId:'p06-lc' },
+
+    { phase:'SETTLE', nav:'Finality reached', method:'EVENT', path:'adapter · mock-evm → final',
+      status:'FINAL 12/12', stKind:'final', msMock:'+144 s', msLive:'+144 s', life:true,
+      corridor:{n:[0,0,1,0], s:[0,1,0], h:['','FINAL 12 / 12','']},
+      title:'Finality threshold reached',
+      plain:'Twelve of twelve confirmations. The transfer is FINAL. Only now does settlement proof become available to read — the sequencing is deliberate.',
+      say:'FINAL means the required threshold was crossed. Precise, auditable, and only claimed once true.',
+      facts:[
+        {k:'lifecycle status', v:'FINAL', ok:1, span:1},
+        {k:'confirmation_depth', v:'12 / 12', ok:1, span:1},
+        {k:'reason_code', v:'FINALITY_THRESHOLD_REACHED', span:2}
+      ],
+      resHead:'lifecycle event', resId:'p07-lc' },
+
+    { phase:'PROVE', nav:'Execution status', method:'GET', path:'/execution-status/{instruction_id}',
+      status:'200 OK', stKind:'ok', msMock:'29 ms', msLive:'240 ms',
+      corridor:{n:[1,1,1,0], s:[1,1,0], h:['status read','','']},
+      title:'A single read replays the whole history',
+      plain:'One poll returns the current FINAL status plus the ordered PENDING → BROADCAST → CONFIRMING → FINAL history — keyed to the same instruction_id and uetr. Polling reuses identifiers; it does not invent new ones.',
+      say:'Status and command are separate surfaces that agree, because they share identifiers. No divergent copies of the truth.',
+      facts:[
+        {k:'status', v:'FINAL', ok:1, span:1},
+        {k:'status_group', v:'SETTLED', ok:1, span:1},
+        {k:'instruction_id', v:'a6eef166… (same)', span:1},
+        {k:'uetr', v:'433bb2fb… (same)', span:1},
+        {k:'history', v:'4 events · PENDING→FINAL', span:2}
+      ],
+      resHead:'200 OK', resId:'p09-res' },
+
+    { phase:'PROVE', nav:'Finality receipt', method:'GET', path:'/finality-receipt/{instruction_id}',
+      status:'200 OK', stKind:'ok', msMock:'31 ms', msLive:'255 ms', receipt:true,
+      corridor:{n:[1,1,1,0], s:[1,1,0], h:['finality receipt','','']},
+      title:'Settlement proof — camt.025 analogue',
+      plain:'The finality receipt is the dedicated settlement-proof surface: transaction hash, block number, block timestamp, and confirmation depth — the on-chain evidence a treasury can archive. It is deliberately not crammed into the instruction.',
+      say:'This is our camt.025 analogue — where the chain evidence lives. In LIVE mode this links straight to Etherscan.',
+      facts:[
+        {k:'finality_status', v:'FINAL', ok:1, span:1},
+        {k:'block_number', v:'22274289', span:1},
+        {k:'confirmation_depth', v:'12 / 12', ok:1, span:1},
+        {k:'settlement_amount', v:'125,000.00 USD', span:1},
+        {k:'token', v:'USDC · DTI T9B3X8H2K', span:2}
+      ],
+      resHead:'200 OK', resId:'p10-res' },
+
+    { phase:'REPORT', nav:'Credit notification', method:'GET', path:'/reporting/notifications/{id}',
+      status:'200 OK', stKind:'ok', msMock:'33 ms', msLive:'268 ms',
+      corridor:{n:[0,1,0,1], s:[0,0,1], h:['','','camt.054 · booked credit']},
+      title:'Booked credit notification — camt.054 analogue',
+      plain:'Reporting derives a BOOKED credit entry for the creditor from the same payment. This is institution-facing booked-entry reporting for the beneficiary’s books — not a block explorer view.',
+      say:'Reporting reuses the identifiers again. It is booked-entry reporting the beneficiary’s ops team recognizes — not a chain viewer.',
+      facts:[
+        {k:'notification_id', v:'8774d448-8d1f-463f-b758-cd90e57e5c7b', acc:1, span:2},
+        {k:'message_family', v:'camt.054_analogue', span:1},
+        {k:'entry_type', v:'CREDIT · BOOKED', ok:1, span:1},
+        {k:'party', v:'Bravo Supplies B.V.', span:1},
+        {k:'amount', v:'125,000.00 USD', span:1},
+        {k:'remittance', v:'Invoice 78452 / DE→NL treasury settlement', span:2}
+      ],
+      resHead:'200 OK', resId:'p11-res' },
+
+    { phase:'REPORT', nav:'Creditor statement', method:'GET', path:'/reporting/statements/{id}',
+      status:'200 OK', stKind:'ok', msMock:'36 ms', msLive:'281 ms',
+      corridor:{n:[0,1,0,1], s:[0,0,1], h:['','','camt.053 · statement']},
+      title:'Creditor statement — camt.053 analogue',
+      plain:'The statement rolls the booked notification into an account statement: opening 0 → closing 125,000 USD, one credit entry, every line traceable back to instruction, finality, and the Travel Rule record we started with. The loop is closed.',
+      say:'And it closes the loop: a statement any bank recognizes, derived from booked notifications, linked all the way back to the pacs.008 anchor.',
+      facts:[
+        {k:'statement_id', v:'db2452bd-62fa-44d5-986e-c5864aa2cf1a', acc:1, span:2},
+        {k:'message_family', v:'camt.053_analogue', span:1},
+        {k:'opening balance', v:'0.00 USD', span:1},
+        {k:'closing balance', v:'125,000.00 USD', ok:1, span:1},
+        {k:'entries', v:'1 · net +125,000 CRDT', span:1},
+        {k:'derivation', v:'BOOKED_NOTIFICATIONS', span:2}
+      ],
+      resHead:'200 OK', resId:'p12-res' }
+  ];
+
+  var TRACE=[
+    {label:'End-to-end ID', val:'E2E-DEMO-2026-0001', at:0},
+    {label:'Travel Rule record', val:'af814c5f-a44c-40ea-b4c3-b764fb023ab3', at:0},
+    {label:'Quote', val:'79c52f2e-de14-48c6-b975-18b01c1ce8a0', at:2},
+    {label:'Instruction', val:'a6eef166-256b-459e-a8e1-4e525021137e', at:3},
+    {label:'UETR', val:'433bb2fb-37a8-46cc-b6de-20b1474a7854', at:3},
+    {label:'Transaction hash', val:'0x7e29497a…20172669e', at:4},
+    {label:'Block number', val:'22274289', at:8},
+    {label:'Credit notification', val:'8774d448-8d1f-463f-b758-cd90e57e5c7b', at:9},
+    {label:'Creditor statement', val:'db2452bd-62fa-44d5-986e-c5864aa2cf1a', at:10}
+  ];
+
+  var PHASES=[
+    {label:'COMPLIANCE', idx:[0,1]},
+    {label:'INSTRUCT', idx:[2,3]},
+    {label:'SETTLE', idx:[4,5,6]},
+    {label:'PROVE', idx:[7,8]},
+    {label:'REPORT', idx:[9,10]}
+  ];
+  var PHASE_COLOR={COMPLIANCE:VIOLET, INSTRUCT:ACC, SETTLE:AMBER, PROVE:CYAN, REPORT:GREEN};
+
+  /* ------- state ------- */
+  var state={step:0, mode:'mock', payloadTab:'response', notesOn:true, playing:false};
+  var timer=null;
+
+  /* =============================================================
+     LIVE mode engine — talks ONLY to the local reference server's
+     default mock adapter at LIVE_BASE_URL. MOCK mode never enters
+     here and performs no network fetch. Sepolia/real-chain
+     broadcasting stays presentation-only: the Etherscan link and
+     Sepolia labels are honoured only when a live response actually
+     carries a transaction_hash.
+     ============================================================= */
+  var LIVE_BASE_URL='http://127.0.0.1:5050';
+  var RED='#F0616D';
+  var liveState=null;
+  /* which earlier live steps must have run before a given step */
+  var LIVE_PREREQ={
+    1:[0],
+    2:[0,1],
+    3:[0,1,2],
+    4:[0,1,2,3],
+    5:[0,1,2,3,4],
+    6:[0,1,2,3,4,5],
+    7:[0,1,2,3,4,5,6],
+    8:[0,1,2,3,4,5,6,7],
+    9:[0,1,2,3,4,5,6,7,8],
+    10:[0,1,2,3,4,5,6,7,8,9]
+  };
+  /* steps that require the instruction to have reached finality first */
+  var LIVE_NEEDS_FINAL={8:true, 9:true, 10:true};
+
+  function newLiveState(){
+    return {
+      runId:(liveState?liveState.runId+1:1),
+      e2e:'E2E-LIVE-'+Math.random().toString(36).slice(2,8).toUpperCase(),
+      recordId:null, quoteId:null, instructionId:null, uetr:null,
+      txHash:null, blockNumber:null, notificationId:null, statementId:null,
+      finalityStatus:null,
+      resp:{}, httpStatus:{}, loading:{}, error:{}, _p:{}
+    };
+  }
+  function pretty(obj){ try{ return JSON.stringify(obj,null,2); }catch(e){ return String(obj); } }
+  function jclone(id){ try{ return JSON.parse(raw(id)); }catch(e){ return {}; } }
+  function ldelay(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+
+  /* single fetch → {ok,status,json}; network/timeout errors reject with a tagged object */
+  function liveFetchJSON(method, path, body){
+    var ctrl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+    var timedOut=false;
+    var t=setTimeout(function(){ timedOut=true; if(ctrl) ctrl.abort(); }, 6000);
+    var opts={ method:method, headers:{} };
+    if(ctrl) opts.signal=ctrl.signal;
+    if(body!==undefined){ opts.headers['content-type']='application/json'; opts.body=JSON.stringify(body); }
+    return fetch(LIVE_BASE_URL+path, opts).then(function(r){
+      return r.text().then(function(txt){
+        var json;
+        try{ json = txt ? JSON.parse(txt) : {}; }catch(e){ json={raw:txt}; }
+        return { ok:r.ok, status:r.status, json:json };
+      });
+    }, function(err){
+      throw { kind:'network', message: timedOut?'request timed out':'connection failed',
+              detail:String(err&&err.message||err) };
+    }).then(function(v){ clearTimeout(t); return v; }, function(e){ clearTimeout(t); throw e; });
+  }
+  function httpFail(res){ return { kind:'http', status:res.status, message:'HTTP '+res.status, body:res.json }; }
+
+  /* poll execution-status until FINAL (or a terminal state / bounded attempts) */
+  function waitForFinal(ls){
+    var attempts=0, last=null;
+    function tick(){
+      return liveFetchJSON('GET','/execution-status/'+encodeURIComponent(ls.instructionId)).then(function(res){
+        if(!res.ok) throw httpFail(res);
+        last=res.json;
+        if(res.json.transaction_hash) ls.txHash=res.json.transaction_hash;
+        ls.finalityStatus = res.json.finality_status || res.json.status || ls.finalityStatus;
+        var st = res.json.status || res.json.finality_status;
+        if(st==='FINAL' || st==='FAILED' || st==='EXPIRED') return res.json;
+        attempts++;
+        if(attempts>=24) return last;
+        return ldelay(500).then(tick);
+      });
+    }
+    return tick();
+  }
+
+  var _renderQueued=false;
+  function scheduleRender(){
+    if(_renderQueued) return;
+    _renderQueued=true;
+    Promise.resolve().then(function(){ _renderQueued=false; render(); });
+  }
+
+  /* memoized per-run promise for a step's live data */
+  function stepPromise(ls,i){
+    if(ls.resp[i]!==undefined) return Promise.resolve(ls.resp[i]);
+    if(ls._p[i]) return ls._p[i];
+    var p=runLiveStep(ls,i);
+    ls._p[i]=p;
+    return p;
+  }
+  function ensurePrereqs(ls,i){
+    var pre=LIVE_PREREQ[i]||[];
+    var chain=Promise.resolve();
+    pre.forEach(function(pi){
+      chain=chain.then(function(){
+        return stepPromise(ls,pi).then(null,function(){ var pe=new Error('prereq'); pe.prereqFail=true; throw pe; });
+      });
+    });
+    if(LIVE_NEEDS_FINAL[i]) chain=chain.then(function(){ return waitForFinal(ls); });
+    return chain;
+  }
+
+  function runLiveStep(ls,i){
+    ls.loading[i]=true; scheduleRender();
+    return ensurePrereqs(ls,i).then(function(){
+      if(i===0){
+        var b=jclone('p01-req');
+        try{ b.travel_rule_data.payment_identification.end_to_end_identification=ls.e2e; }catch(e){}
+        return liveFetchJSON('POST','/travel-rule',b).then(function(res){
+          if(!res.ok) throw httpFail(res);
+          ls.recordId=res.json.record_id; return res;
+        });
+      }
+      if(i===1){
+        return liveFetchJSON('POST','/travel-rule/'+encodeURIComponent(ls.recordId)+'/callback', jclone('p03-req')).then(function(res){
+          if(!res.ok) throw httpFail(res); return res;
+        });
+      }
+      if(i===2){
+        return liveFetchJSON('POST','/instruction/quote', jclone('p05-req')).then(function(res){
+          if(!res.ok) throw httpFail(res);
+          ls.quoteId=res.json.quote_id; return res;
+        });
+      }
+      if(i===3){
+        var b=jclone('p07-req');
+        try{
+          b.payment_identification.quote_id=ls.quoteId;
+          b.payment_identification.end_to_end_identification=ls.e2e;
+          b.travel_rule_record_id=ls.recordId;
+        }catch(e){}
+        return liveFetchJSON('POST','/instruction',b).then(function(res){
+          if(!res.ok) throw httpFail(res);
+          ls.instructionId=res.json.instruction_id; ls.uetr=res.json.uetr;
+          if(res.json.transaction_hash) ls.txHash=res.json.transaction_hash;
+          return res;
+        });
+      }
+      if(i===4||i===5||i===6||i===7){
+        return liveFetchJSON('GET','/execution-status/'+encodeURIComponent(ls.instructionId)).then(function(res){
+          if(!res.ok) throw httpFail(res);
+          if(res.json.transaction_hash) ls.txHash=res.json.transaction_hash;
+          ls.finalityStatus = res.json.finality_status || res.json.status || ls.finalityStatus;
+          return res;
+        });
+      }
+      if(i===8){
+        return liveFetchJSON('GET','/finality-receipt/'+encodeURIComponent(ls.instructionId)).then(function(res){
+          if(!res.ok) throw httpFail(res);
+          if(res.json.transaction_hash) ls.txHash=res.json.transaction_hash;
+          if(res.json.block_number!=null) ls.blockNumber=res.json.block_number;
+          return res;
+        });
+      }
+      if(i===9){
+        return liveFetchJSON('GET','/reporting/notifications?instruction_id='+encodeURIComponent(ls.instructionId)+'&account_role=CREDITOR').then(function(list){
+          if(!list.ok) throw httpFail(list);
+          var nid=(list.json.notifications && list.json.notifications[0] && list.json.notifications[0].notification_id) || null;
+          if(!nid) return { ok:true, status:list.status, json:list.json };
+          return liveFetchJSON('GET','/reporting/notifications/'+encodeURIComponent(nid)).then(function(res){
+            if(!res.ok) throw httpFail(res);
+            ls.notificationId=res.json.notification_id||nid; return res;
+          });
+        });
+      }
+      if(i===10){
+        return liveFetchJSON('GET','/reporting/statements?instruction_id='+encodeURIComponent(ls.instructionId)+'&account_role=CREDITOR').then(function(list){
+          if(!list.ok) throw httpFail(list);
+          var sid=(list.json.statements && list.json.statements[0] && list.json.statements[0].statement_id) || null;
+          if(!sid) return { ok:true, status:list.status, json:list.json };
+          return liveFetchJSON('GET','/reporting/statements/'+encodeURIComponent(sid)).then(function(res){
+            if(!res.ok) throw httpFail(res);
+            ls.statementId=res.json.statement_id||sid; return res;
+          });
+        });
+      }
+      return { ok:true, status:200, json:{} };
+    }).then(function(res){
+      ls.resp[i]=res.json; ls.httpStatus[i]=res.status;
+      ls.loading[i]=false; scheduleRender();
+      return res.json;
+    }, function(e){
+      if(!(e&&e.prereqFail)) ls.error[i]=e;
+      ls.loading[i]=false; scheduleRender();
+      throw e;
+    });
+  }
+
+  /* kick off (idempotently) whatever the current step needs; errors are captured in liveState */
+  function syncLive(step){
+    if(!liveState) return;
+    stepPromise(liveState, step).then(null,function(){});
+  }
+
+  /* has an upstream prerequisite failed? (so this step is blocked, not merely loading) */
+  function liveUpstreamError(step){
+    var pre=LIVE_PREREQ[step]||[];
+    for(var k=0;k<pre.length;k++){
+      if(liveState.error[pre[k]] || liveUpstreamError(pre[k])) return true;
+    }
+    return false;
+  }
+  /* RESPONSE-tab body text for the payload panel in LIVE mode */
+  function liveResponseBody(step){
+    var ls=liveState;
+    if(ls.error[step]){
+      var er=ls.error[step];
+      var p={ error: er.kind==='network'?'connection_failed':(er.kind==='http'?'request_failed':'error'),
+              base_url:LIVE_BASE_URL, message:er.message||'request failed' };
+      if(er.status) p.status=er.status;
+      if(er.body) p.response=er.body;
+      return 'live · FAILED · '+LIVE_BASE_URL+'\n'+pretty(p);
+    }
+    if(ls.resp[step]!==undefined){
+      var code=ls.httpStatus[step]||200;
+      return 'live · '+code+' · '+LIVE_BASE_URL+'\n'+pretty(ls.resp[step]);
+    }
+    if(liveUpstreamError(step)){
+      return 'live · BLOCKED · '+LIVE_BASE_URL+'\n'+pretty({ error:'upstream_unavailable', base_url:LIVE_BASE_URL,
+        message:'a prior live step failed; resolve the server connection and re-enter LIVE mode' });
+    }
+    return 'live · LOADING · '+LIVE_BASE_URL+'\n'+pretty({ status:'loading', base_url:LIVE_BASE_URL, message:'fetching live response…' });
+  }
+  /* small status callout at the top of the EVIDENCE column in LIVE mode */
+  function liveEvidenceBanner(step){
+    var ls=liveState, col, st, txt;
+    if(ls.error[step]){ col=RED; st='REQUEST FAILED'; txt=(ls.error[step].message||'failed')+' · '+LIVE_BASE_URL; }
+    else if(ls.resp[step]!==undefined){ col=CYAN; st='LIVE RESPONSE'; txt=(ls.httpStatus[step]||200)+' · '+LIVE_BASE_URL; }
+    else if(liveUpstreamError(step)){ col=RED; st='UPSTREAM BLOCKED'; txt='a prior live step failed'; }
+    else { col=AMBER; st='LOADING…'; txt='contacting '+LIVE_BASE_URL; }
+    return '<div style="display:flex;align-items:center;gap:9px;background:'+rgba(col,.08)+';border:1px solid '+rgba(col,.3)+';border-left:3px solid '+col+';border-radius:0 8px 8px 0;padding:9px 12px;margin-bottom:12px">'+
+      '<span style="width:7px;height:7px;border-radius:50%;background:'+col+';flex:none"></span>'+
+      '<span style="font:700 8px \'IBM Plex Mono\',monospace;letter-spacing:.12em;color:'+col+'">'+st+'</span>'+
+      '<span style="font:500 9.5px \'IBM Plex Mono\',monospace;color:#8B96AB;margin-left:auto;word-break:break-all;text-align:right">'+esc(txt)+'</span>'+
+    '</div>';
+  }
+  /* live value for a traceability-spine row, or null if not yet produced */
+  function liveTraceVal(label){
+    var ls=liveState;
+    switch(label){
+      case 'End-to-end ID': return ls.e2e;
+      case 'Travel Rule record': return ls.recordId;
+      case 'Quote': return ls.quoteId;
+      case 'Instruction': return ls.instructionId;
+      case 'UETR': return ls.uetr;
+      case 'Transaction hash': return ls.txHash;
+      case 'Block number': return ls.blockNumber!=null?String(ls.blockNumber):null;
+      case 'Credit notification': return ls.notificationId;
+      case 'Creditor statement': return ls.statementId;
+    }
+    return null;
+  }
+
+  function stopPlay(){ if(timer){clearInterval(timer);timer=null;} }
+  function togglePlay(){
+    if(state.playing){ stopPlay(); state.playing=false; render(); return; }
+    state.playing=true; state.payloadTab='response'; render();
+    timer=setInterval(function(){
+      if(state.step>=STEPS.length-1){ stopPlay(); state.playing=false; render(); return; }
+      state.step++; state.payloadTab='response'; render();
+    },2400);
+  }
+  /* manual navigation: always stops autoplay + resets payload toggle to RESPONSE */
+  function go(d){
+    var ns=Math.max(0,Math.min(STEPS.length-1,state.step+d));
+    stopPlay(); state.playing=false; state.step=ns; state.payloadTab='response'; render();
+  }
+  function goTo(i){
+    stopPlay(); state.playing=false; state.step=i; state.payloadTab='response'; render();
+  }
+  function restart(){
+    stopPlay(); state.playing=false; state.step=0; state.payloadTab='response';
+    if(state.mode==='live'){ liveState=newLiveState(); }
+    render();
+  }
+  /* Switching INTO live always starts a fresh live run (also the natural retry
+     path after a server-unavailable failure). MOCK stays fully static. */
+  function setMode(m){
+    stopPlay(); state.playing=false; state.mode=m;
+    if(m==='live'){ liveState=newLiveState(); }
+    render();
+  }
+  function toggleNotes(){ state.notesOn=!state.notesOn; render(); }
+
+  /* ------- render ------- */
+  function nodeVals(on){
+    return { bd:on?ACC:'#232B3A', ic:on?ACC:'#4A5568', c:on?HI:MUTED, on:!!on };
+  }
+  function factColor(f){ return f.acc?ACC : f.ok?GREEN : f.warn?AMBER : f.info?BLUE : BODY; }
+
+  function corridorNode(w, node, iconHtml, name, sub, subC){
+    var ring = node.on ? '<div style="position:absolute;inset:-1px;border-radius:10px;border:1px solid '+ACC+';animation:pulseglow 1.6s ease infinite"></div>' : '';
+    return '<div style="width:'+w+'px;flex:none;display:flex;align-items:center;gap:11px">'+
+      '<div style="width:42px;height:42px;border-radius:10px;background:#10151F;border:1px solid '+node.bd+';display:flex;align-items:center;justify-content:center;position:relative">'+
+        iconHtml+ring+
+      '</div>'+
+      '<div>'+
+        '<div style="font:600 11.5px \'IBM Plex Sans\',sans-serif;color:'+node.c+'">'+name+'</div>'+
+        '<div style="font:400 9.5px \'IBM Plex Mono\',monospace;color:'+subC+';margin-top:2px">'+sub+'</div>'+
+      '</div>'+
+    '</div>';
+  }
+  function segment(on, hop){
+    var dash = on ? '<div style="position:absolute;left:8px;right:8px;top:20px;height:2px;background:repeating-linear-gradient(90deg,'+ACC+' 0 7px,transparent 7px 14px);animation:dashmove .7s linear infinite"></div>' : '';
+    var label = hop ? '<div style="position:absolute;left:50%;transform:translateX(-50%);top:-4px;font:600 9px \'IBM Plex Mono\',monospace;color:#9CC4F2;background:#0F1E33;border:1px solid rgba(77,157,246,.35);border-radius:5px;padding:3px 9px;white-space:nowrap">'+esc(hop)+'</div>' : '';
+    return '<div style="flex:1;position:relative;height:42px">'+
+      '<div style="position:absolute;left:8px;right:8px;top:20px;height:2px;background:#1C2434"></div>'+
+      dash+label+
+    '</div>';
+  }
+
+  function render(){
+    var step=state.step, live=state.mode==='live', S=STEPS[step], c=S.corridor;
+    var n1=nodeVals(c.n[0]), n2=nodeVals(c.n[1]), n3=nodeVals(c.n[2]), n4=nodeVals(c.n[3]);
+
+    var chainSub, chainSubC;
+    if(step<4){ chainSub=(live?'Sepolia':'mock-evm')+' · idle'; chainSubC=DIM; }
+    else if(step===4){ chainSub=(live?'Sepolia':'mock-evm')+' · BROADCAST'; chainSubC=BLUE; }
+    else if(step===5){ chainSub=(live?'Sepolia':'mock-evm')+' · CONFIRMING'; chainSubC=AMBER; }
+    else { chainSub=(live?'Sepolia':'mock-evm')+' · FINAL'; chainSubC=GREEN; }
+
+    var pc=PHASE_COLOR[S.phase]||ACC;
+    var mMap={POST:{c:GREEN,bg:rgba(GREEN,.12)}, GET:{c:BLUE,bg:rgba(BLUE,.12)}, EVENT:{c:VIOLET,bg:rgba(VIOLET,.12)}};
+    var mm=mMap[S.method]||mMap.GET;
+    var stMap={ok:{c:GREEN,bg:rgba(GREEN,.1),bd:rgba(GREEN,.32)},
+               broadcast:{c:BLUE,bg:rgba(BLUE,.1),bd:rgba(BLUE,.32)},
+               confirming:{c:AMBER,bg:rgba(AMBER,.1),bd:rgba(AMBER,.32)},
+               final:{c:GREEN,bg:rgba(GREEN,.1),bd:rgba(GREEN,.32)}};
+    var sm=stMap[S.stKind]||stMap.ok;
+
+    /* ---------- header ---------- */
+    var baseUrl = live ? '<span style="font:500 10px \'IBM Plex Mono\',monospace;color:#67D3E0;background:#0B1A1E;border:1px solid rgba(103,211,224,.25);border-radius:5px;padding:5px 10px">http://127.0.0.1:5050</span>' : '';
+    var mockBg=!live?'#E8EDF6':'transparent', mockC=!live?'#0A0E16':MUTED;
+    var liveBg=live?CYAN:'transparent', liveC=live?'#06121A':MUTED;
+    var notesBd=state.notesOn?rgba(ACC,.5):'#232B3A', notesBg=state.notesOn?rgba(ACC,.12):'#10151F', notesC=state.notesOn?ACC:MUTED;
+    var playLabel=state.playing?'❚❚ PAUSE':'▶ PLAY';
+
+    var header=
+      '<div style="height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 20px;background:#0D1220;border-bottom:1px solid #1C2434">'+
+        '<div style="width:27px;height:27px;border-radius:7px;background:linear-gradient(135deg,'+ACC+','+rgba(ACC,.6)+');display:flex;align-items:center;justify-content:center;font:700 9px \'IBM Plex Mono\',monospace;color:#06080D">PC</div>'+
+        '<div style="display:flex;align-items:baseline;gap:9px">'+
+          '<span style="font:600 14px \'IBM Plex Mono\',monospace;color:#F2F5FB;letter-spacing:-.01em">pacs.crypto</span>'+
+          '<span style="font:700 9px \'IBM Plex Mono\',monospace;color:#576175;letter-spacing:.16em">BANK → VASP DEMO</span>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px;margin-left:12px">'+
+          '<span style="font:600 9px \'IBM Plex Mono\',monospace;color:#8B96AB;background:#141B29;border:1px solid #232B3A;border-radius:4px;padding:3px 8px">USDC</span>'+
+          '<span style="font:600 9px \'IBM Plex Mono\',monospace;color:#8B96AB;background:#141B29;border:1px solid #232B3A;border-radius:4px;padding:3px 8px">EVM</span>'+
+          '<span style="font:600 9px \'IBM Plex Mono\',monospace;color:#8B96AB;background:#141B29;border:1px solid #232B3A;border-radius:4px;padding:3px 8px">FULL_CUSTODY</span>'+
+        '</div>'+
+        '<div style="margin-left:auto;display:flex;align-items:center;gap:9px">'+
+          baseUrl+
+          '<div style="display:flex;background:#10151F;border:1px solid #232B3A;border-radius:7px;padding:2px;gap:2px">'+
+            '<button data-act="mock" style="border:none;cursor:pointer;font:700 9.5px \'IBM Plex Mono\',monospace;letter-spacing:.08em;padding:6px 12px;border-radius:5px;background:'+mockBg+';color:'+mockC+'">MOCK</button>'+
+            '<button data-act="live" style="border:none;cursor:pointer;font:700 9.5px \'IBM Plex Mono\',monospace;letter-spacing:.08em;padding:6px 12px;border-radius:5px;background:'+liveBg+';color:'+liveC+'">LIVE · SEPOLIA</button>'+
+          '</div>'+
+          '<button data-act="say" title="Presenter notes" style="border:1px solid '+notesBd+';cursor:pointer;font:700 9.5px \'IBM Plex Mono\',monospace;letter-spacing:.08em;padding:7px 12px;border-radius:7px;background:'+notesBg+';color:'+notesC+'">SAY ✎</button>'+
+          '<button data-act="play" class="hbtn" style="border:1px solid #232B3A;cursor:pointer;font:700 9.5px \'IBM Plex Mono\',monospace;letter-spacing:.08em;padding:7px 12px;border-radius:7px;background:#10151F;color:#B9C4D6">'+playLabel+'</button>'+
+        '</div>'+
+      '</div>';
+
+    /* ---------- corridor ---------- */
+    var icBank='<svg width="18" height="18" viewBox="0 0 16 16"><path d="M8 1.2 14.8 5H1.2z" fill="'+n1.ic+'"></path><rect x="2.4" y="6.2" width="1.9" height="5.4" fill="'+n1.ic+'"></rect><rect x="7.05" y="6.2" width="1.9" height="5.4" fill="'+n1.ic+'"></rect><rect x="11.7" y="6.2" width="1.9" height="5.4" fill="'+n1.ic+'"></rect><rect x="1.2" y="12.8" width="13.6" height="1.9" fill="'+n1.ic+'"></rect></svg>';
+    var icSurf='<span style="font:600 13px \'IBM Plex Mono\',monospace;color:'+n2.ic+'">{ }</span>';
+    var icChain='<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M8 1.3 14 4.8v6.4L8 14.7 2 11.2V4.8z" stroke="'+n3.ic+'" stroke-width="1.4"></path><path d="M2 4.8 8 8.3l6-3.5M8 8.3v6.4" stroke="'+n3.ic+'" stroke-width="1.4"></path></svg>';
+    var icVasp='<svg width="18" height="18" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="3.5" width="13" height="9.5" rx="2" stroke="'+n4.ic+'" stroke-width="1.4"></rect><path d="M10.4 8.2h4.1" stroke="'+n4.ic+'" stroke-width="1.4"></path><circle cx="10.4" cy="8.2" r="1.15" fill="'+n4.ic+'"></circle></svg>';
+
+    var corridor=
+      '<div style="height:108px;flex:none;background:#0B101B;border-bottom:1px solid #1C2434;display:flex;align-items:center;padding:0 44px;position:relative">'+
+        corridorNode(196, n1, icBank, 'Instructing bank', 'Bankhaus Example AG · DE', DIM)+
+        segment(c.s[0], c.h[0])+
+        corridorNode(214, n2, icSurf, 'pacs.crypto surfaces', 'travel-rule · instruction · reporting', DIM)+
+        segment(c.s[1], c.h[1])+
+        corridorNode(186, n3, icChain, 'EVM chain', chainSub, chainSubC)+
+        segment(c.s[2], c.h[2])+
+        corridorNode(202, n4, icVasp, 'Receiving VASP', 'Kraken Belgium → Bravo Supplies', DIM)+
+        '<div style="position:absolute;right:44px;bottom:9px;font:600 9px \'IBM Plex Mono\',monospace;color:#3A4358;letter-spacing:.13em">ONE PAYMENT · $125,000.00 USDC · E2E-DEMO-2026-0001</div>'+
+      '</div>';
+
+    /* ---------- script rail ---------- */
+    var railItems='';
+    PHASES.forEach(function(p){
+      var activePhase=p.idx.indexOf(step)>=0;
+      var lc=activePhase?(PHASE_COLOR[p.label]||ACC):'#3A4358';
+      railItems+='<div style="padding:14px 18px 5px;display:flex;align-items:center;gap:9px">'+
+        '<span style="font:700 8.5px \'IBM Plex Mono\',monospace;color:'+lc+';letter-spacing:.15em">'+p.label+'</span>'+
+        '<span style="flex:1;height:1px;background:#1C2434"></span></div>';
+      p.idx.forEach(function(i){
+        var cur=i===step, done=i<step;
+        var bl=cur?ACC:'transparent', bg=cur?rgba(ACC,.08):'transparent';
+        var nc=cur?ACC:done?GREEN:'#3A4358', tc=cur?HI:done?BODY2:'#576175', fw=cur?'600':'400';
+        railItems+='<div class="rail-step" data-act="goto" data-i="'+i+'" style="display:flex;align-items:baseline;gap:11px;padding:9px 18px 9px 16px;border-left:2px solid '+bl+';background:'+bg+';cursor:pointer">'+
+          '<span style="font:700 10px \'IBM Plex Mono\',monospace;color:'+nc+';min-width:16px">'+(i+1)+'</span>'+
+          '<span style="font:'+fw+' 12.5px/1.35 \'IBM Plex Sans\',sans-serif;color:'+tc+'">'+esc(STEPS[i].nav)+'</span>'+
+        '</div>';
+      });
+    });
+    var rail=
+      '<div style="border-right:1px solid #1C2434;background:#0C111C;overflow-y:auto;display:flex;flex-direction:column">'+
+        '<div style="padding:15px 18px 4px;flex:none"><div style="font:700 9px \'IBM Plex Mono\',monospace;color:#576175;letter-spacing:.17em">DEMO SCRIPT</div></div>'+
+        '<div style="flex:1;padding-bottom:6px">'+railItems+'</div>'+
+        '<div style="flex:none;padding:12px 18px;border-top:1px solid #1C2434;display:flex;align-items:center;justify-content:space-between">'+
+          '<button data-act="restart" class="hbtn" style="border:1px solid #232B3A;background:transparent;cursor:pointer;font:700 9px \'IBM Plex Mono\',monospace;letter-spacing:.1em;color:#8B96AB;border-radius:6px;padding:6px 11px">↺ RESTART</button>'+
+          '<span style="font:500 9px \'IBM Plex Mono\',monospace;color:#3A4358">happy path · v1.3</span>'+
+        '</div>'+
+      '</div>';
+
+    /* ---------- narrative ---------- */
+    var adapter=live?'sepolia-usdc':'mock-evm · SIMULATED';
+    var adDot=live?CYAN:AMBER;
+    var sayHtml = state.notesOn ?
+      '<div style="display:flex;gap:12px;background:'+rgba(ACC,.06)+';border:1px solid '+rgba(ACC,.22)+';border-left:3px solid '+ACC+';border-radius:0 8px 8px 0;padding:11px 14px;margin-bottom:13px">'+
+        '<span style="font:700 8.5px \'IBM Plex Mono\',monospace;color:'+ACC+';letter-spacing:.13em;padding-top:2px;flex:none">SAY</span>'+
+        '<span style="font:italic 400 12.5px/1.55 \'IBM Plex Sans\',sans-serif;color:#B9C4D6">'+esc(S.say)+'</span>'+
+      '</div>' : '';
+    var narrative=
+      '<div class="fadein" style="flex:none;padding:22px 28px 16px">'+
+        '<div style="display:flex;align-items:center;gap:11px;margin-bottom:12px">'+
+          '<span style="font:700 8.5px \'IBM Plex Mono\',monospace;letter-spacing:.14em;color:'+pc+';background:'+rgba(pc,.1)+';border:1px solid '+rgba(pc,.3)+';border-radius:4px;padding:4px 9px">'+S.phase+'</span>'+
+          '<span style="font:600 9.5px \'IBM Plex Mono\',monospace;color:#576175">STEP '+(step+1)+' / 11</span>'+
+          '<div style="margin-left:auto;display:flex;align-items:center;gap:7px">'+
+            '<span style="width:6px;height:6px;border-radius:50%;background:'+adDot+'"></span>'+
+            '<span style="font:600 9.5px \'IBM Plex Mono\',monospace;color:#8B96AB">'+adapter+'</span>'+
+          '</div>'+
+        '</div>'+
+        '<div style="font:600 22px/1.25 \'IBM Plex Sans\',sans-serif;color:#F2F5FB;letter-spacing:-.015em;margin-bottom:8px">'+esc(S.title)+'</div>'+
+        '<div style="font:400 13px/1.6 \'IBM Plex Sans\',sans-serif;color:#8B96AB;margin-bottom:12px">'+esc(S.plain)+'</div>'+
+        sayHtml+
+        '<div style="display:flex;align-items:center;gap:10px;background:#0D1220;border:1px solid #1F2735;border-radius:8px;padding:10px 14px;flex-wrap:wrap">'+
+          '<span style="font:700 10px \'IBM Plex Mono\',monospace;color:'+mm.c+';background:'+mm.bg+';border-radius:5px;padding:3px 9px;letter-spacing:.06em">'+S.method+'</span>'+
+          '<span style="font:500 12px \'IBM Plex Mono\',monospace;color:#C6D2E4">'+esc(S.path)+'</span>'+
+          '<span style="color:#3A4358;font-size:11px">→</span>'+
+          '<span style="font:700 10.5px \'IBM Plex Mono\',monospace;color:'+sm.c+';background:'+sm.bg+';border:1px solid '+sm.bd+';border-radius:5px;padding:3px 9px">'+S.status+'</span>'+
+          '<span style="font:500 10px \'IBM Plex Mono\',monospace;color:#576175;margin-left:auto">'+(live?S.msLive:S.msMock)+'</span>'+
+        '</div>'+
+      '</div>';
+
+    /* ---------- evidence ---------- */
+    var lifeHtml='';
+    if(S.life){
+      var lifeLabels=['PENDING','BROADCAST','CONFIRMING','FINAL'];
+      var lifeCur=step===4?1:step===5?2:step>=6?3:0;
+      var railDots='';
+      lifeLabels.forEach(function(lb,i){
+        var done=i<lifeCur, curN=i===lifeCur;
+        var col=curN?(S.stKind==='confirming'?AMBER:S.stKind==='broadcast'?BLUE:GREEN):done?GREEN:'#3A4358';
+        var dot=(done||curN)?col:'#0B101B';
+        var glow=curN?('0 0 10px 1px '+rgba(col,.5)):'none';
+        var tc=(done||curN)?col:'#4A5568';
+        railDots+='<div style="display:flex;flex-direction:column;align-items:center;gap:7px;width:74px;flex:none">'+
+          '<div style="width:13px;height:13px;border-radius:50%;background:'+dot+';border:2px solid '+col+';box-shadow:'+glow+'"></div>'+
+          '<span style="font:700 8px \'IBM Plex Mono\',monospace;letter-spacing:.05em;color:'+tc+'">'+lb+'</span></div>';
+        if(i<lifeLabels.length-1){
+          railDots+='<div style="flex:1;height:2px;background:'+(i<lifeCur?GREEN:'#232B3A')+';margin-top:-15px"></div>';
+        }
+      });
+      var confDepth=step===4?1:step===5?6:step>=6?12:0;
+      var confPct=Math.round(confDepth/12*100)+'%';
+      var confColor=confDepth>=12?GREEN:AMBER;
+      lifeHtml=
+        '<div style="background:#0D1220;border:1px solid #1F2735;border-radius:9px;padding:17px 18px;margin-bottom:12px">'+
+          '<div style="display:flex;align-items:center;margin-bottom:15px">'+railDots+'</div>'+
+          '<div style="display:flex;align-items:center;gap:11px">'+
+            '<span style="font:700 8.5px \'IBM Plex Mono\',monospace;color:#576175;letter-spacing:.09em;flex:none">DEPTH</span>'+
+            '<div style="flex:1;height:9px;background:#141B29;border-radius:5px;overflow:hidden">'+
+              '<div style="height:9px;border-radius:5px;background:'+confColor+';width:'+confPct+';transition:width .4s ease"></div>'+
+            '</div>'+
+            '<span style="font:700 12px \'IBM Plex Mono\',monospace;color:'+confColor+';flex:none">'+confDepth+' / 12</span>'+
+          '</div>'+
+          '<div style="font:500 9.5px/1.7 \'IBM Plex Mono\',monospace;color:#576175;margin-top:12px">block_time <span style="color:#8B96AB">12s</span> · required_depth <span style="color:#8B96AB">12</span><br>model <span style="color:#8B96AB">PROBABILISTIC → THRESHOLD_FINALITY</span></div>'+
+        '</div>';
+    }
+    var factsHtml='';
+    S.facts.forEach(function(f){
+      factsHtml+='<div style="background:#0D1220;border:1px solid #1F2735;border-radius:8px;padding:10px 13px;grid-column:span '+(f.span||1)+'">'+
+        '<div style="font:700 8px \'IBM Plex Mono\',monospace;letter-spacing:.1em;color:#576175;text-transform:uppercase;margin-bottom:5px">'+esc(f.k)+'</div>'+
+        '<div style="font:500 12px/1.5 \'IBM Plex Mono\',monospace;color:'+factColor(f)+';word-break:break-all">'+esc(f.v)+'</div>'+
+      '</div>';
+    });
+    var receiptHtml='';
+    if(S.receipt){
+      /* Etherscan + Sepolia are presentation-only: honoured only when a LIVE
+         response actually carries a transaction_hash. MOCK keeps its embedded
+         sample values and never shows an Etherscan link (as before). */
+      var rc=live?(liveState.resp[8]||null):null;
+      var hashVal = live ? liveState.txHash : HASH;
+      var blockVal = live ? (liveState.blockNumber!=null?String(liveState.blockNumber):null) : '22274289';
+      var depthVal = live
+        ? (rc && rc.confirmation_depth!=null ? rc.confirmation_depth+' / '+(rc.required_confirmation_depth||12) : '—')
+        : '12 / 12';
+      var amountVal = live
+        ? (rc && rc.settlement_amount ? esc(rc.settlement_amount.amount+' '+rc.settlement_amount.currency) : '—')
+        : '125,000.00 USD';
+      var etherscan='';
+      if(live){
+        etherscan = hashVal
+          ? '<a href="https://sepolia.etherscan.io/tx/'+encodeURIComponent(hashVal)+'" target="_blank" rel="noopener" style="margin-left:auto;font:700 8.5px \'IBM Plex Mono\',monospace;color:#67D3E0;border:1px solid rgba(103,211,224,.35);border-radius:5px;padding:4px 8px;text-decoration:none">ETHERSCAN ↗</a>'
+          : '<span style="margin-left:auto;font:700 8px \'IBM Plex Mono\',monospace;color:#576175;border:1px dashed #2E384A;border-radius:5px;padding:4px 8px">ETHERSCAN — awaiting live tx hash</span>';
+      }
+      var hashDisplay = hashVal ? esc(hashVal) : '— awaiting live transaction_hash —';
+      var hashColor = hashVal ? '#E8EDF6' : '#576175';
+      var depthColor = (depthVal==='12 / 12'||/^12 \/ /.test(depthVal))?'#3DD68C':'#B9C4D6';
+      receiptHtml=
+        '<div style="margin-top:12px;background:linear-gradient(180deg,rgba(61,214,140,.06),rgba(61,214,140,.02));border:1px solid rgba(61,214,140,.3);border-radius:9px;padding:15px 17px">'+
+          '<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">'+
+            '<span style="width:8px;height:8px;border-radius:50%;background:#3DD68C"></span>'+
+            '<span style="font:700 8.5px \'IBM Plex Mono\',monospace;color:#3DD68C;letter-spacing:.12em">SETTLEMENT PROOF · camt.025</span>'+
+            etherscan+
+          '</div>'+
+          '<div style="font:600 12px \'IBM Plex Mono\',monospace;color:'+hashColor+';word-break:break-all;line-height:1.5">'+hashDisplay+'</div>'+
+          '<div style="display:flex;gap:18px;margin-top:10px;flex-wrap:wrap">'+
+            '<span style="font:500 10px \'IBM Plex Mono\',monospace;color:#576175">block <span style="color:#B9C4D6">'+(blockVal||'—')+'</span></span>'+
+            '<span style="font:500 10px \'IBM Plex Mono\',monospace;color:#576175">depth <span style="color:'+depthColor+'">'+depthVal+'</span></span>'+
+            '<span style="font:500 10px \'IBM Plex Mono\',monospace;color:#576175">amount <span style="color:#B9C4D6">'+amountVal+'</span></span>'+
+          '</div>'+
+        '</div>';
+    }
+    var evidence=
+      '<div style="overflow-y:auto;padding:16px 22px 22px;border-right:1px solid #1F2735">'+
+        '<div style="font:700 8.5px \'IBM Plex Mono\',monospace;color:#576175;letter-spacing:.15em;margin-bottom:12px">EVIDENCE</div>'+
+        (live?liveEvidenceBanner(step):'')+
+        lifeHtml+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+factsHtml+'</div>'+
+        receiptHtml+
+      '</div>';
+
+    /* ---------- payload ---------- */
+    var hasReq=!!S.reqId;
+    var showReq = hasReq && state.payloadTab==='request';
+    var body;
+    if(showReq){ body=S.reqHead+'\n'+raw(S.reqId); }        /* REQUEST stays the embedded request JSON in both modes */
+    else if(live){ body=liveResponseBody(step); }            /* LIVE RESPONSE = live server payload / loading / error */
+    else { body=S.resHead+'\n'+raw(S.resId); }               /* MOCK RESPONSE = embedded sample payload */
+    var reqBtn = hasReq ?
+      '<button data-act="req" style="border:none;cursor:pointer;font:700 9px \'IBM Plex Mono\',monospace;letter-spacing:.08em;padding:5px 11px;border-radius:5px;background:'+(showReq?rgba(ACC,.14):'transparent')+';color:'+(showReq?ACC:MUTED)+'">REQUEST</button>' : '';
+    var resBtn=
+      '<button data-act="res" style="border:none;cursor:pointer;font:700 9px \'IBM Plex Mono\',monospace;letter-spacing:.08em;padding:5px 11px;border-radius:5px;background:'+(!showReq?rgba(ACC,.14):'transparent')+';color:'+(!showReq?ACC:MUTED)+'">RESPONSE</button>';
+    var payload=
+      '<div style="display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:#0B0F18">'+
+        '<div style="flex:none;display:flex;align-items:center;gap:10px;padding:12px 18px 10px;border-bottom:1px solid #1F2735">'+
+          '<span style="font:700 8.5px \'IBM Plex Mono\',monospace;color:#576175;letter-spacing:.15em">PAYLOAD</span>'+
+          '<span style="font:500 9px \'IBM Plex Mono\',monospace;color:#3A4358">application/json</span>'+
+          '<div style="margin-left:auto;display:flex;gap:3px">'+reqBtn+resBtn+'</div>'+
+        '</div>'+
+        '<div style="flex:1;overflow:auto;padding:16px 18px;min-width:0;min-height:0">'+payloadPre(body)+'</div>'+
+      '</div>';
+
+    var stageMid=
+      '<div style="display:flex;flex-direction:column;background:#0A0E16;min-height:0;overflow:hidden">'+
+        narrative+
+        '<div class="fadein2" style="flex:1;display:grid;grid-template-columns:452px minmax(0,1fr);min-width:0;min-height:0;border-top:1px solid #1F2735">'+
+          evidence+payload+
+        '</div>'+
+      '</div>';
+
+    /* ---------- traceability spine ---------- */
+    var traceRows='';
+    TRACE.forEach(function(t){
+      /* In LIVE mode the spine lights up from real identifiers as the live
+         calls produce them; in MOCK it follows the scripted step index. */
+      var lv = live ? liveTraceVal(t.label) : null;
+      var on = live ? (lv!=null) : (step>=t.at);
+      var shown = live
+        ? (lv!=null ? lv : (step>=t.at ? '— live pending —' : '— pending —'))
+        : (step>=t.at ? t.val : '— pending —');
+      traceRows+='<div style="padding:10px 18px;display:flex;gap:11px;align-items:flex-start;opacity:'+(on?'1':'.4')+';transition:opacity .3s ease">'+
+        '<div style="width:8px;height:8px;border-radius:50%;flex:none;margin-top:4px;background:'+(on?ACC:'transparent')+';border:1.5px solid '+(on?ACC:'#3A4358')+'"></div>'+
+        '<div style="min-width:0;flex:1">'+
+          '<div style="font:700 8.5px \'IBM Plex Mono\',monospace;letter-spacing:.09em;color:'+(on?'#8B96AB':'#4A5568')+';text-transform:uppercase">'+esc(t.label)+'</div>'+
+          '<div style="font:500 10.5px/1.45 \'IBM Plex Mono\',monospace;color:'+(on?'#C6D2E4':'#4A5568')+';word-break:break-all;margin-top:3px">'+esc(shown)+'</div>'+
+        '</div>'+
+      '</div>';
+    });
+    var spine=
+      '<div style="border-left:1px solid #1C2434;background:#0C111C;overflow-y:auto;display:flex;flex-direction:column">'+
+        '<div style="padding:15px 18px 10px;flex:none;border-bottom:1px solid #1C2434">'+
+          '<div style="font:700 9px \'IBM Plex Mono\',monospace;color:#576175;letter-spacing:.16em">TRACEABILITY</div>'+
+          '<div style="font:400 11px/1.5 \'IBM Plex Sans\',sans-serif;color:#8B96AB;margin-top:5px">One payment. The same identifiers reused across every surface — never re-sent.</div>'+
+        '</div>'+
+        '<div style="flex:1;padding:6px 0">'+traceRows+'</div>'+
+        '<div style="flex:none;padding:12px 18px;border-top:1px solid #1C2434">'+
+          '<div style="display:flex;align-items:center;gap:8px"><span style="font:700 8.5px \'IBM Plex Mono\',monospace;color:#576175;letter-spacing:.1em">MESSAGE FAMILY</span><span style="flex:1"></span></div>'+
+          '<div style="font:500 10px/1.6 \'IBM Plex Mono\',monospace;color:#8B96AB;margin-top:6px">pacs.008 anchor → pacs.002-like status → camt.025-like finality → camt.054/053-like reporting</div>'+
+        '</div>'+
+      '</div>';
+
+    var body_grid='<div style="flex:1;display:grid;grid-template-columns:300px 1fr 300px;min-height:0">'+rail+stageMid+spine+'</div>';
+
+    document.getElementById('stage').innerHTML = header+corridor+body_grid;
+
+    /* LIVE only: (idempotently) fetch what this step needs from the reference
+       server. MOCK never reaches here, so it performs no network activity. */
+    if(live && liveState){ syncLive(step); }
+  }
+
+  /* ------- events (delegated) ------- */
+  document.getElementById('stage').addEventListener('click', function(ev){
+    var el=ev.target.closest('[data-act]'); if(!el) return;
+    var act=el.getAttribute('data-act');
+    if(act==='mock') setMode('mock');
+    else if(act==='live') setMode('live');
+    else if(act==='say') toggleNotes();
+    else if(act==='play') togglePlay();
+    else if(act==='restart') restart();
+    else if(act==='goto') goTo(parseInt(el.getAttribute('data-i'),10));
+    else if(act==='req'){ state.payloadTab='request'; render(); }
+    else if(act==='res'){ state.payloadTab='response'; render(); }
+  });
+  window.addEventListener('keydown', function(e){
+    if(e.key==='ArrowRight'){ e.preventDefault(); go(1); }
+    else if(e.key==='ArrowLeft'){ e.preventDefault(); go(-1); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

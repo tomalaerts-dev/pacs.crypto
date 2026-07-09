@@ -26,6 +26,124 @@ The project is offered as a **community proposal**, not a finished standard. The
 
 ---
 
+## Current Direction
+
+The project is now being taken in a more execution-oriented direction: not just a family of proposal specs, but an **executable reference stack** for a bank-to-VASP blockchain payment flow. The current implementation wedge is intentionally narrow:
+
+- one asset: USDC
+- one chain family: EVM
+- one corridor: bank → sending VASP → on-chain transfer → receiving VASP
+- linked Travel Rule record + remittance information + instruction lifecycle
+
+This repo therefore has two parallel layers:
+
+- **specification layer** — the YAML specs and standalone simulators at the repo root
+- **reference implementation layer** — the live server under `reference-server/`
+
+The near-term goal is to prove that the existing specs survive real request validation, persistence, state transitions, and on-chain lifecycle handling before the family expands further.
+
+### Reference Stack Status
+
+The first executable slice lives in `reference-server/` and currently supports:
+
+- Travel Rule submit, update, callback, retrieval, search, and stats
+- instruction quote, submission, retrieval, cancellation, and search
+- pacs.002-like execution status read endpoints by `instruction_id` and `uetr`
+- camt.025-like finality receipt read endpoints by `instruction_id` and `uetr`
+- event outbox endpoints that mirror execution-status and finality-receipt payloads for webhook-style delivery
+- webhook endpoint registration, signed delivery attempts, and retry logs on top of the outbox
+- `camt.054`-like reporting notifications for booked debit and credit entries
+- `camt.052`-like intraday movement view built from the reporting notification feed
+- `camt.053`-like statement view derived from reporting notifications and instruction context
+- first-slice exception-family endpoints for `investigation_case` and `return_case`
+- live statement and reporting traceability views in the instruction simulator
+- adapter-backed mocked EVM lifecycle progression with amount-aware fee, slippage, and finality modeling:
+  `PENDING → BROADCAST → CONFIRMING → FINAL`
+- adapter metadata surfaced on quote, instruction, execution-status, and finality reads
+- webhook delivery stats and dead-letter reads for exhausted subscription attempts
+
+The two HTML simulators can still run standalone in **Demo** mode, but now also support **Live API** mode against the local reference server.
+
+### Quick Start
+
+There are three reviewer paths, in increasing order of setup:
+
+**1. MOCK demo — no server needed.** Open the presenter-driven Control Room shell straight from the repo root:
+
+- [`bank-to-vasp-control-room.html`](bank-to-vasp-control-room.html) — a guided walkthrough of the happy-path corridor (Travel Rule → settlement → camt.053 statement) with sample payloads bundled into the page. In **MOCK** mode it performs no network call; no reference server or chain is required.
+
+**2. LIVE local API demo — local reference server, no funded chain.** Run the reference server:
+
+```bash
+cd reference-server
+npm install
+npm start
+```
+
+Then open either simulator locally (or switch the Control Room shell to its **Live API** mode):
+
+- `travel-rule-simulator-v1.3.html`
+- `instruction-simulator-v1.3.html`
+
+Switch **Execution Mode** to `Live API` and keep the default API base URL `http://127.0.0.1:5050`. This runs against the default mock EVM adapter — no funded chain is touched.
+
+**3. Real-chain Sepolia evidence capture — separate funded-wallet path, not run by default.** An explicitly configured funded-wallet run that broadcasts one USDC transfer on Ethereum Sepolia and captures a reviewer evidence bundle. It is not part of the default walkthrough; see [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md).
+
+### Roadmap And Backlog
+
+The active forward plan is now documented in:
+
+- [`docs/roadmap.md`](docs/roadmap.md) — active post-wedge roadmap for real Sepolia execution, reviewer demo, deeper exceptions, and delegated signing
+- [`docs/backlog.md`](docs/backlog.md) — prioritized post-wedge backlog with `P0/P1/P2/P3` sequencing
+- [`docs/conformance.md`](docs/conformance.md) — current spec-to-server conformance matrix
+- [`docs/spec-hardening.md`](docs/spec-hardening.md) — implementation decisions for lifecycle, failure, webhook, and reporting semantics
+- [`docs/chain-adapter.md`](docs/chain-adapter.md) — current adapter contract and swap-in boundary for later testnet work
+- [`docs/webhook-delivery.md`](docs/webhook-delivery.md) — delivery guarantees, retry model, and dead-letter handling
+- [`bank-to-vasp-control-room.html`](bank-to-vasp-control-room.html) — presenter-driven reviewer demo shell (MOCK bundled payloads, or Live API mode against the local server)
+- [`docs/demo-bank-to-vasp.md`](docs/demo-bank-to-vasp.md) — reviewer walkthrough, sequence diagram, and live demo script
+- [`docs/visual-showcase.html`](docs/visual-showcase.html) — reviewer-facing visual artifact page that keeps the draft PR non-normative
+- [`docs/visual-flow-map.md`](docs/visual-flow-map.md) — visual lifecycle map for Travel Rule, instruction, status, returns/reversals, and draft investigation flows
+- [`docs/architecture-note.md`](docs/architecture-note.md) — what changed architecturally once the proposal became executable
+- [`docs/demo-samples/happy-path/`](docs/demo-samples/happy-path/) — canonical happy-path payload pack
+- [`docs/exception-family.md`](docs/exception-family.md) — implemented first-slice exception-family design and runtime boundaries
+- [`docs/reference-stack-plan.md`](docs/reference-stack-plan.md) — original pivot plan that led to the current implementation
+- [`docs/interop-defi-tradfi.md`](docs/interop-defi-tradfi.md) — DeFi ↔ TradFi interoperability research and new-direction opportunities (2025–2026 landscape)
+- [`docs/interop-roadmap.md`](docs/interop-roadmap.md) — horizon-based expansion roadmap built from that research
+
+### Current Baseline
+
+Implemented now:
+
+- executable reference server with persistence, state transitions, and tests
+- live simulator support for the Travel Rule and instruction flows
+- status, finality, webhook, reporting, and first-slice exception read/write surfaces
+
+Still mocked or partial:
+
+- chain lifecycle remains mocked, but now runs through an adapter-backed fee/finality policy with surfaced adapter metadata
+- webhook delivery is background-driven with retries, dead-letter handling, and operator stats, but still demo-grade rather than production-hardened
+- spec-covered conformance is explicit and tested, but still hand-authored rather than YAML-generated
+- delegated signing is implemented on the mock EVM wedge (instruction held with an unsigned transaction, then resumed on signed-transaction resubmission); `SELF_CUSTODY` is still surface-only
+- a first interoperability layer is in place as tested reference components (mock CCTP settlement adapter, IVMS101 Travel Rule mapping, x402 agent-intent binding, Trust Anchor pool-access credentials, multi-regime compliance reporting) — see [`docs/interop-defi-tradfi.md`](docs/interop-defi-tradfi.md)
+- spec layer is synced to Tom's v1.3: the server accepts v1.3 `SELF_CUSTODY` and optional debtor/creditor agents, but executes `FULL_CUSTODY` only; Spec 4 (exception & investigation, camt.110/111), the instruction-level returns/reversals endpoints, and Spec 5 (liquidity management) are not yet implemented
+- Sepolia adapter path exists, but a funded-wallet live transaction still needs to be run and captured
+- reviewer/demo package is now present, but still built around the current mock EVM wedge
+
+Current next defaults:
+
+- first real execution target: `Ethereum Sepolia`
+- first real asset: `USDC on Sepolia`
+- first real execution mode: `FULL_CUSTODY`
+- first real-chain demo audience: Tom-facing reviewer walkthrough
+
+Explicitly deferred:
+
+- non-EVM chains
+- tokenized assets
+- CBDC
+- regulated DeFi
+- agent-driven submission
+
 ## How to read these specifications
 
 The pacs.crypto YAML files are dense OpenAPI 3.1.0 documents. Substantive architectural commentary (sanctions compliance, finality semantics, custody and signing models, returns and reversals framing, push notification patterns, anti-tipping-off discipline) lives in the top-level `info.description` block and uses markdown heading hierarchy. A few practical notes for reviewers:
@@ -288,7 +406,7 @@ Banks connecting to EBSI — or any EVM-compatible chain — via a VASP or gatew
 
 ## Roadmap — where the family goes next
 
-These are areas under active exploration. Contributions, challenges, and alternative proposals are all welcome.
+The current implementation roadmap is execution-first and narrow by design. Broader family expansion remains valuable, but the immediate credibility target is to prove one real bank-to-VASP-to-chain corridor end to end.
 
 ### 1. Compliance Base Info Reporting API
 

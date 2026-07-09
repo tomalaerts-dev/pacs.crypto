@@ -1,0 +1,15 @@
+.DS_Store
+.env
+.env.*
+reference-server/.env
+reference-server/.env.*
+reference-server/node_modules/
+reference-server/data/*.sqlite
+reference-server/data/*.sqlite-*
+reference-server/data/demo-runs/
+
+# Local media/video generation byproducts kept outside Git history.
+docs/media/**/.venv*/
+docs/media/**/raw-playwright-video/
+docs/media/**/renders/frames/
+docs/media/**/*-master.mp4
