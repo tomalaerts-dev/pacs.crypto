@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic Authorisation Flow – pacs.crypto v1.4</title>
+<style>
+  :root{
+    --bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--surface3:#21262d;
+    --border:#30363d;--border-hi:#388bfd;
+    --text:#e6edf3;--muted:#7d8590;--dim:#484f58;
+    --blue:#388bfd;--blue-bg:rgba(56,139,253,.12);
+    --green:#3fb950;--green-bg:rgba(63,185,80,.1);
+    --amber:#d29922;--amber-bg:rgba(210,153,34,.12);
+    --red:#f85149;--red-bg:rgba(248,81,73,.1);
+    --purple:#bc8cff;--purple-bg:rgba(188,140,255,.12);
+    --cyan:#79c0ff;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'IBM Plex Sans',-apple-system,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);margin:0;line-height:1.55;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--cyan)}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 120px}
+  header{border-bottom:1px solid var(--border);padding-bottom:28px;margin-bottom:8px}
+  .kicker{font-family:var(--mono);font-size:12px;color:var(--purple);letter-spacing:.02em;margin-bottom:10px}
+  h1{font-size:30px;line-height:1.15;margin:0 0 12px;font-weight:600}
+  h1 .v{color:var(--muted);font-weight:400}
+  .lede{color:var(--muted);max-width:68ch;font-size:15.5px}
+  .lede strong{color:var(--text);font-weight:600}
+  h2{font-size:14px;font-family:var(--mono);color:var(--muted);font-weight:500;
+    margin:44px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  h2 .n{color:var(--purple);margin-right:10px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:780px){.two{grid-template-columns:1fr}.wrap{padding:28px 16px 90px}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+  .card h3{margin:0 0 6px;font-size:15px;font-weight:600}
+  .card p{margin:0;color:var(--muted);font-size:13.5px}
+  .layers{display:flex;flex-direction:column;gap:10px;margin:4px 0}
+  .layer{display:flex;gap:14px;align-items:flex-start;background:var(--surface);
+    border:1px solid var(--border);border-left-width:3px;border-radius:8px;padding:14px 18px}
+  .layer .tag{font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:5px;white-space:nowrap;margin-top:1px}
+  .layer h3{margin:0 0 3px;font-size:14.5px;font-weight:600}
+  .layer p{margin:0;color:var(--muted);font-size:13px}
+  .layer.consume{border-left-color:var(--dim)}
+  .layer.consume .tag{background:var(--surface3);color:var(--muted)}
+  .layer.ours{border-left-color:var(--purple)}
+  .layer.ours .tag{background:var(--purple-bg);color:var(--purple)}
+
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:4px}
+  .scenario{display:flex;gap:10px;flex-wrap:wrap;padding:16px 18px;border-bottom:1px solid var(--border);
+    background:var(--surface2)}
+  .scn{flex:1;min-width:180px;background:transparent;border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:11px 13px;cursor:pointer;text-align:left;font-family:inherit;font-size:13px;transition:.12s}
+  .scn:hover{border-color:var(--border-hi)}
+  .scn.active{border-color:var(--purple);background:var(--purple-bg)}
+  .scn b{display:block;font-size:13.5px;margin-bottom:2px}
+  .scn span{color:var(--muted);font-size:12px}
+  .runbar{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border)}
+  .runbar .desc{color:var(--muted);font-size:13px;flex:1}
+  button.run{font-family:inherit;font-weight:600;font-size:13.5px;background:var(--purple);color:#1a0f2e;
+    border:none;border-radius:8px;padding:10px 18px;cursor:pointer}
+  button.run:hover{filter:brightness(1.08)}
+  button.run:disabled{opacity:.5;cursor:default}
+
+  .flow{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  @media(max-width:780px){.flow{grid-template-columns:1fr}}
+  .col{padding:18px 20px}
+  .col.left{border-right:1px solid var(--border)}
+  @media(max-width:780px){.col.left{border-right:none;border-bottom:1px solid var(--border)}}
+  .col h4{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:0 0 12px;font-weight:500}
+  .step{border:1px solid var(--border);border-radius:8px;padding:0;margin-bottom:10px;overflow:hidden;
+    opacity:.35;transition:opacity .25s}
+  .step.on{opacity:1}
+  .step .sh{display:flex;align-items:center;gap:10px;padding:11px 14px;font-size:13.5px;font-weight:600}
+  .step .sh .ic{width:20px;height:20px;border-radius:50%;flex:none;display:grid;place-items:center;
+    font-size:11px;font-family:var(--mono)}
+  .step .sb{padding:0 14px 12px 44px;font-size:12.5px;color:var(--muted);display:none}
+  .step.on .sb{display:block}
+  .step.pass .ic{background:var(--green-bg);color:var(--green);border:1px solid var(--green)}
+  .step.hold .ic{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber)}
+  .step.fail .ic{background:var(--red-bg);color:var(--red);border:1px solid var(--red)}
+  .step.info .ic{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue)}
+  .step.pass .sh{color:var(--text)}
+  .verdict{margin-top:6px;border-radius:10px;padding:16px 18px;font-size:14px;display:none}
+  .verdict.show{display:block}
+  .verdict.ok{background:var(--green-bg);border:1px solid var(--green)}
+  .verdict.held{background:var(--amber-bg);border:1px solid var(--amber)}
+  .verdict.no{background:var(--red-bg);border:1px solid var(--red)}
+  .verdict b{display:block;margin-bottom:4px;font-size:14px}
+  .verdict.ok b{color:var(--green)}.verdict.held b{color:var(--amber)}.verdict.no b{color:var(--red)}
+  .verdict span{color:var(--muted)}
+
+  pre{background:#0a0d12;border:1px solid var(--border);border-radius:8px;margin:0;padding:14px 16px;
+    overflow:auto;font-family:var(--mono);font-size:12px;line-height:1.6;color:#c9d4e0}
+  .k{color:var(--cyan)}.s{color:#a5d6a4}.num{color:#f0a868}.c{color:var(--dim)}
+  .note{background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--blue);
+    border-radius:8px;padding:14px 18px;font-size:13px;color:var(--muted);margin-top:14px}
+  .note b{color:var(--text)}
+  .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .pill{font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:20px;border:1px solid var(--border);color:var(--muted)}
+  .pill.y{border-color:var(--green);color:var(--green)}
+  .pill.n{border-color:var(--red);color:var(--red)}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--dim);font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">pacs.crypto · v1.4 · agentic authorisation</div>
+  <h1>When an AI agent initiates a payment <span class="v">— what the API checks, and what it cannot</span></h1>
+  <p class="lede">pacs.crypto does not re-invent agent identity or mandates. Those are
+  <strong>consumed</strong> from GLEIF's vLEI and Google's AP2. What this family adds is the
+  <strong>ISO 20022 payment-instruction binding and the compliance trail</strong> — the layer that
+  checks an agent's action against a principal-signed mandate, carries the facts that must travel
+  with the transfer, and makes agent activity visible to supervisors. This walkthrough makes that
+  binding tangible.</p>
+</header>
+
+<h2><span class="n">01</span>Three layers — who owns what</h2>
+<div class="layers">
+  <div class="layer consume"><span class="tag">consume</span>
+    <div><h3>Identity &amp; attestation</h3><p>Who the agent is, bound to a real legal entity.
+    GLEIF vLEI delegated identifiers; Visa TAP / Mastercard agentic tokens / DIDs. We reference and
+    verify against it — we do not attest identity ourselves.</p></div></div>
+  <div class="layer consume"><span class="tag">consume</span>
+    <div><h3>Authority / mandate credential</h3><p>What the agent may do, signed by the principal.
+    AP2 Intent Mandate (a verifiable credential) or GLEIF Agent Mandate Credential. We reference and
+    verify it — we do not issue mandates.</p></div></div>
+  <div class="layer ours"><span class="tag">pacs.crypto</span>
+    <div><h3>ISO 20022 payment-instruction binding + compliance</h3><p>The piece both layers above
+    explicitly leave open. We bind the verified mandate to an ISO 20022 payment, check the action
+    against the mandate's scope, carry Travel Rule data, and disclose agent activity to supervisors.</p></div></div>
+</div>
+<div class="note"><b>Why this split matters.</b> GLEIF's own paper names the "PSP-side verification
+interface at the payment instruction layer" as the critical missing piece, and invites complementary
+work rather than competing formats. That interface is exactly what this binding is.</div>
+
+<h2><span class="n">02</span>The mandate grants <em>action classes</em>, not a blanket permission</h2>
+<p class="lede" style="margin-bottom:16px">A mandate does not say "this agent may transact." It says
+"this agent may perform <strong>these classes of action</strong>, each within these limits." A principal
+can authorise an agent to pay but never to amend a limit; to move liquidity but never to raise an
+investigation. The VASP check is two-level: is this action's class authorised at all, and is it within
+that class's constraints?</p>
+<div class="two">
+  <div class="card"><h3>INITIATE_PAYMENT</h3><p>Max amount, allowlisted counterparties (LEI preferred),
+  permitted chains/tokens, escalation threshold, multi-agent approval, execution gates.</p></div>
+  <div class="card"><h3>MANAGE_LIQUIDITY</h3><p>Max transfer amount, allowed accounts, escalation
+  threshold. Value-like, so real constraints apply.</p></div>
+  <div class="card"><h3>AMEND_LIMIT</h3><p>A ceiling on how high the agent may set a limit — an agent
+  that can change limits must not be able to raise one without bound.</p></div>
+  <div class="card"><h3>RAISE_INVESTIGATION</h3><p>Usually minimal or no constraints — raising an
+  investigation moves information, not value, so it is disclosure-level.</p></div>
+</div>
+
+<h2><span class="n">03</span>Walk a request through the binding</h2>
+<div class="panel">
+  <div class="scenario" id="scenarios"></div>
+  <div class="runbar">
+    <div class="desc" id="scnDesc"></div>
+    <button class="run" id="runBtn">Run the check</button>
+  </div>
+  <div class="flow">
+    <div class="col left">
+      <h4>VASP CHECK SEQUENCE</h4>
+      <div id="steps"></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+    <div class="col">
+      <h4>WHAT THE AGENT PRESENTED</h4>
+      <pre id="payload"></pre>
+      <div class="pills" id="pills"></div>
+    </div>
+  </div>
+</div>
+<div class="note" id="scnNote"></div>
+
+<h2><span class="n">04</span>What travels, and what a supervisor can later ask</h2>
+<div class="two">
+  <div class="card"><h3>Travels with the transfer</h3><p>The Travel Rule record gains an
+  <code style="color:var(--cyan)">initiating_ai_agent</code> block: which agent, on whose authority,
+  human present or not. On stablecoin rails there is no bank in the middle to supply this — so it
+  must ride with the transaction.</p></div>
+  <div class="card"><h3>Reaches the supervisor</h3><p>The regulatory report carries the same facts as a
+  first-class, filterable dimension. A compliance officer can ask: <em>"show me fully-autonomous
+  agent payments over 250,000"</em> — agent id, human-present and amount are all reportable.</p></div>
+</div>
+
+<h2><span class="n">05</span>What the binding honestly cannot do</h2>
+<div class="layers">
+  <div class="layer" style="border-left-color:var(--red)"><span class="tag" style="background:var(--red-bg);color:var(--red)">limit</span>
+    <div><h3>It cannot tell whether a payment is hallucinated</h3><p>The agent may be authorised and the
+    facts stale. Execution gates (new beneficiary, post-gap, deviation) catch some cases; N-of-M
+    independent-agent approval catches more. Neither is a guarantee.</p></div></div>
+  <div class="layer" style="border-left-color:var(--red)"><span class="tag" style="background:var(--red-bg);color:var(--red)">limit</span>
+    <div><h3>It cannot verify the agent understood the user's intent</h3><p>"100 Lamborghini cars"
+    vs "100 Lamborghini outboard motors" is resolved in the user's own agent interface, upstream.
+    The binding only carries a <em>reference</em> to the intent artifact, so the payment can be
+    reconciled against it afterward.</p></div></div>
+  <div class="layer" style="border-left-color:var(--red)"><span class="tag" style="background:var(--red-bg);color:var(--red)">limit</span>
+    <div><h3>It cannot prove reasoning independence</h3><p>N-of-M signatures prove N distinct attested
+    agents approved the exact instruction. They do not prove the agents reasoned independently —
+    distinct identifiers are checkable; independent reasoning is not.</p></div></div>
+</div>
+
+<footer>
+  Illustrative simulator. Logic runs in your browser against the v1.4 schema shapes; no network calls.
+  Mandates, identity and verification are consumed from external standards (GLEIF vLEI, Google AP2 / FIDO)
+  and stubbed here. Example identifiers are illustrative, not registered values.
+</footer>
+</div>
+
+<script>
+const scenarios = [
+  {
+    id:'ok',
+    title:'Treasury sweep — in scope',
+    sub:'Agent pays within a payment mandate',
+    desc:'A treasury agent moves 50,000 USDC to an allowlisted own account. Mandate authorises INITIATE_PAYMENT up to 100,000 to that counterparty. No gate trips.',
+    note:'<b>The common path.</b> Identity verifies, the action class is authorised, the amount and counterparty are within the payment constraints, no gate fires. The payment executes. This is what most agent payments look like — the machinery is invisible when everything is in order.',
+    payload:{
+      action:'INITIATE_PAYMENT', amount:'50,000 USDC', counterparty:'LEI 5299…DO55 (allowlisted)',
+      agent:'did:vlei:acme-treasury-agent-07', human_present:false, mandate:'amc:acme:treasury-sweep:2026Q4'
+    },
+    pills:[['identity',1],['action in scope',1],['within limits',1],['no gate',1]],
+    steps:[
+      ['info','Identity verified','vLEI delegated id resolves to Acme (LEI 5299…DO55). Attestation checks out. — consumed from GLEIF layer, stubbed.'],
+      ['pass','Action class authorised','Mandate authorised_actions includes INITIATE_PAYMENT. ✓'],
+      ['pass','Within payment constraints','50,000 ≤ max 100,000; counterparty is on the allowlist; chain/token permitted. ✓'],
+      ['pass','No execution gate fired','Known beneficiary, amount in line with history, below soft threshold. ✓']
+    ],
+    verdict:['ok','Executed','The action was authorised and within scope. The Travel Rule record carries the initiating-agent disclosure; the transaction will appear in regulatory reporting as agent-initiated, fully autonomous.']
+  },
+  {
+    id:'gate',
+    title:'New beneficiary — gate holds it',
+    sub:'Authorised, but paused for a human',
+    desc:'Same agent, same mandate, but the beneficiary has never been paid under this mandate before. The mandate sets a NEW_BENEFICIARY gate → require human confirmation.',
+    note:'<b>Authorised is not the same as unattended.</b> Everything verifies and the payment is within limits — but the principal set a gate for first-time beneficiaries. The gate outcome surfaces as a status (HELD_FOR_CONFIRMATION), not as something the agent can set or suppress. This is a partial mitigation for a wrong-but-authorised payment.',
+    payload:{
+      action:'INITIATE_PAYMENT', amount:'50,000 USDC', counterparty:'LEI 7245…1Z17 (first time)',
+      agent:'did:vlei:acme-treasury-agent-07', human_present:false, gate:'NEW_BENEFICIARY → REQUIRE_HUMAN_CONFIRM'
+    },
+    pills:[['identity',1],['action in scope',1],['within limits',1],['gate fired',0]],
+    steps:[
+      ['info','Identity verified','vLEI delegated id resolves to Acme. ✓ — consumed, stubbed.'],
+      ['pass','Action class authorised','INITIATE_PAYMENT is in scope. ✓'],
+      ['pass','Within payment constraints','Amount and chain/token fine; counterparty is allowlisted. ✓'],
+      ['hold','Execution gate fired','NEW_BENEFICIARY: the VASP has no prior payment to this counterparty under this mandate. Action = REQUIRE_HUMAN_CONFIRM.']
+    ],
+    verdict:['held','Held for confirmation','The payment is authorised but paused. Status returns HELD_FOR_CONFIRMATION with the triggering gate. A human at the principal must confirm before it executes. The agent cannot override its own gate.']
+  },
+  {
+    id:'wrongaction',
+    title:'Agent amends a limit — not in scope',
+    sub:'The two-level check stops it',
+    desc:'A payment agent tries to raise a wallet limit. Its mandate authorises INITIATE_PAYMENT only — AMEND_LIMIT is not in its action scope.',
+    note:'<b>This is the whole point of action-scoped mandates.</b> The agent is a perfectly valid, verified agent — it simply was never granted the authority to change limits. The check fails at level one (action class not authorised), before any limit values are even looked at. "May pay but not amend limits" is now enforceable rather than assumed.',
+    payload:{
+      action:'AMEND_LIMIT', requested:'raise daily limit to 2,000,000 USDC',
+      agent:'did:vlei:acme-treasury-agent-07', mandate_scope:'[INITIATE_PAYMENT]', human_present:false
+    },
+    pills:[['identity',1],['action in scope',0],['—',0],['—',0]],
+    steps:[
+      ['info','Identity verified','The agent is who it claims — a valid Acme treasury agent. ✓ — consumed, stubbed.'],
+      ['fail','Action class NOT authorised','Requested action is AMEND_LIMIT. The mandate\'s authorised_actions = [INITIATE_PAYMENT]. AMEND_LIMIT is absent. ✗'],
+      ['info','Constraint check skipped','No need to look at limit ceilings — the action class itself is not authorised.'],
+      ['info','Nothing executed','The request is refused at the authority layer.']
+    ],
+    verdict:['no','Refused — action not authorised','A verified agent is not an all-powerful agent. The mandate scopes which classes of action are permitted; this one is not among them. The limit is never touched.']
+  },
+  {
+    id:'multiagent',
+    title:'High-value — needs two agents',
+    sub:'Maker/checker for agents',
+    desc:'A 480,000 USDC supplier payment. The mandate requires 2-of-3 independent agent approval above the 250,000 soft threshold. Two approvals, signed, are carried as evidence.',
+    note:'<b>Independent agents as a hallucination mitigation.</b> A single agent hallucinates consistently; two independently-reasoning agents are unlikely to share the same error. The approvals happen inside the sending party, verified with its own PKI, before submission — the VASP records the signed evidence for audit, it does not re-verify internal keys. Honest limit: the signatures prove two distinct agents approved this exact instruction, not that they reasoned independently.',
+    payload:{
+      action:'INITIATE_PAYMENT', amount:'480,000 USDC', threshold:'250,000 (soft)',
+      required:'2 of 3 independent agents', approvals:'procurement-agent-03, finance-reviewer-agent-11 (different operators)'
+    },
+    pills:[['identity',1],['action in scope',1],['within limits',1],['2-of-3 met',1]],
+    steps:[
+      ['info','Identity verified','Initiating agent resolves to Acme. ✓ — consumed, stubbed.'],
+      ['pass','Action class authorised','INITIATE_PAYMENT in scope. ✓'],
+      ['pass','Within payment constraints','480,000 ≤ max 500,000; counterparty allowlisted; chain/token permitted. ✓'],
+      ['pass','Multi-agent approval present','Mandate requires 2-of-3 over the soft threshold. Two signed approvals from distinct agents under different operators are carried. Evidence recorded for audit. ✓']
+    ],
+    verdict:['ok','Executed with recorded approvals','Above the soft threshold the principal demanded two independent agents. The signed approvals travel with the instruction for non-repudiation. The report will flag this as multi-agent-approved.']
+  }
+];
+
+let current = 0;
+const scEl = document.getElementById('scenarios');
+scenarios.forEach((s,i)=>{
+  const b=document.createElement('button');
+  b.className='scn'+(i===0?' active':'');
+  b.innerHTML=`<b>${s.title}</b><span>${s.sub}</span>`;
+  b.onclick=()=>{current=i;select();};
+  scEl.appendChild(b);
+});
+
+function esc(v){return String(v).replace(/</g,'&lt;')}
+function renderPayload(p){
+  let out='{\n';
+  const keys=Object.keys(p);
+  keys.forEach((k,i)=>{
+    const v=p[k];
+    const val = (v===true||v===false) ? `<span class="num">${v}</span>` : `<span class="s">"${esc(v)}"</span>`;
+    out+=`  <span class="k">"${k}"</span>: ${val}${i<keys.length-1?',':''}\n`;
+  });
+  out+='}';
+  return out;
+}
+
+function select(){
+  const s=scenarios[current];
+  document.querySelectorAll('.scn').forEach((b,i)=>b.classList.toggle('active',i===current));
+  document.getElementById('scnDesc').textContent=s.desc;
+  document.getElementById('scnNote').innerHTML=s.note;
+  document.getElementById('payload').innerHTML=renderPayload(s.payload);
+  const pills=document.getElementById('pills');
+  pills.innerHTML='';
+  s.pills.forEach(([label,ok])=>{
+    if(label==='—')return;
+    const p=document.createElement('span');
+    p.className='pill '+(ok?'y':'n');
+    p.textContent=(ok?'✓ ':'✗ ')+label;
+    pills.appendChild(p);
+  });
+  // reset steps
+  const steps=document.getElementById('steps');
+  steps.innerHTML='';
+  s.steps.forEach((st,i)=>{
+    const d=document.createElement('div');
+    d.className='step '+st[0];
+    d.dataset.i=i;
+    const icon = st[0]==='pass'?'✓':st[0]==='fail'?'✗':st[0]==='hold'?'!':'·';
+    d.innerHTML=`<div class="sh"><span class="ic">${icon}</span>${st[1]}</div><div class="sb">${st[2]}</div>`;
+    steps.appendChild(d);
+  });
+  document.getElementById('verdict').className='verdict';
+  document.getElementById('runBtn').disabled=false;
+}
+
+document.getElementById('runBtn').onclick=()=>{
+  const s=scenarios[current];
+  const stepEls=[...document.querySelectorAll('.step')];
+  stepEls.forEach(e=>e.classList.remove('on'));
+  document.getElementById('verdict').className='verdict';
+  document.getElementById('runBtn').disabled=true;
+  let i=0;
+  const tick=()=>{
+    if(i>0) {} // keep previous on
+    if(i<stepEls.length){
+      stepEls[i].classList.add('on');
+      i++;
+      setTimeout(tick, 620);
+    } else {
+      const v=document.getElementById('verdict');
+      v.className='verdict show '+s.verdict[0];
+      v.innerHTML=`<b>${s.verdict[1]}</b><span>${s.verdict[2]}</span>`;
+      document.getElementById('runBtn').disabled=false;
+    }
+  };
+  tick();
+};
+
+select();
+</script>
+</body>
+</html>
